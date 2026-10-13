@@ -47,13 +47,13 @@ pub enum JobPhase {
 impl JobPhase {
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Acquiring => "Acquisition",
-            Self::Analyzing => "Analyse",
-            Self::Encoding => "Encodage local",
-            Self::Uploading { .. } => "Envoi audio",
-            Self::Ingesting { .. } => "Vérification Yoto",
-            Self::Committing => "Publication",
-            Self::Verifying { .. } => "Relecture",
+            Self::Acquiring => "Téléchargement",
+            Self::Analyzing => "Analyse de l’audio",
+            Self::Encoding => "Préparation de l’audio",
+            Self::Uploading { .. } => "Envoi de l’audio à Yoto",
+            Self::Ingesting { .. } => "Traitement par Yoto",
+            Self::Committing => "Enregistrement de la playlist",
+            Self::Verifying { .. } => "Vérification finale",
         }
     }
 }
@@ -62,10 +62,10 @@ impl JobState {
         match self {
             Self::Queued => "En attente",
             Self::Running { phase } => phase.label(),
-            Self::Retry { .. } => "Nouvel essai programmé",
-            Self::WaitingForAuthentication => "Connexion requise",
-            Self::Conflict { .. } => "Conflit",
-            Self::Reconciling => "Résultat distant à vérifier",
+            Self::Retry { .. } => "Nouvel essai automatique prévu",
+            Self::WaitingForAuthentication => "Connexion au compte Yoto requise",
+            Self::Conflict { .. } => "Modifiée aussi sur Yoto · à vérifier",
+            Self::Reconciling => "Résultat à vérifier auprès de Yoto",
             Self::Completed { .. } => "Terminé",
             Self::Failed { .. } => "Échec",
             Self::Cancelled => "Annulé",

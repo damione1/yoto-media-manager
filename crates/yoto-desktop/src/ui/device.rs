@@ -252,8 +252,11 @@ impl DevicePanel {
                                 .and_then(serde_json::Value::as_bool)
                                 .unwrap_or(false);
                         }
-                        v.status =
-                            serde_json::to_string_pretty(&data).unwrap_or_else(|e| e.to_string());
+                        v.status = if v.loaded {
+                            "Réglages chargés. Modifiez-les ci-dessous puis enregistrez.".into()
+                        } else {
+                            "État du lecteur reçu.".into()
+                        };
                     }
                     Ok(Ok(Reply::Player(result))) => {
                         v.status = match result {
@@ -263,9 +266,8 @@ impl DevicePanel {
                             yoto_infra::players::CommandResult::Accepted => {
                                 "Commande acceptée.".into()
                             }
-                            yoto_infra::players::CommandResult::Observed { status } => {
-                                serde_json::to_string_pretty(&status)
-                                    .unwrap_or_else(|e| e.to_string())
+                            yoto_infra::players::CommandResult::Observed { .. } => {
+                                "Commande reçue par le lecteur.".into()
                             }
                         }
                     }
@@ -283,8 +285,8 @@ impl DevicePanel {
                         | Reply::Image(_)
                         | Reply::Images(_),
                     )) => v.status = "Réglages envoyés.".into(),
-                    Ok(Err(e)) => v.status = e.to_string(),
-                    Err(e) => v.status = e.to_string(),
+                    Ok(Err(e)) => v.status = failure_text(&e),
+                    Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
                 }
                 cx.notify();
             });
@@ -321,7 +323,7 @@ impl DevicePanel {
         {
             Ok(value) => self.player(PlayerCommand::Volume { value }, cx),
             Err(e) => {
-                self.status = e.to_string();
+                self.status = failure_text(&e);
                 cx.notify();
             }
         }
@@ -330,7 +332,7 @@ impl DevicePanel {
         match color(&self.value(Field::Light, cx)) {
             Ok([r, g, b]) => self.player(PlayerCommand::Ambient { r, g, b }, cx),
             Err(e) => {
-                self.status = e.to_string();
+                self.status = failure_text(&e);
                 cx.notify();
             }
         }
@@ -384,7 +386,7 @@ impl DevicePanel {
             headphones_volume_limited: self.limited,
         };
         if let Err(e) = patch.validate() {
-            self.status = e.to_string();
+            self.status = failure_text(&e);
             cx.notify();
             return;
         }
@@ -423,7 +425,7 @@ impl DevicePanel {
                 cx,
             ),
             Err(e) => {
-                self.status = e.to_string();
+                self.status = failure_text(&e);
                 cx.notify();
             }
         }
@@ -471,7 +473,11 @@ impl Render for DevicePanel {
             .border_1()
             .border_color(cx.theme().border)
             .rounded_lg()
-            .child("Lecteur sélectionné");
+            .child(
+                div()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Lecteur sélectionné"),
+            );
         let commands = [
             PlayerCommand::Pause,
             PlayerCommand::Resume,
@@ -529,7 +535,7 @@ impl Render for DevicePanel {
         body = body
             .child(
                 Button::new("load-config")
-                    .label("Charger la configuration")
+                    .label("Charger les réglages du lecteur")
                     .on_click(cx.listener(|v, _, _, cx| {
                         v.send(
                             Command::DeviceConfig {
@@ -542,7 +548,7 @@ impl Render for DevicePanel {
             )
             .child(
                 Button::new("rest-status")
-                    .label("État détaillé (permission supplémentaire)")
+                    .label("Actualiser l’état du lecteur")
                     .on_click(cx.listener(|v, _, _, cx| {
                         v.send(
                             Command::DeviceStatus {
@@ -619,7 +625,7 @@ impl Render for DevicePanel {
             .child(Input::new(&self.inputs[&Field::NightShortcut]))
             .child(
                 Button::new("save-shortcuts")
-                    .label("Enregistrer les raccourcis (beta)")
+                    .label("Enregistrer les raccourcis")
                     .disabled(!self.loaded)
                     .on_click(cx.listener(|v, _, _, cx| v.shortcuts(cx))),
             )

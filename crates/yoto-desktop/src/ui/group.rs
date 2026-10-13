@@ -118,12 +118,15 @@ impl GroupEditor {
                         if writing && matches!(e, Failure::Ambiguous) {
                             v.saving = true;
                         }
-                        v.status = e.to_string();
+                        v.status = failure_text(&e);
                     }
-                    Err(e) => v.status = e.to_string(),
+                    Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
                 }
                 if let Some(error) = refresh_failure {
-                    v.status = format!("Groupe enregistré. Actualisation : {error}");
+                    v.status = format!(
+                        "Groupe enregistré. Actualisation impossible : {}",
+                        failure_text(&error)
+                    );
                 }
                 cx.notify();
             });
@@ -184,8 +187,8 @@ impl GroupEditor {
                             | Reply::Player(_)
                             | Reply::Data(_),
                         )) => v.status = "Aperçu indisponible.".into(),
-                        Ok(Err(e)) => v.status = e.to_string(),
-                        Err(e) => v.status = e.to_string(),
+                        Ok(Err(e)) => v.status = failure_text(&e),
+                        Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
                     }
                     cx.notify();
                 }

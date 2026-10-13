@@ -73,7 +73,7 @@ impl TrimRange {
     pub fn new(start: MediaTime, end: MediaTime, duration: MediaTime) -> Result<Self> {
         if start >= end || end > duration {
             return Err(Failure::Validation(
-                "Choose 0 ≤ start < end ≤ source duration.".into(),
+                "Le début doit précéder la fin, et les deux doivent rester dans la durée de l’audio.".into(),
             ));
         }
         Ok(Self { start, end })
@@ -109,7 +109,7 @@ impl Normalization {
     pub fn label(self) -> &'static str {
         match self {
             Self::Preserve => "Volume original",
-            Self::Loudness => "Normaliser (-16 LUFS)",
+            Self::Loudness => "Volume égalisé",
         }
     }
 }

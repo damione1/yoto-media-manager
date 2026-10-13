@@ -97,7 +97,7 @@ fn wire_key_namespaces_are_chapter_scoped_and_colliding_moves_are_atomic() {
     duplicate.id = TrackId::new();
     p.chapters[0].tracks.push(duplicate);
     assert!(
-        matches!(p.validate(),Err(Failure::Validation(message)) if message=="Duplicate track key")
+        matches!(p.validate(),Err(Failure::Validation(message)) if message=="Deux pistes portent la même clé Yoto.")
     );
 }
 #[test]

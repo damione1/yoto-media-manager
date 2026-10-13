@@ -301,7 +301,9 @@ impl PlaylistEditor {
             .collect();
         self.draft.playback.resume_seconds =
             self.resume.read(cx).value().parse().map_err(|_| {
-                Failure::Validation("Resume duration must be nonnegative seconds".into())
+                Failure::Validation(
+                    "La durée de reprise doit être un nombre entier de secondes.".into(),
+                )
             })?;
         let age = |input: &Entity<InputState>| {
             let s = input.read(cx).value().to_string();
@@ -386,8 +388,8 @@ impl PlaylistEditor {
                         | Reply::Player(_)
                         | Reply::Data(_),
                     )) => "Opération terminée.".into(),
-                    Ok(Err(e)) => e.to_string(),
-                    Err(e) => e.to_string(),
+                    Ok(Err(e)) => failure_text(&e),
+                    Err(e) => failure_text(&Failure::Storage(e.to_string())),
                 };
                 cx.notify();
             });
@@ -492,13 +494,13 @@ impl PlaylistEditor {
         let account = match self.owning_remote(cx) {
             Ok((account, _)) => account,
             Err(e) => {
-                self.status = e.to_string();
+                self.status = failure_text(&e);
                 cx.notify();
                 return;
             }
         };
         if let Err(e) = self.gather(cx) {
-            self.status = e.to_string();
+            self.status = failure_text(&e);
             cx.notify();
             return;
         }
@@ -519,7 +521,7 @@ impl PlaylistEditor {
             return;
         }
         if let Err(e) = self.draft.touch() {
-            self.status = e.to_string();
+            self.status = failure_text(&e);
             cx.notify();
             return;
         }
@@ -590,7 +592,7 @@ impl PlaylistEditor {
         }));
     }
     fn fail_operation(&mut self, failure: Failure, cx: &mut Context<Self>) {
-        self.status = failure.to_string();
+        self.status = failure_text(&failure);
         let needs_verification = matches!(failure, Failure::Ambiguous | Failure::Conflict);
         self.operation = Some(PlaylistOperation::Failed(failure));
         self.draft = self.base.clone();
@@ -684,7 +686,7 @@ impl PlaylistEditor {
                 self.status = match state {
                     JobState::Queued => "Envoi sur Yoto en attente…".into(),
                     JobState::Running { phase } => format!("{}…", phase.label()),
-                    JobState::Retry { failure, .. } => format!("Nouvel essai automatique : {failure}"),
+                    JobState::Retry { failure, .. } => format!("Nouvel essai automatique : {}", failure_text(failure)),
                     JobState::WaitingForAuthentication => "Reconnectez le compte Yoto pour terminer l’envoi.".into(),
                     JobState::Conflict { .. } => "La playlist a changé sur Yoto. Vérifiez la version distante avant de continuer.".into(),
                     JobState::Reconciling => "Yoto a peut-être reçu la modification. Vérification requise avant un nouvel envoi.".into(),
@@ -782,7 +784,7 @@ impl PlaylistEditor {
                                         "Remonter le chapitre",
                                         move |v, _, cx| {
                                             if let Err(error) = v.draft.move_chapter(id, -1) {
-                                                v.status = error.to_string();
+                                                v.status = failure_text(&error);
                                                 return;
                                             }
                                             v.save(cx);
@@ -796,7 +798,7 @@ impl PlaylistEditor {
                                         "Descendre le chapitre",
                                         move |v, _, cx| {
                                             if let Err(error) = v.draft.move_chapter(id, 1) {
-                                                v.status = error.to_string();
+                                                v.status = failure_text(&error);
                                                 return;
                                             }
                                             v.save(cx);
@@ -810,7 +812,7 @@ impl PlaylistEditor {
                                     "Séparer les pistes en chapitres",
                                     move |v, window, cx| {
                                         if let Err(error) = v.draft.ungroup(id) {
-                                            v.status = error.to_string();
+                                            v.status = failure_text(&error);
                                             return;
                                         }
                                         v.refresh_inputs(window, cx);
@@ -891,7 +893,7 @@ impl PlaylistEditor {
                                         v.draft.move_track(tid, id, track_index - 1)
                                     };
                                     if let Err(error) = result {
-                                        v.status = error.to_string();
+                                        v.status = failure_text(&error);
                                         return;
                                     }
                                     v.save(cx);
@@ -910,7 +912,7 @@ impl PlaylistEditor {
                                         v.draft.move_track(tid, id, track_index + 1)
                                     };
                                     if let Err(error) = result {
-                                        v.status = error.to_string();
+                                        v.status = failure_text(&error);
                                         return;
                                     }
                                     v.save(cx);
@@ -938,7 +940,7 @@ impl PlaylistEditor {
                                 "Retirer de la playlist",
                                 move |v, _, cx| {
                                     if let Err(error) = v.draft.remove_track(tid) {
-                                        v.status = error.to_string();
+                                        v.status = failure_text(&error);
                                         return;
                                     }
                                     v.save(cx);
@@ -1083,7 +1085,7 @@ impl PlaylistEditor {
         let (account, _) = match self.owning_remote(cx) {
             Ok(remote) => remote,
             Err(error) => {
-                self.status = error.to_string();
+                self.status = failure_text(&error);
                 cx.notify();
                 return;
             }
@@ -1207,7 +1209,7 @@ impl PlaylistEditor {
         let (account, card) = match self.owning_remote(cx) {
             Ok(remote) => remote,
             Err(e) => {
-                self.status = e.to_string();
+                self.status = failure_text(&e);
                 cx.notify();
                 return;
             }
@@ -1248,7 +1250,7 @@ impl PlaylistEditor {
         let (account, card) = match self.owning_remote(cx) {
             Ok(remote) => remote,
             Err(e) => {
-                self.status = e.to_string();
+                self.status = failure_text(&e);
                 cx.notify();
                 return;
             }
@@ -1366,8 +1368,8 @@ impl PlaylistEditor {
                         | Reply::Player(_)
                         | Reply::Data(_),
                     )) => v.status = "Aperçu d’icône indisponible.".into(),
-                    Ok(Err(e)) => v.status = e.to_string(),
-                    Err(e) => v.status = e.to_string(),
+                    Ok(Err(e)) => v.status = failure_text(&e),
+                    Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
                 }
                 cx.notify();
             });
@@ -1481,9 +1483,9 @@ impl PlaylistEditor {
                             | Reply::Images(_)
                             | Reply::Player(_)
                             | Reply::Data(_),
-                        )) => v.status = "Image import returned an unexpected result".into(),
-                        Ok(Err(e)) => v.status = e.to_string(),
-                        Err(e) => v.status = e.to_string(),
+                        )) => v.status = "L’image n’a pas pu être ajoutée.".into(),
+                        Ok(Err(e)) => v.status = failure_text(&e),
+                        Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
                     }
                     cx.notify();
                 });
@@ -2054,7 +2056,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
             div()
                 .text_sm()
                 .text_color(cx.theme().danger)
-                .child(error.to_string()),
+                .child(failure_text(error)),
         );
     }
     let mut main = div().flex_1().min_w_0().h_full().flex().flex_col();
@@ -2109,16 +2111,34 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     )
                     .separator()
                     .item(
-                        PopupMenuItem::new("Supprimer la playlist Yoto")
+                        PopupMenuItem::new("Supprimer la playlist de mon compte Yoto")
                             .disabled(blocked)
-                            .on_click(move |_, _, cx| {
-                                let _ = remove.update(cx, |v, cx| {
-                                    if let Some(editor) = v.editors.get(&id).cloned() {
-                                        cx.defer(move |cx| {
-                                            editor.update(cx, |e, cx| e.delete_remote(cx))
+                            .on_click(move |_, window, cx| {
+                                let Some(title) = remove.upgrade().and_then(|v| {
+                                    let v = v.read(cx);
+                                    v.editors
+                                        .get(&id)
+                                        .map(|editor| editor.read(cx).draft.title.clone())
+                                }) else {
+                                    return;
+                                };
+                                let remove = remove.clone();
+                                confirm_destructive(
+                                    window,
+                                    cx,
+                                    format!("Supprimer « {title} » de votre compte Yoto ?"),
+                                    "La playlist disparaîtra de votre compte Yoto et de vos lecteurs. Vos fichiers audio restent dans la médiathèque. Cette action est irréversible.",
+                                    "Supprimer",
+                                    move |_, cx| {
+                                        let _ = remove.update(cx, |v, cx| {
+                                            if let Some(editor) = v.editors.get(&id).cloned() {
+                                                cx.defer(move |cx| {
+                                                    editor.update(cx, |e, cx| e.delete_remote(cx))
+                                                });
+                                            }
                                         });
-                                    }
-                                });
+                                    },
+                                );
                             }),
                     )
                 }),

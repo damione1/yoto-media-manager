@@ -90,7 +90,7 @@ impl TrimPanel {
         let start = cx.new(|cx| InputState::new(window, cx).default_value("0.000"));
         let end = cx.new(|cx| {
             InputState::new(window, cx)
-                .default_value(format!("{:.6}", media.info.duration.seconds()))
+                .default_value(format!("{:.3}", media.info.duration.seconds()))
         });
         let range = cx.new(|_| {
             SliderState::new()
@@ -269,10 +269,10 @@ impl TrimPanel {
         match origin {
             SelectionOrigin::Handles | SelectionOrigin::Canonical => {
                 self.start.update(cx, |v, cx| {
-                    v.set_value(format!("{:.6}", trim.start().seconds()), window, cx)
+                    v.set_value(format!("{:.3}", trim.start().seconds()), window, cx)
                 });
                 self.end.update(cx, |v, cx| {
-                    v.set_value(format!("{:.6}", trim.end().seconds()), window, cx)
+                    v.set_value(format!("{:.3}", trim.end().seconds()), window, cx)
                 });
             }
             SelectionOrigin::NumericInput => {}
@@ -334,7 +334,7 @@ impl TrimPanel {
                 match &job.state {
                     JobState::Failed { failure } => {
                         draft.preparation = Preparation::Failed;
-                        self.status = failure.to_string();
+                        self.status = failure_text(failure);
                     }
                     JobState::Cancelled => {
                         draft.preparation = Preparation::Failed;
@@ -422,7 +422,7 @@ impl TrimPanel {
                         }
                     }
                     Ok(Err(e)) => {
-                        view.status = e.to_string();
+                        view.status = failure_text(&e);
                         if let Some(draft) = &mut view.editing
                             && draft.preparation.busy()
                         {
@@ -430,7 +430,7 @@ impl TrimPanel {
                         }
                     }
                     Err(e) => {
-                        view.status = e.to_string();
+                        view.status = failure_text(&Failure::Storage(e.to_string()));
                         if let Some(draft) = &mut view.editing
                             && draft.preparation.busy()
                         {
@@ -776,17 +776,32 @@ impl Render for TrimPanel {
                             ))
                             .separator()
                             .item(
-                                PopupMenuItem::new("Supprimer ce média local").on_click(
-                                    move |_, _, cx| {
-                                        let _ = remove.update(cx, |v, cx| {
-                                            v.send(
-                                                Command::DeleteMedia {
-                                                    media: v.media.id,
-                                                    policy: ReferencePolicy::RejectReferenced,
-                                                },
-                                                cx,
-                                            )
-                                        });
+                                PopupMenuItem::new("Supprimer de la médiathèque").on_click(
+                                    move |_, window, cx| {
+                                        let Some(title) =
+                                            remove.upgrade().map(|v| v.read(cx).media.title.clone())
+                                        else {
+                                            return;
+                                        };
+                                        let remove = remove.clone();
+                                        confirm_destructive(
+                                            window,
+                                            cx,
+                                            format!("Supprimer « {title} » ?"),
+                                            "L’audio et ses versions préparées seront effacés de cet ordinateur. Cette action est irréversible. Un média utilisé dans une playlist ne peut pas être supprimé.",
+                                            "Supprimer",
+                                            move |_, cx| {
+                                                let _ = remove.update(cx, |v, cx| {
+                                                    v.send(
+                                                        Command::DeleteMedia {
+                                                            media: v.media.id,
+                                                            policy: ReferencePolicy::RejectReferenced,
+                                                        },
+                                                        cx,
+                                                    )
+                                                });
+                                            },
+                                        );
                                     },
                                 ),
                             )

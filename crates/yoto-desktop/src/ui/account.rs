@@ -63,10 +63,21 @@ pub fn render(view: &mut AppView, cx: &mut Context<AppView>) -> AnyElement {
                         let owner = owner.clone();
                         let id = id.clone();
                         menu.item(PopupMenuItem::new("Déconnecter ce compte").on_click(
-                            move |_, _, cx| {
-                                let _ = owner.update(cx, |v, cx| {
-                                    v.send(Command::Disconnect(id.clone()), cx)
-                                });
+                            move |_, window, cx| {
+                                let owner = owner.clone();
+                                let id = id.clone();
+                                confirm_destructive(
+                                    window,
+                                    cx,
+                                    "Déconnecter ce compte Yoto ?",
+                                    "Les envois en cours vers Yoto seront interrompus. Vos playlists restent sur votre compte Yoto et votre médiathèque reste sur cet ordinateur. Vous pourrez vous reconnecter à tout moment.",
+                                    "Déconnecter",
+                                    move |_, cx| {
+                                        let _ = owner.update(cx, |v, cx| {
+                                            v.send(Command::Disconnect(id.clone()), cx)
+                                        });
+                                    },
+                                );
                             },
                         ))
                     }),

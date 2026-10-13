@@ -48,7 +48,7 @@ impl Render for MovePicker {
                 .child(Button::new("confirm-move").label("Déplacer").primary().disabled(blocked || self.selected.is_none()).on_click(cx.listener(|v, _, _, cx| {
                     if let Some((chapter, end)) = v.selected { let track = v.track; let _ = v.owner.update(cx, |owner, cx| {
                         if owner.blocked() || owner.owning_remote(cx).is_err() { return }
-                        if let Err(error) = owner.draft.move_track(track, chapter, end) { owner.status = error.to_string(); cx.notify(); return }
+                        if let Err(error) = owner.draft.move_track(track, chapter, end) { owner.status = failure_text(&error); cx.notify(); return }
                         owner.persist(CommitTarget::MovePicker, cx);
                     }); }
                 }))))

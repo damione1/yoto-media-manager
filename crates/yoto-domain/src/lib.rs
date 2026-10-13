@@ -91,7 +91,7 @@ impl Rules {
     pub fn title(value: &str) -> Result<()> {
         if value.trim().is_empty() || value.chars().count() > Self::TITLE_MAX {
             return Err(Failure::Validation(format!(
-                "Title must contain 1–{} characters.",
+                "Le titre doit contenir entre 1 et {} caractères.",
                 Self::TITLE_MAX
             )));
         }

@@ -263,11 +263,11 @@ impl Render for UpdatePanel {
                         ));
             }
         }
-        body = body.children(
-            self.notice
-                .as_ref()
-                .map(|error| div().text_color(cx.theme().danger).child(error.to_string())),
-        );
+        body = body.children(self.notice.as_ref().map(|error| {
+            div()
+                .text_color(cx.theme().danger)
+                .child(failure_text(error))
+        }));
         body.child(
             div().flex().justify_end().child(
                 DialogClose::new().child(

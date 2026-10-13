@@ -84,15 +84,19 @@ fn choices(snapshot: &Snapshot) -> Vec<MediaChoice> {
                     id: recipe.id,
                     label: if recipe.id == original {
                         format!(
-                            "Original · {:.1} min",
-                            recipe.trim.duration().seconds() / 60.
+                            "Original · {}",
+                            duration_text(recipe.trim.duration().seconds())
                         )
                     } else {
                         format!(
-                            "Découpe · {:.1}–{:.1} s · {}",
-                            recipe.trim.start().seconds(),
-                            recipe.trim.end().seconds(),
-                            recipe.normalization.label()
+                            "Découpe {} → {} ({}){}",
+                            wording::position_text(recipe.trim.start().seconds()),
+                            wording::position_text(recipe.trim.end().seconds()),
+                            duration_text(recipe.trim.duration().seconds()),
+                            match recipe.normalization {
+                                Normalization::Preserve => "",
+                                Normalization::Loudness => " · volume égalisé",
+                            }
                         )
                     },
                 })

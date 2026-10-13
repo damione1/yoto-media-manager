@@ -159,8 +159,8 @@ impl IconPicker {
                     | Reply::Player(_)
                     | Reply::Data(_),
                 )) => Err("Résultat d’image inattendu.".into()),
-                Ok(Err(error)) => Err(error.to_string()),
-                Err(error) => Err(error.to_string()),
+                Ok(Err(error)) => Err(failure_text(&error)),
+                Err(error) => Err(failure_text(&Failure::Storage(error.to_string()))),
             };
             let asset = staged.as_ref().ok().copied();
             let accepted = weak
@@ -279,7 +279,7 @@ impl Render for IconPicker {
         .h(px(336.));
         let loading = matches!(self.sync, Some(RemoteSyncState::Syncing));
         let failure = match &self.sync {
-            Some(RemoteSyncState::Failed { failure }) => Some(failure.to_string()),
+            Some(RemoteSyncState::Failed { failure }) => Some(failure_text(failure)),
             Some(RemoteSyncState::Syncing | RemoteSyncState::Ready { .. }) | None => None,
         };
         let mut body = div()

@@ -9,6 +9,7 @@ mod players;
 mod reconciliation;
 mod trim;
 mod update;
+mod wording;
 use gpui_kit::component::{
     ActiveTheme, Disableable, Selectable, Sizable,
     button::{Button, ButtonVariants},
@@ -16,6 +17,8 @@ use gpui_kit::component::{
 };
 use gpui_kit::*;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
+pub use wording::failure_text;
+use wording::{confirm_destructive, duration_text};
 use yoto_domain::*;
 use yoto_infra::{Command, Reply, Session as Service, Snapshot};
 pub struct AppView {
@@ -53,6 +56,9 @@ pub struct AppView {
     pub new_title: Entity<InputState>,
     pub youtube: Entity<InputState>,
     pub youtube_entries: Vec<SourceEntry>,
+    /// Titles learned while inspecting YouTube links, keyed by the imported URL, so a
+    /// running import shows the video title instead of a generic label.
+    pub youtube_titles: BTreeMap<String, String>,
     pub selected_entries: std::collections::BTreeSet<String>,
     pub youtube_import_pending: bool,
     pub youtube_inspection_generation: u64,
@@ -204,6 +210,7 @@ impl AppView {
             new_title,
             youtube,
             youtube_entries: vec![],
+            youtube_titles: BTreeMap::new(),
             selected_entries: Default::default(),
             youtube_import_pending: false,
             youtube_inspection_generation: 0,
@@ -362,13 +369,28 @@ impl AppView {
                         view.job_page = Some(Arc::new(jobs));
                         view.job_offset = offset;
                     }
-                    Ok(Err(e)) => view.error = Some(e),
-                    Err(e) => view.error = Some(Failure::Storage(e.to_string())),
+                    Ok(Err(e)) => view.report_error(e, cx),
+                    Err(e) => view.report_error(Failure::Storage(e.to_string()), cx),
                 };
                 cx.notify();
             });
         })
         .detach();
+    }
+    /// Show a failure where a parent will see it: the status line and a toast.
+    pub fn report_error(&mut self, failure: Failure, cx: &mut Context<Self>) {
+        let text = failure_text(&failure);
+        self.status = text.clone();
+        self.error = Some(failure);
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    use gpui_kit::component::{WindowExt, notification::Notification};
+                    window.push_notification(Notification::error(text).autohide(false), cx);
+                });
+            });
+        }
+        cx.notify();
     }
     pub fn send(&mut self, command: Command, cx: &mut Context<Self>) {
         let creating_playlist = matches!(
@@ -395,7 +417,7 @@ impl AppView {
         if connecting {
             self.connecting = true;
         }
-        let synchronizing = matches!(&command, Command::Sync(_) | Command::RefreshPlaylists(_));
+        let progress = command_status(&command);
         if matches!(
             &command,
             Command::NewPlaylist(_)
@@ -436,14 +458,9 @@ impl AppView {
         if let Some(request) = &opening_remote {
             self.opening_playlist = Some(request.clone());
         }
-        self.status = if connecting {
-            "Connexion Yoto en cours dans votre navigateur…"
-        } else if synchronizing {
-            "Chargement depuis Yoto…"
-        } else {
-            "Traitement en cours…"
+        if let Some((pending, _)) = progress {
+            self.status = pending.into();
         }
-        .into();
         let selection = self.selected_media;
         let base = self.snapshot.clone();
         let worker_base = base.clone();
@@ -492,20 +509,13 @@ impl AppView {
                         {
                             view.adopt(prepared, cx);
                         }
-                        view.status = if connecting {
-                            "Compte connecté. Chargement de vos playlists Yoto…"
-                        } else if synchronizing {
-                            "Données Yoto actualisées."
-                        } else {
-                            "Enregistré."
+                        if let Some((_, done)) = progress {
+                            view.status = done.into();
                         }
-                        .into();
                         let reply = match reply {
                             Ok(reply) => reply,
                             Err(error) => {
-                                view.status = error.to_string();
-                                view.error = Some(error);
-                                cx.notify();
+                                view.report_error(error, cx);
                                 return;
                             }
                         };
@@ -603,13 +613,8 @@ impl AppView {
                             }
                         }
                     }
-                    Ok(Err(e)) => {
-                        view.status = e.to_string();
-                        view.error = Some(e);
-                    }
-                    Err(e) => {
-                        view.error = Some(Failure::Storage(e.to_string()));
-                    }
+                    Ok(Err(e)) => view.report_error(e, cx),
+                    Err(e) => view.report_error(Failure::Storage(e.to_string()), cx),
                 }
                 cx.notify();
             });
@@ -629,7 +634,7 @@ impl AppView {
         let runtime = self.runtime.clone();
         cx.spawn(async move|weak,cx|{
             let result=runtime.spawn_blocking(move|| {let profile=yoto_infra::canonical_profile(&path)?;if !profile.join("catalogue.db").is_file(){return Err(Failure::Validation("Choisissez un profil Yoto existant contenant catalogue.db".into()));}let mut command=std::process::Command::new(std::env::current_exe().map_err(|e|Failure::Storage(e.to_string()))?);command.env("YOTO_PROFILE",profile);if cfg!(debug_assertions)&&std::env::args().any(|a|a=="--isolated"){command.arg("--isolated");}command.spawn().map_err(|e|Failure::Storage(e.to_string()))?;Ok(())}).await;
-            let _=weak.update(cx,|v,cx|{match result {Ok(Ok(()))=>v.status="Le profil choisi s’ouvre dans une autre fenêtre ; le profil courant reste disponible.".into(),Ok(Err(e))=>v.error=Some(e),Err(e)=>v.error=Some(Failure::Storage(e.to_string()))}cx.notify();});
+            let _=weak.update(cx,|v,cx|{match result {Ok(Ok(()))=>v.status="La médiathèque choisie s’ouvre dans une autre fenêtre ; celle-ci reste disponible.".into(),Ok(Err(e))=>v.report_error(e,cx),Err(e)=>v.report_error(Failure::Storage(e.to_string()),cx)}cx.notify();});
         }).detach();
     }
     pub fn choose_profile(&mut self, cx: &mut Context<Self>) {
@@ -644,14 +649,46 @@ impl AppView {
         })
         .detach();
     }
+    /// Files dropped anywhere on the window: keep the audio, explain the rest, and show
+    /// the import queue so the parent sees something happen.
+    pub fn import_dropped(&mut self, paths: &[std::path::PathBuf], cx: &mut Context<Self>) {
+        let (audio, ignored): (Vec<_>, Vec<_>) = paths.iter().cloned().partition(|path| {
+            path.extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| AUDIO_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+        });
+        if audio.is_empty() {
+            self.report_error(
+                Failure::Validation(
+                    "Déposez des fichiers audio (MP3, M4A, WAV, FLAC, OGG…). Les autres fichiers sont ignorés.".into(),
+                ),
+                cx,
+            );
+            return;
+        }
+        self.navigate(Route::Imports, cx);
+        self.send(
+            Command::Import(
+                audio
+                    .into_iter()
+                    .map(|path| ImportSelection::LocalFile { path })
+                    .collect(),
+            ),
+            cx,
+        );
+        if !ignored.is_empty() {
+            self.status = format!(
+                "Import lancé. {} fichier(s) ignoré(s) car ce ne sont pas des fichiers audio.",
+                ignored.len()
+            );
+            cx.notify();
+        }
+    }
     pub fn add_files(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |weak, cx| {
             let files = rfd::AsyncFileDialog::new()
                 .set_title("Ajouter vos fichiers audio")
-                .add_filter(
-                    "Audio",
-                    &["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "aiff"],
-                )
+                .add_filter("Audio", AUDIO_EXTENSIONS)
                 .pick_files()
                 .await;
             if let Some(files) = files {
@@ -662,7 +699,7 @@ impl AppView {
                     })
                     .collect();
                 let _ = weak.update(cx, |view, cx| {
-                    view.route = Route::Imports;
+                    view.navigate(Route::Imports, cx);
                     view.send(Command::Import(selections), cx);
                 });
             }
@@ -714,6 +751,10 @@ impl AppView {
         cx.notify();
     }
 }
+/// Audio formats accepted by the file picker and by drag-and-drop.
+const AUDIO_EXTENSIONS: &[&str] = &[
+    "mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "aiff", "aif", "wma",
+];
 struct SearchRow {
     index: usize,
     title: String,
@@ -824,17 +865,7 @@ impl Render for AppView {
         div()
             .size_full()
             .on_drop(cx.listener(|view, files: &ExternalPaths, _, cx| {
-                view.send(
-                    Command::Import(
-                        files
-                            .paths()
-                            .iter()
-                            .cloned()
-                            .map(|path| ImportSelection::LocalFile { path })
-                            .collect(),
-                    ),
-                    cx,
-                );
+                view.import_dropped(files.paths(), cx);
             }))
             .flex()
             .flex_col()
@@ -860,6 +891,7 @@ impl Render for AppView {
                     } else {
                         cx.theme().muted_foreground
                     })
+                    .truncate()
                     .child(self.status.clone()),
             )
     }
@@ -913,6 +945,90 @@ impl AppView {
 fn element_id(label: &str, id: impl std::fmt::Display) -> ElementId {
     SharedString::from(format!("{label}:{id}")).into()
 }
+/// Status line while a command runs and once it succeeds. `None` keeps the line as it is:
+/// background lookups (waveform, preview) must not claim anything was saved.
+fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
+    Some(match command {
+        Command::Connect => (
+            "Connexion Yoto en cours dans votre navigateur…",
+            "Compte connecté. Chargement de vos playlists Yoto…",
+        ),
+        Command::Disconnect(_) => ("Déconnexion du compte…", "Compte déconnecté."),
+        Command::SelectAccount(_) => ("Changement de compte…", "Compte sélectionné."),
+        Command::Sync(_) | Command::RefreshPlaylists(_) | Command::RefreshIcons(_) => {
+            ("Chargement depuis Yoto…", "Données Yoto actualisées.")
+        }
+        Command::Import(_) => (
+            "Ajout à la file d’import…",
+            "Import lancé. Suivez sa progression dans « Imports ».",
+        ),
+        Command::CreateYotoPlaylist { .. } => (
+            "Création de la playlist sur Yoto…",
+            "Playlist créée sur Yoto.",
+        ),
+        Command::DuplicateYotoPlaylist { .. } => {
+            ("Copie de la playlist sur Yoto…", "Copie créée sur Yoto.")
+        }
+        Command::LoadRemote { .. } => ("Ouverture de la playlist…", "Playlist Yoto ouverte."),
+        Command::DeleteRemote { .. } => (
+            "Suppression sur Yoto…",
+            "Playlist supprimée de votre compte Yoto.",
+        ),
+        Command::DeleteGroup { .. } => ("Suppression du groupe…", "Groupe supprimé."),
+        Command::DeleteMedia { .. } | Command::DeleteMediaBatch { .. } => {
+            ("Suppression…", "Média supprimé de votre médiathèque.")
+        }
+        Command::CollectGarbage => ("Nettoyage…", "Fichiers inutilisés supprimés."),
+        Command::Retry(_) => ("Relance de la tâche…", "Tâche relancée."),
+        Command::Cancel(_) => ("Annulation…", "Tâche annulée."),
+        Command::Resolve { .. }
+        | Command::Reconcile(_)
+        | Command::AttachPublicationReceipt { .. } => {
+            ("Vérification auprès de Yoto…", "Vérification lancée.")
+        }
+        Command::Backup { .. } => ("Sauvegarde en cours…", "Sauvegarde terminée."),
+        Command::Restore { .. } => ("Restauration en cours…", "Restauration terminée."),
+        Command::Waveform(_)
+        | Command::StopPreview
+        | Command::PreviewStatus
+        | Command::Preview(_)
+        | Command::PreviewTrim { .. }
+        | Command::ReleaseAsset(_)
+        | Command::ReadPixelArt(_)
+        | Command::Thumbnail(_)
+        | Command::AppUpdate(_)
+        | Command::JobsPage { .. } => return None,
+        Command::InspectYoutube(_)
+        | Command::NewPlaylist(_)
+        | Command::SavePlaylist { .. }
+        | Command::Duplicate(_)
+        | Command::SaveCopy(_)
+        | Command::DeletePlaylist(_)
+        | Command::AddMedia { .. }
+        | Command::DeleteRecipe { .. }
+        | Command::UpdateMedia { .. }
+        | Command::Prepare { .. }
+        | Command::Export { .. }
+        | Command::UpdateYotoPlaylist { .. }
+        | Command::AddYotoMedia { .. }
+        | Command::DeviceConfig { .. }
+        | Command::DeviceStatus { .. }
+        | Command::SaveDeviceConfig { .. }
+        | Command::SaveShortcuts { .. }
+        | Command::Publish { .. }
+        | Command::Player { .. }
+        | Command::RenameDevice { .. }
+        | Command::SaveGroup { .. }
+        | Command::LoadGroup { .. }
+        | Command::FamilyImages(_)
+        | Command::FamilyImage { .. }
+        | Command::UploadFamilyImage { .. }
+        | Command::SavePixelArt(_)
+        | Command::StoreImage { .. }
+        | Command::ImportIcon { .. }
+        | Command::SetCover { .. } => ("Traitement en cours…", "Terminé."),
+    })
+}
 fn account_summary(snapshot: &Snapshot) -> String {
     match snapshot
         .active_account
@@ -936,7 +1052,10 @@ fn remote_sync_message(snapshot: &Snapshot, collection: RemoteCollection) -> Str
         Some(RemoteSyncState::Syncing) => format!("{label} · Synchronisation en cours…"),
         Some(RemoteSyncState::Ready { .. }) => format!("{label} · À jour"),
         Some(RemoteSyncState::Failed { failure }) => {
-            format!("{label} · Actualisation impossible : {failure}")
+            format!(
+                "{label} · Actualisation impossible : {}",
+                failure_text(failure)
+            )
         }
     }
 }

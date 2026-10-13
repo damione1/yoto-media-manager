@@ -9,11 +9,10 @@ impl AppView {
         }
         let url = self.youtube.read(cx).value().trim().to_owned();
         if url.is_empty() {
-            self.error = Some(Failure::Validation(
-                "Collez un lien YouTube pour importer son audio.".into(),
-            ));
-            self.status = "Collez un lien YouTube pour commencer.".into();
-            cx.notify();
+            self.report_error(
+                Failure::Validation("Collez un lien YouTube pour importer son audio.".into()),
+                cx,
+            );
             return;
         }
         self.youtube_import_pending = true;
@@ -29,38 +28,94 @@ impl AppView {
         let rt = self.runtime.clone();
         cx.spawn(async move |weak, cx| {
             let request_url = url.clone();
-            let result = rt.spawn(async move { service.execute(Command::InspectYoutube(request_url)).await }).await;
+            let result = rt
+                .spawn(async move { service.execute(Command::InspectYoutube(request_url)).await })
+                .await;
             let _ = weak.update(cx, |view, cx| {
-                if generation != view.youtube_inspection_generation { return; }
+                if generation != view.youtube_inspection_generation {
+                    return;
+                }
                 view.youtube_import_pending = false;
-                if view.youtube.read(cx).value().trim() != url { cx.notify(); return; }
+                if view.youtube.read(cx).value().trim() != url {
+                    cx.notify();
+                    return;
+                }
                 match result {
                     Ok(Ok(Reply::Entries(inspection))) => match inspection.kind {
                         SourceShape::Video => {
                             if let [entry] = inspection.entries.as_slice() {
-                                view.status = format!("Import de « {} »…", entry.title);
-                                view.send(Command::Import(vec![ImportSelection::Youtube { url: entry.url.clone(), entry: Some(entry.id.clone()) }]), cx);
+                                view.youtube_titles
+                                    .insert(entry.url.clone(), entry.title.clone());
+                                view.send(
+                                    Command::Import(vec![ImportSelection::Youtube {
+                                        url: entry.url.clone(),
+                                        entry: Some(entry.id.clone()),
+                                    }]),
+                                    cx,
+                                );
+                                view.status = format!(
+                                    "Import de « {} » lancé. Suivez-le ci-dessous.",
+                                    entry.title
+                                );
+                                view.clear_youtube_link(cx);
                             } else {
-                                view.status = "Cette vidéo n’est pas disponible. Vérifiez le lien et réessayez.".into();
-                                view.error = Some(Failure::Validation(view.status.clone()));
+                                view.report_error(
+                                    Failure::Validation(
+                                        "Cette vidéo n’est pas disponible. Vérifiez le lien et réessayez.".into(),
+                                    ),
+                                    cx,
+                                );
                             }
                         }
                         SourceShape::Playlist => {
                             view.youtube_selection_url = Some(url.clone());
                             view.youtube_entries = inspection.entries;
-                            view.status = if view.youtube_entries.is_empty() { "Cette playlist ne contient aucune vidéo disponible.".into() } else { "Choisissez les vidéos de cette playlist à importer.".into() };
+                            view.status = if view.youtube_entries.is_empty() {
+                                "Cette playlist ne contient aucune vidéo disponible.".into()
+                            } else {
+                                "Cochez les vidéos de cette playlist à importer.".into()
+                            };
                         }
                     },
-                    Ok(Ok(Reply::AppUpdate(_) | Reply::Updated | Reply::Saved(_) | Reply::OpenedPlaylist(_) | Reply::PlaylistOperation { .. } | Reply::Waveform(_) | Reply::Prepared(_) | Reply::Asset(_) | Reply::PixelArt(_) | Reply::Image(_) | Reply::Images(_) | Reply::Player(_) | Reply::Data(_))) => {
-                        view.status = "Impossible de lire les informations YouTube. Réessayez.".into();
-                        view.error = Some(Failure::Validation(view.status.clone()));
-                    }
-                    Ok(Err(error)) => { view.status = "Impossible d’importer ce lien. Vérifiez qu’il est accessible puis réessayez.".into(); view.error = Some(error); }
-                    Err(error) => { view.status = "L’import n’a pas pu démarrer. Réessayez.".into(); view.error = Some(Failure::Storage(error.to_string())); }
+                    Ok(Ok(
+                        Reply::AppUpdate(_)
+                        | Reply::Updated
+                        | Reply::Saved(_)
+                        | Reply::OpenedPlaylist(_)
+                        | Reply::PlaylistOperation { .. }
+                        | Reply::Waveform(_)
+                        | Reply::Prepared(_)
+                        | Reply::Asset(_)
+                        | Reply::PixelArt(_)
+                        | Reply::Image(_)
+                        | Reply::Images(_)
+                        | Reply::Player(_)
+                        | Reply::Data(_),
+                    )) => view.report_error(
+                        Failure::Validation(
+                            "Impossible de lire les informations de cette vidéo. Réessayez.".into(),
+                        ),
+                        cx,
+                    ),
+                    Ok(Err(error)) => view.report_error(error, cx),
+                    Err(error) => view.report_error(Failure::Storage(error.to_string()), cx),
                 }
                 cx.notify();
             });
-        }).detach();
+        })
+        .detach();
+    }
+    /// Empty the link field once its import is queued, so a second click cannot import
+    /// the same video twice.
+    fn clear_youtube_link(&mut self, cx: &mut Context<Self>) {
+        let input = self.youtube.clone();
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    input.update(cx, |input, cx| input.set_value("", window, cx));
+                });
+            });
+        }
     }
 }
 pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> AnyElement {
@@ -87,7 +142,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                         .on_click(cx.listener(|v, _, _, cx| v.begin_youtube(cx))),
                 ),
         )
-        .child(div().text_sm().text_color(cx.theme().muted_foreground).child("Collez un lien vidéo : son audio rejoint votre médiathèque. Pour une playlist, choisissez les vidéos."));
+        .child(div().text_sm().text_color(cx.theme().muted_foreground).child("Collez le lien d’une vidéo YouTube : son audio rejoint votre médiathèque. Pour une playlist YouTube, vous choisirez les vidéos à garder. Vous pouvez aussi glisser des fichiers audio dans cette fenêtre."));
     let choosing = view.youtube_selection_url.as_deref()
         == Some(view.youtube.read(cx).value().trim())
         && !view.youtube_entries.is_empty();
@@ -143,17 +198,30 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                     .primary()
                     .disabled(view.selected_entries.is_empty())
                     .on_click(cx.listener(|v, _, _, cx| {
-                        let selections = v
+                        let chosen: Vec<_> = v
                             .youtube_entries
                             .iter()
                             .filter(|e| v.selected_entries.contains(&e.id))
-                            .map(|e| ImportSelection::Youtube {
-                                url: e.url.clone(),
-                                entry: Some(e.id.clone()),
+                            .cloned()
+                            .collect();
+                        let count = chosen.len();
+                        let selections = chosen
+                            .into_iter()
+                            .map(|e| {
+                                v.youtube_titles.insert(e.url.clone(), e.title);
+                                ImportSelection::Youtube {
+                                    url: e.url,
+                                    entry: Some(e.id),
+                                }
                             })
                             .collect();
                         v.send(Command::Import(selections), cx);
                         v.selected_entries.clear();
+                        v.youtube_entries.clear();
+                        v.youtube_selection_url = None;
+                        v.status =
+                            format!("{count} vidéo(s) en cours d’import. Suivez-les ci-dessous.");
+                        v.clear_youtube_link(cx);
                         cx.notify();
                     })),
             )
@@ -163,7 +231,20 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
         .as_ref()
         .map_or(view.snapshot.jobs.len(), |v| v.len());
     if jobs_count == 0 {
-        return body.child(div().text_color(cx.theme().muted_foreground).child("Vos imports apparaîtront ici. Vous pouvez aussi ajouter un fichier audio depuis votre ordinateur.")).into_any_element();
+        return body
+            .child(
+                div()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("Vos imports apparaîtront ici, avec leur progression."),
+            )
+            .child(
+                div().child(
+                    Button::new("imports-add-file")
+                        .label("Ajouter un fichier audio depuis mon ordinateur")
+                        .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
+                ),
+            )
+            .into_any_element();
     }
     let mut history = div().flex().gap_2().child(format!(
         "Historique · {}–{}",
@@ -200,7 +281,21 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                             .as_ref()
                             .map_or(&view.snapshot.jobs, |v| v.as_ref())[index];
                         let id = job.id;
-                        let title = job_title(job, &view.snapshot);
+                        let title = job_title(job, &view.snapshot, &view.youtube_titles);
+                        let failed = matches!(job.state, JobState::Failed { .. });
+                        let state_line = match &job.state {
+                            JobState::Failed { failure } | JobState::Retry { failure, .. } => {
+                                format!("{} · {}", job.state.label(), failure_text(failure))
+                            }
+                            JobState::Queued | JobState::Running { .. } => {
+                                format!("{}…", job.state.label())
+                            }
+                            JobState::WaitingForAuthentication
+                            | JobState::Conflict { .. }
+                            | JobState::Reconciling
+                            | JobState::Completed { .. }
+                            | JobState::Cancelled => job.state.label().to_owned(),
+                        };
                         let mut actions = div().flex().items_center().gap_2();
                         match &job.state {
                             JobState::Failed { .. } | JobState::Retry { .. } => {
@@ -294,8 +389,13 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                             .child(
                                 div()
                                     .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(job.state.label()),
+                                    .text_color(if failed {
+                                        cx.theme().danger
+                                    } else {
+                                        cx.theme().muted_foreground
+                                    })
+                                    .truncate()
+                                    .child(state_line),
                             )
                             .child(actions)
                             .into_any_element()
@@ -309,7 +409,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
     .min_h_0();
     body.child(jobs).into_any_element()
 }
-fn job_title(job: &Job, snapshot: &Snapshot) -> String {
+fn job_title(job: &Job, snapshot: &Snapshot, youtube_titles: &BTreeMap<String, String>) -> String {
     if let JobState::Completed {
         output: JobOutput::Imported { media },
     } = &job.state
@@ -324,7 +424,10 @@ fn job_title(job: &Job, snapshot: &Snapshot) -> String {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
-            ImportSelection::Youtube { .. } => "Audio YouTube".into(),
+            ImportSelection::Youtube { url, .. } => youtube_titles.get(url).map_or_else(
+                || "Vidéo YouTube".into(),
+                |title| format!("YouTube · {title}"),
+            ),
         },
         JobRequest::Encode { recipe } => snapshot
             .recipes
@@ -349,7 +452,7 @@ fn show_details(view: &mut AppView, id: JobId, window: &mut Window, cx: &mut Con
     else {
         return;
     };
-    let title = job_title(&job, &view.snapshot);
+    let title = job_title(&job, &view.snapshot, &view.youtube_titles);
     let owner = cx.entity().downgrade();
     window.open_dialog(cx, move |dialog, _, cx| {
         let content = owner
@@ -382,7 +485,7 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
     }
     match &job.state {
         JobState::Failed { failure } | JobState::Retry { failure, .. } => {
-            body = body.child(failure.to_string()).child(
+            body = body.child(failure_text(failure)).child(
                 Button::new(element_id("retry-details", id))
                     .label("Réessayer")
                     .on_click(cx.listener(move |v, _, window, cx| {
@@ -419,8 +522,8 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
                 })));
         }
         JobState::Completed { output } => match output {
-            JobOutput::Published { card, .. } => {
-                body = body.child(format!("Publié : {card}. Associez ensuite ce contenu à votre carte MYO dans l’application Yoto."));
+            JobOutput::Published { .. } => {
+                body = body.child("Enregistré sur votre compte Yoto. Pour l’écouter sur une carte, associez cette playlist à une carte « Make Your Own » dans l’application Yoto.");
             }
             JobOutput::Imported { .. } | JobOutput::Encoded { .. } => {}
         },

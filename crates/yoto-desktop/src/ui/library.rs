@@ -14,11 +14,30 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     let media = &view.snapshot.media[view.library_rows[index]];
                     let id = media.id;
                     let selected = view.selected_media_set.contains(&id);
+                    let open = view.selected_media == Some(id);
+                    let versions = media.recipes.len().saturating_sub(1);
+                    let details = if versions > 0 {
+                        format!(
+                            "{} · {:.1} Mo · {versions} version(s) préparée(s)",
+                            duration_text(media.info.duration.seconds()),
+                            media.info.bytes as f64 / 1_000_000.
+                        )
+                    } else {
+                        format!(
+                            "{} · {:.1} Mo",
+                            duration_text(media.info.duration.seconds()),
+                            media.info.bytes as f64 / 1_000_000.
+                        )
+                    };
                     rows.push(
                         div()
                             .p_4()
                             .border_1()
-                            .border_color(cx.theme().border)
+                            .border_color(if open {
+                                cx.theme().primary
+                            } else {
+                                cx.theme().border
+                            })
                             .rounded_lg()
                             .flex()
                             .gap_3()
@@ -28,6 +47,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                     "select-media",
                                     id,
                                 ))
+                                .accessibility_label(format!("Sélectionner {}", media.title))
                                 .checked(selected)
                                 .on_click(cx.listener(
                                     move |v, checked, _, cx| {
@@ -52,17 +72,13 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                         div()
                                             .text_sm()
                                             .text_color(cx.theme().muted_foreground)
-                                            .child(format!(
-                                                "{:.1} min · {} · {:.1} Mo",
-                                                media.info.duration.seconds() / 60.,
-                                                media.info.codec,
-                                                media.info.bytes as f64 / 1_000_000.
-                                            )),
+                                            .child(details),
                                     ),
                             )
                             .child(
                                 Button::new(element_id("open-media", id.to_string()))
-                                    .label("Écouter")
+                                    .label(if open { "Ouvert" } else { "Écouter" })
+                                    .selected(open)
                                     .on_click(cx.listener(move |v, _, window, cx| {
                                         v.select_media(id, window, cx)
                                     })),
@@ -88,9 +104,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     .flex()
                     .flex_col()
                     .gap_3()
-                    .child(div().text_xl().child("Commencez votre bibliothèque audio"))
+                    .child(div().text_xl().child("Commencez votre médiathèque"))
                     .child(
-                        "Importez vos fichiers, préparez vos extraits, puis composez une playlist.",
+                        "Ajoutez un fichier audio ou un lien YouTube. Vous pourrez ensuite écouter, découper, puis ajouter l’audio à une playlist Yoto.",
                     )
                     .child(
                         Button::new("first-file")
@@ -100,10 +116,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     )
                     .child(
                         Button::new("first-youtube")
-                            .label("Ajouter une URL YouTube")
+                            .label("Importer depuis un lien YouTube")
                             .on_click(cx.listener(|v, _, _, cx| {
-                                v.route = Route::Imports;
-                                cx.notify();
+                                v.navigate(Route::Imports, cx);
                             })),
                     ),
             )
@@ -204,6 +219,8 @@ fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
         .child(
             Button::new("library-more")
                 .label("⋯")
+                .accessibility_label("Plus d’options")
+                .tooltip("Plus d’options")
                 .ghost()
                 .dropdown_menu(move |menu, _, _| {
                     let select = more.clone();
@@ -222,9 +239,12 @@ fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                     )
                     .separator()
                     .item(
-                        PopupMenuItem::new("Nettoyer le cache audio").on_click(move |_, _, cx| {
-                            let _ = clean.update(cx, |v, cx| v.send(Command::CollectGarbage, cx));
-                        }),
+                        PopupMenuItem::new("Libérer l’espace inutilisé").on_click(
+                            move |_, _, cx| {
+                                let _ =
+                                    clean.update(cx, |v, cx| v.send(Command::CollectGarbage, cx));
+                            },
+                        ),
                     )
                 }),
         );
@@ -271,13 +291,26 @@ fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
             .child(
                 Button::new("delete-selected-media")
                     .label("Supprimer")
-                    .on_click(cx.listener(|v, _, _, cx| {
-                        v.send(
-                            Command::DeleteMediaBatch {
-                                media: v.selected_media_set.iter().copied().collect(),
-                                policy: ReferencePolicy::RejectReferenced,
-                            },
+                    .on_click(cx.listener(|v, _, window, cx| {
+                        let count = v.selected_media_set.len();
+                        let owner = cx.entity().downgrade();
+                        confirm_destructive(
+                            window,
                             cx,
+                            format!("Supprimer {count} média(s) de la médiathèque ?"),
+                            "Les fichiers audio et leurs versions préparées seront effacés de cet ordinateur. Les médias déjà utilisés dans une playlist seront conservés. Cette action est irréversible.",
+                            "Supprimer",
+                            move |_, cx| {
+                                let _ = owner.update(cx, |v, cx| {
+                                    v.send(
+                                        Command::DeleteMediaBatch {
+                                            media: v.selected_media_set.iter().copied().collect(),
+                                            policy: ReferencePolicy::RejectReferenced,
+                                        },
+                                        cx,
+                                    );
+                                });
+                            },
                         );
                     })),
             )
