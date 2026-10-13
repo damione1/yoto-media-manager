@@ -1,6 +1,7 @@
 /target/
 /dist/
 /tools/
+/.cargo/config.toml
 *.p12
 *.key
 .DS_Store

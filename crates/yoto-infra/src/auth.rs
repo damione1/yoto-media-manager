@@ -22,13 +22,21 @@ pub struct PublicConfig {
 }
 #[derive(Clone, Deserialize)]
 pub struct OAuthConfig {
+    #[serde(skip)]
     pub client_id: String,
     pub redirect_uri: String,
     pub requested_scopes: Vec<Scope>,
 }
 impl PublicConfig {
     pub fn embedded() -> Result<Self> {
-        let c: Self = toml::from_str(include_str!("../../../config/yoto.toml")).map_err(storage)?;
+        let mut c: Self =
+            toml::from_str(include_str!("../../../config/yoto.toml")).map_err(storage)?;
+        c.oauth.client_id = env!(
+            "YOTO_CLIENT_ID",
+            "Set YOTO_CLIENT_ID before building YotoMediaManager"
+        )
+        .trim()
+        .to_owned();
         let u = url::Url::parse(&c.oauth.redirect_uri).map_err(storage)?;
         if u.scheme() != "http"
             || u.host_str() != Some("127.0.0.1")

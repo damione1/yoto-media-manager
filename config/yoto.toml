@@ -1,6 +1,5 @@
-# Public OAuth configuration. User tokens are stored separately in the OS vault.
+# OAuth settings. The client ID is injected at build time via YOTO_CLIENT_ID.
 [oauth]
-client_id = "tpc_vbQ5viEhBMgXgZdFGUAJKx"
 redirect_uri = "http://127.0.0.1:8787/callback"
 requested_scopes = [
     "family:library:view",

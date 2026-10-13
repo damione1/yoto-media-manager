@@ -327,7 +327,7 @@ pub fn command(path: &Path) -> Command {
         use std::os::windows::process::CommandExt;
         let mut c = c;
         c.creation_flags(0x08000000);
-        return c;
+        c
     }
     #[cfg(not(windows))]
     c

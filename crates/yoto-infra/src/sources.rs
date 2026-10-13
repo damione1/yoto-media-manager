@@ -141,28 +141,6 @@ fn inspection(info: YoutubeInfo) -> Result<SourceInspection> {
         .collect::<Result<Vec<_>>>()?;
     Ok(SourceInspection { kind, entries })
 }
-#[cfg(test)]
-mod inspection_tests {
-    use super::*;
-    #[test]
-    fn a_single_video_and_one_entry_playlist_keep_distinct_shapes() {
-        let video: YoutubeInfo =
-            serde_json::from_value(serde_json::json!({"id":"one","title":"Song","_type":"video"}))
-                .unwrap();
-        let result = inspection(video).unwrap();
-        assert_eq!(result.kind, SourceShape::Video);
-        assert_eq!(result.entries.len(), 1);
-        let playlist: YoutubeInfo = serde_json::from_value(serde_json::json!({"id":"list","_type":"playlist","entries":[{"id":"one","title":"Song"}]})).unwrap();
-        let result = inspection(playlist).unwrap();
-        assert_eq!(result.kind, SourceShape::Playlist);
-        assert_eq!(result.entries.len(), 1);
-        let multi: YoutubeInfo = serde_json::from_value(
-            serde_json::json!({"id":"multi","_type":"multi_video","entries":[]}),
-        )
-        .unwrap();
-        assert_eq!(inspection(multi).unwrap().kind, SourceShape::Playlist);
-    }
-}
 impl SourceProvider for YoutubeSource<'_> {
     fn acquire(&self, selection: &ImportSelection, store: &AssetStore) -> Result<Acquired> {
         match selection {
@@ -326,5 +304,28 @@ printf 'resume' > "$output.ytdl"
         assert!(workspace.join("source.audio.part").exists());
         drop(acquired);
         assert!(!workspace.exists());
+    }
+}
+
+#[cfg(test)]
+mod inspection_tests {
+    use super::*;
+    #[test]
+    fn a_single_video_and_one_entry_playlist_keep_distinct_shapes() {
+        let video: YoutubeInfo =
+            serde_json::from_value(serde_json::json!({"id":"one","title":"Song","_type":"video"}))
+                .unwrap();
+        let result = inspection(video).unwrap();
+        assert_eq!(result.kind, SourceShape::Video);
+        assert_eq!(result.entries.len(), 1);
+        let playlist: YoutubeInfo = serde_json::from_value(serde_json::json!({"id":"list","_type":"playlist","entries":[{"id":"one","title":"Song"}]})).unwrap();
+        let result = inspection(playlist).unwrap();
+        assert_eq!(result.kind, SourceShape::Playlist);
+        assert_eq!(result.entries.len(), 1);
+        let multi: YoutubeInfo = serde_json::from_value(
+            serde_json::json!({"id":"multi","_type":"multi_video","entries":[]}),
+        )
+        .unwrap();
+        assert_eq!(inspection(multi).unwrap().kind, SourceShape::Playlist);
     }
 }
