@@ -9840,7 +9840,7 @@
                         "uploadUrl": {
                           "type": "string",
                           "nullable": true,
-                          "example": "https://yoto-media-api-test-uploads.s3.eu-west-2.amazonaws.com/1bErAD2CBDPwN88jdjBO7aVSR1OGL5DOq05fyz6PioCs~/-JTCEUt18dYMVDUx_8Ncy?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAVBV5GELTKAFMCG5D%2F20240223%2Feu-west-2%2Fs3%2Faws4_request&X-Amz-Date=20240223T174348Z&X-Amz-Expires=900&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEJL%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMiJIMEYCIQCF6SpJmxaVDmmZpumWLbVzYjZVCN6qsbuVfS9Rqg6vIQIhAJnAl3YSEK4Ya9YBNE7Vdd825PF2VoQfIBUYstlvrmXyKqMDCHsQABoMMzQ3MjE1MzczMDMwIgwfR9iHcJYTtB6kLmYqgANMuidNac8snn8ov14vq37HLYUDbscIkmxjZm2K056jiTgPr7TM0eUP9TDo4WtpOac5ba27IZddO6NaAKkyk0hZMPWySnNhSvAEvW2PIDQS%2FqKGCma6WB%2BJ06f4sKaMSu3wHmS%2Bzl%2Bt22SWVfsaS4KgJRK9NLH33KnUkueyAeMJVKsdR%2Fyc44euyF8p6gC%2BcGBcqEoAwCzRnlA26d4XiJF99r1sZvmA0x9jqHzFsnBw%2F0XK4JxCQalLPSW1IdUka9oH7SxN3H8mHAEUJjtDtiFiSeuKy4QvpFUdzSlRSujKgdQbBUYDWC3Q1BUhUY0jBgdStNLdBE6M2paIbRl%2FmNshbKW1mDomSpPdbHe39SELdlY7CNxWEVO%2B3su2eki62t5hd8Mvmz8sNTk2FePeIIWkVW2dt%2Fq6wFiL0PfLdK9Ryvek3cgj7DdmaxsKso1mS7dVWBEfe%2BFr5EEc8Zp83PfZhoXZZSYokcxu%2FB%2FuOHeC1Phb4JIyi0hTAjeoGj5cXCkw07LjrgY6nAFUgJIEBs9iv4AbxLydQJCSqsj4LfqSav9LSEhnE8stSAqOl1XwvTymRIgoSYY2xxpS8lLb9KoLkYbvamHNsj3h5jGWekd4P0mmV2OcnTkht6tmI48y4sa0V3LezRErXHb3dtXvKRnF2MbwD2lzLQuJO8o%2BoBPfF9haL8slR2yTVIzKgkYPG1xDKCvcqRX5tgBk1X5ISPxz%2FkPUuS8%3D&X-Amz-Signature=08ec43d2761d26c81facd7d921d09126f22caf306321c1df38e2ec9eed196ea1&X-Amz-SignedHeaders=host&x-id=PutObject"
+                          "example": "https://uploads.example.com/audio.mp3"
                         }
                       }
                     }
@@ -9859,7 +9859,7 @@
                     "value": {
                       "upload": {
                         "uploadId": "-JTCEUt18dYMVDUx_8Ncy",
-                        "uploadUrl": "https://yoto-media-api-test-uploads.s3.eu-west-2.amazonaws.com/1bErAD2CBDPwN88jdjBO7aVSR1OGL5DOq05fyz6PioCs~/-JTCEUt18dYMVDUx_8Ncy?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAVBV5GELTKAFMCG5D%2F20240223%2Feu-west-2%2Fs3%2Faws4_request&X-Amz-Date=20240223T174348Z&X-Amz-Expires=900&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEJL%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCWV1LXdlc3QtMiJIMEYCIQCF6SpJmxaVDmmZpumWLbVzYjZVCN6qsbuVfS9Rqg6vIQIhAJnAl3YSEK4Ya9YBNE7Vdd825PF2VoQfIBUYstlvrmXyKqMDCHsQABoMMzQ3MjE1MzczMDMwIgwfR9iHcJYTtB6kLmYqgANMuidNac8snn8ov14vq37HLYUDbscIkmxjZm2K056jiTgPr7TM0eUP9TDo4WtpOac5ba27IZddO6NaAKkyk0hZMPWySnNhSvAEvW2PIDQS%2FqKGCma6WB%2BJ06f4sKaMSu3wHmS%2Bzl%2Bt22SWVfsaS4KgJRK9NLH33KnUkueyAeMJVKsdR%2Fyc44euyF8p6gC%2BcGBcqEoAwCzRnlA26d4XiJF99r1sZvmA0x9jqHzFsnBw%2F0XK4JxCQalLPSW1IdUka9oH7SxN3H8mHAEUJjtDtiFiSeuKy4QvpFUdzSlRSujKgdQbBUYDWC3Q1BUhUY0jBgdStNLdBE6M2paIbRl%2FmNshbKW1mDomSpPdbHe39SELdlY7CNxWEVO%2B3su2eki62t5hd8Mvmz8sNTk2FePeIIWkVW2dt%2Fq6wFiL0PfLdK9Ryvek3cgj7DdmaxsKso1mS7dVWBEfe%2BFr5EEc8Zp83PfZhoXZZSYokcxu%2FB%2FuOHeC1Phb4JIyi0hTAjeoGj5cXCkw07LjrgY6nAFUgJIEBs9iv4AbxLydQJCSqsj4LfqSav9LSEhnE8stSAqOl1XwvTymRIgoSYY2xxpS8lLb9KoLkYbvamHNsj3h5jGWekd4P0mmV2OcnTkht6tmI48y4sa0V3LezRErXHb3dtXvKRnF2MbwD2lzLQuJO8o%2BoBPfF9haL8slR2yTVIzKgkYPG1xDKCvcqRX5tgBk1X5ISPxz%2FkPUuS8%3D&X-Amz-Signature=08ec43d2761d26c81facd7d921d09126f22caf306321c1df38e2ec9eed196ea1&X-Amz-SignedHeaders=host&x-id=PutObject"
+                        "uploadUrl": "https://uploads.example.com/audio.mp3"
                       }
                     }
                   }

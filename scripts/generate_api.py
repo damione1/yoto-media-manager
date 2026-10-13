@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """Deterministic, offline normalization and generation from the official snapshot."""
 import copy, hashlib, json, pathlib, subprocess, os
+from openapi_examples import assert_safe_examples
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 up = ROOT/'api/upstream/yoto.openapi.json'
+s = json.loads(up.read_text())
+O = ROOT/'api/overlays/contract.json'
+overlay = json.loads(O.read_text())
+assert_safe_examples(s)
+assert_safe_examples(overlay)
 jar=ROOT/'tools/openapi-generator-cli-7.26.0.jar'
 jar.parent.mkdir(exist_ok=True)
 if not jar.exists():
@@ -10,9 +16,6 @@ if not jar.exists():
  urllib.request.urlretrieve('https://repo.maven.apache.org/maven2/org/openapitools/openapi-generator-cli/7.26.0/openapi-generator-cli-7.26.0.jar',jar)
 expected=(ROOT/'api/generator.sha256').read_text().strip()
 if hashlib.sha256(jar.read_bytes()).hexdigest()!=expected:raise SystemExit('Generator checksum mismatch')
-s = json.loads(up.read_text())
-O = ROOT/'api/overlays/contract.json'
-overlay = json.loads(O.read_text())
 for p,v in s['paths'].items():
  v.pop('servers',None)
  for method,op in v.items():

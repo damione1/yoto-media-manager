@@ -12,6 +12,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
+      - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: python3 scripts/generate_api.py
       - run: git diff --exit-code -- api crates/yoto-contracts crates/yoto-api-generated crates/yoto-auth-generated
   native:
