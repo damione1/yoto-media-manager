@@ -687,11 +687,20 @@ impl AppView {
             cx,
         );
         if !ignored.is_empty() {
-            self.status = format!(
-                "Import lancé. {} fichier(s) ignoré(s) car ce ne sont pas des fichiers audio.",
+            // The import's own completion text replaces the status line, so the skipped
+            // files are reported in a toast that stays until dismissed.
+            let text = format!(
+                "{} fichier(s) ignoré(s) : seuls les fichiers audio (MP3, M4A, WAV, FLAC, OGG…) sont importés.",
                 ignored.len()
             );
-            cx.notify();
+            if let Some(window) = cx.windows().first().copied() {
+                cx.defer(move |cx| {
+                    let _ = cx.update_window(window, |_, window, cx| {
+                        use gpui_kit::component::{WindowExt, notification::Notification};
+                        window.push_notification(Notification::warning(text).autohide(false), cx);
+                    });
+                });
+            }
         }
     }
     pub fn add_files(&mut self, cx: &mut Context<Self>) {
