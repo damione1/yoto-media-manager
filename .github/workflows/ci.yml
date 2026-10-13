@@ -33,7 +33,8 @@ jobs:
     steps:
       - name: Require OAuth client configuration
         shell: bash
-        run: test -n "$YOTO_CLIENT_ID" || { echo "Missing required secret: YOTO_CLIENT_ID"; exit 1; }
+        run: |
+          test -n "$YOTO_CLIENT_ID" || { echo "Missing required secret: YOTO_CLIENT_ID"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
         with:
