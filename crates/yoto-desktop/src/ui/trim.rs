@@ -1,9 +1,9 @@
 use super::*;
 use gpui_kit::component::{
     WindowExt,
-    checkbox::Checkbox,
     dialog::DialogClose,
     slider::{Slider, SliderState},
+    spinner::Spinner,
 };
 
 #[derive(Clone, Copy)]
@@ -87,10 +87,9 @@ impl TrimPanel {
                 .placeholder("Étiquettes séparées par des virgules")
                 .default_value(media.tags.join(", "))
         });
-        let start = cx.new(|cx| InputState::new(window, cx).default_value("0.000"));
+        let start = cx.new(|cx| InputState::new(window, cx).default_value(trim_text(0.)));
         let end = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(format!("{:.3}", media.info.duration.seconds()))
+            InputState::new(window, cx).default_value(trim_text(media.info.duration.seconds()))
         });
         let range = cx.new(|_| {
             SliderState::new()
@@ -135,7 +134,7 @@ impl TrimPanel {
                             }
                             Err(_) => {
                                 v.status =
-                                    "Choisissez un début et une fin valides, en secondes.".into();
+                                    "Choisissez un début et une fin valides, en minutes et secondes (par exemple 1:05).".into();
                                 cx.notify();
                             }
                         }
@@ -236,22 +235,22 @@ impl TrimPanel {
         }));
         view
     }
+    /// The selection typed in the two fields. A field still showing the current bound keeps
+    /// its exact value, so displaying whole seconds never moves a handle by itself.
     fn range(&self, cx: &App) -> yoto_domain::Result<TrimRange> {
-        let s = self
-            .start
-            .read(cx)
-            .value()
-            .parse::<f64>()
-            .map_err(|_| Failure::Validation("Début invalide".into()))?;
-        let e = self
-            .end
-            .read(cx)
-            .value()
-            .parse::<f64>()
-            .map_err(|_| Failure::Validation("Fin invalide".into()))?;
+        let read = |input: &Entity<InputState>, current: MediaTime, label: &str| {
+            let text = input.read(cx).value().trim().to_owned();
+            if text == trim_text(current.seconds()) {
+                Ok(current)
+            } else {
+                parse_time(&text)
+                    .ok_or_else(|| Failure::Validation(format!("{label} invalide")))
+                    .and_then(MediaTime::from_seconds)
+            }
+        };
         TrimRange::new(
-            MediaTime::from_seconds(s)?,
-            MediaTime::from_seconds(e)?,
+            read(&self.start, self.selection.start(), "Début")?,
+            read(&self.end, self.selection.end(), "Fin")?,
             self.media.info.duration,
         )
     }
@@ -270,10 +269,10 @@ impl TrimPanel {
         match origin {
             SelectionOrigin::Handles | SelectionOrigin::Canonical => {
                 self.start.update(cx, |v, cx| {
-                    v.set_value(format!("{:.3}", trim.start().seconds()), window, cx)
+                    v.set_value(trim_text(trim.start().seconds()), window, cx)
                 });
                 self.end.update(cx, |v, cx| {
-                    v.set_value(format!("{:.3}", trim.end().seconds()), window, cx)
+                    v.set_value(trim_text(trim.end().seconds()), window, cx)
                 });
             }
             SelectionOrigin::NumericInput => {}
@@ -563,12 +562,11 @@ impl TrimPanel {
         window.open_dialog(cx, move |dialog, _, _| {
             let close = panel.clone();
             let cancel = panel.clone();
+            let dialog = match kind {
+                AudioEditor::Trim => dialog.close_button(false).w(px(820.)),
+                AudioEditor::Metadata => dialog.title("Modifier les informations").w(px(560.)),
+            };
             dialog
-                .title(match kind {
-                    AudioEditor::Trim => "Découper l’audio",
-                    AudioEditor::Metadata => "Modifier les informations",
-                })
-                .w(px(660.))
                 .child(editor.clone())
                 .on_cancel(move |_, _, cx| {
                     cancel
@@ -606,28 +604,43 @@ impl TrimPanel {
         });
     }
     fn metadata_editor(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        use theme::{Height, Look};
+        let field = |label: &'static str, input: &Entity<InputState>| {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(6.))
+                .child(
+                    div()
+                        .text_size(px(14.))
+                        .font_weight(FontWeight::BOLD)
+                        .child(label),
+                )
+                .child(theme::field(Input::new(input)))
+        };
         div()
             .flex()
             .flex_col()
-            .gap_3()
-            .child("Titre")
-            .child(Input::new(&self.title))
-            .child("Auteur")
-            .child(Input::new(&self.author))
-            .child("Étiquettes")
-            .child(Input::new(&self.tags))
+            .gap(px(14.))
+            .child(field("Titre", &self.title))
+            .child(field("Auteur", &self.author))
+            .child(field("Étiquettes", &self.tags))
+            .children((!self.status.is_empty()).then(|| theme::note(self.status.clone())))
             .child(
                 div()
                     .flex()
-                    .gap_2()
+                    .gap(px(8.))
                     .justify_end()
-                    .child(
-                        DialogClose::new().child(Button::new("cancel-metadata").label("Annuler")),
-                    )
-                    .child(
+                    .child(DialogClose::new().child(theme::pill(
+                        Button::new("cancel-metadata").label("Annuler"),
+                        Look::Outline,
+                        Height::Medium,
+                        false,
+                        cx,
+                    )))
+                    .child(theme::pill(
                         Button::new("save-media")
                             .label("Enregistrer")
-                            .primary()
                             .on_click(cx.listener(|v, _, _, cx| {
                                 let metadata = MediaMetadata {
                                     title: v.title.read(cx).value().to_string(),
@@ -650,63 +663,355 @@ impl TrimPanel {
                                     cx,
                                 );
                             })),
-                    ),
+                        Look::Primary,
+                        Height::Medium,
+                        false,
+                        cx,
+                    )),
             )
-            .child(self.status.clone())
             .into_any_element()
     }
     fn trim_editor(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        use gpui_kit::component::switch::Switch;
+        use theme::{Height, Look};
         let busy = self.editing.as_ref().is_some_and(|d| d.preparation.busy());
         let ready = self
             .editing
             .as_ref()
             .is_some_and(|d| matches!(d.preparation, Preparation::Ready(_)));
-        let mut wave = div()
-            .h(px(110.))
-            .flex()
-            .items_center()
-            .gap_px()
-            .overflow_hidden()
-            .rounded_md()
-            .bg(cx.theme().muted);
+        let duration = self.media.info.duration.seconds().max(0.001);
+        let selection = self.selection;
+        let start = (selection.start().seconds() / duration) as f32;
+        let end = (selection.end().seconds() / duration) as f32;
+        let cursor = (self.playing)
+            .then(|| (self.cursor_seconds / duration) as f32)
+            .filter(|c| (start..=end).contains(c));
+        let mut bars = div().size_full().flex().items_center().gap(px(2.));
         if let Some(w) = &self.waveform {
             if let Some(peaks) = w
                 .levels
                 .iter()
-                .find(|v| v.len() <= 384)
+                .find(|v| v.len() <= 120)
                 .or_else(|| w.levels.last())
             {
-                for (lo, hi) in peaks {
-                    wave = wave.child(
+                let count = peaks.len().max(1) as f32;
+                for (index, (lo, hi)) in peaks.iter().enumerate() {
+                    let position = (index as f32 + 0.5) / count;
+                    let color = if position < start || position > end {
+                        0xE8DCCD
+                    } else if cursor.is_some_and(|c| position <= c) {
+                        theme::SKY.accent
+                    } else {
+                        0xA9C8F7
+                    };
+                    bars = bars.child(
                         div()
                             .flex_1()
                             .min_w(px(1.))
-                            .h(px(((hi - lo).abs() * 50.).clamp(1., 100.)))
-                            .bg(cx.theme().primary),
+                            .rounded(px(4.))
+                            .h(px(((hi - lo).abs() * 60.).clamp(4., 118.)))
+                            .bg(theme::c(color)),
                     );
                 }
             }
         } else {
-            wave = wave.child("Analyse de la forme d’onde…");
+            bars = bars.justify_center().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(theme::c(theme::MUTED))
+                    .child(Spinner::new().color(theme::c(theme::SKY.accent)))
+                    .child("Analyse de la forme d’onde…"),
+            );
         }
-        div().flex().flex_col().gap_4().child(div().font_weight(FontWeight::SEMIBOLD).child(self.media.title.clone()))
-            .child("Déplacez les poignées pour garder la partie qui vous plaît.")
-            .child(wave).child(Slider::new(&self.range).disabled(busy))
-            .child(format!("{} → {} · {} conservées", clock(self.selection.start().seconds()), clock(self.selection.end().seconds()), clock(self.selection.duration().seconds())))
-            .child(div().flex().gap_3()
-                .child(div().flex_1().min_w_0().flex().flex_col().gap_2().child("Début (s)").child(Input::new(&self.start).disabled(busy)))
-                .child(div().flex_1().min_w_0().flex().flex_col().gap_2().child("Fin (s)").child(Input::new(&self.end).disabled(busy))))
-            .child(Checkbox::new("normalize").label("Égaliser le volume").checked(self.normalization == Normalization::Loudness).disabled(busy).on_click(cx.listener(|v, checked, _, cx| {
-                v.normalization = if *checked { Normalization::Loudness } else { Normalization::Preserve }; cx.notify();
-            })))
-            .child(div().flex().gap_2()
-                .child(Button::new("preview-trim").label(if self.preview_pending.is_some() { "Préparation de l’écoute…" } else if self.playing { "■ Arrêter" } else { "▶ Écouter la sélection" }).disabled(busy || self.preview_pending.is_some()).on_click(cx.listener(|v, _, _, cx| {
-                    if v.playing { v.stop(cx); } else { v.send(Command::PreviewTrim { media: v.media.id, trim: v.selection }, cx); }
-                })))
-                .child(div().flex_1())
-                .child(DialogClose::new().child(Button::new("cancel-trim").label(if ready { "Fermer" } else { "Annuler" }).disabled(busy)))
-                .child(Button::new("apply-handles").label(if busy { "Préparation…" } else { "Appliquer" }).primary().disabled(busy || ready).on_click(cx.listener(|v, _, _, cx| v.prepare(cx)))))
-            .child(div().text_sm().text_color(cx.theme().muted_foreground).child(if self.status.is_empty() { "Votre original est conservé. Appliquer crée une version pour vos playlists.".to_owned() } else { self.status.clone() }))
+        let handle = |left: f32| {
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left(relative(left))
+                .ml(px(-9.))
+                .w(px(18.))
+                .rounded(px(10.))
+                .bg(theme::c(theme::SKY.accent))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .w(px(4.))
+                        .h(px(26.))
+                        .rounded(px(4.))
+                        .bg(theme::c(theme::SURFACE)),
+                )
+        };
+        let mut overlay = div()
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left(px(14.))
+            .right(px(14.))
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left(relative(start))
+                    .w(relative((end - start).max(0.)))
+                    .border_t_3()
+                    .border_b_3()
+                    .border_color(theme::c(theme::SKY.accent))
+                    .bg(theme::c(theme::SKY.accent).opacity(0.06)),
+            )
+            .child(handle(start))
+            .child(handle(end));
+        if let Some(cursor) = cursor {
+            overlay = overlay.child(
+                div()
+                    .absolute()
+                    .top(px(10.))
+                    .bottom(px(10.))
+                    .left(relative(cursor))
+                    .w(px(3.))
+                    .rounded(px(3.))
+                    .bg(theme::c(theme::PEACH.accent)),
+            );
+        }
+        let wave = div()
+            .relative()
+            .h(px(150.))
+            .rounded(px(20.))
+            .bg(theme::c(theme::CREAM))
+            .px(px(14.))
+            .overflow_hidden()
+            .child(bars)
+            .children(self.waveform.is_some().then_some(overlay));
+        let label = |text: &'static str| {
+            div()
+                .text_size(px(13.))
+                .font_weight(FontWeight::EXTRA_BOLD)
+                .text_color(theme::c(theme::MUTED))
+                .child(text)
+        };
+        let time_field = |input: &Entity<InputState>| {
+            Input::new(input)
+                .disabled(busy)
+                .w(px(104.))
+                .h(px(44.))
+                .rounded(px(12.))
+                .border_2()
+                .border_color(theme::c(theme::BORDER))
+                .bg(theme::c(theme::SURFACE))
+                .text_size(px(17.))
+                .font_weight(FontWeight::EXTRA_BOLD)
+        };
+        let close = DialogClose::new().child(theme::round(
+            Button::new("close-trim")
+                .icon(IconName::X)
+                .accessibility_label("Fermer"),
+            Look::Soft(&theme::LIGHT_SAND),
+            40.,
+            busy,
+            cx,
+        ));
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(20.))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(14.))
+                    .child(theme::icon_tile(IconName::Scissors, &theme::SKY, 52., 16.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(theme::heading(
+                                format!("Découper « {} »", self.media.title),
+                                26.,
+                            ))
+                            .child(
+                                div()
+                                    .text_size(px(15.))
+                                    .text_color(theme::c(theme::MUTED))
+                                    .child("Déplacez les poignées pour garder la partie qui vous plaît."),
+                            ),
+                    )
+                    .child(close),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .child(wave)
+                    .child(
+                        div().px(px(14.)).child(
+                            Slider::new(&self.range)
+                                .bg(theme::c(theme::SKY.accent))
+                                .disabled(busy),
+                        ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_end()
+                    .gap(px(14.))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.))
+                            .child(label("Début"))
+                            .child(time_field(&self.start)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.))
+                            .child(label("Fin"))
+                            .child(time_field(&self.end)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.))
+                            .child(label("Durée gardée"))
+                            .child(
+                                theme::heading(duration_text(selection.duration().seconds()), 20.)
+                                    .h(px(44.))
+                                    .flex()
+                                    .items_center()
+                                    .text_color(theme::c(theme::SKY.ink)),
+                            ),
+                    )
+                    .child(div().flex_1())
+                    .child(theme::pill(
+                        Button::new("preview-trim")
+                            .icon(if self.playing {
+                                IconName::Pause
+                            } else {
+                                IconName::Play
+                            })
+                            .label(if self.preview_pending.is_some() {
+                                "Préparation de l’écoute…"
+                            } else if self.playing {
+                                "Arrêter l’écoute"
+                            } else {
+                                "Écouter la sélection"
+                            })
+                            .on_click(cx.listener(|v, _, _, cx| {
+                                if v.playing {
+                                    v.stop(cx);
+                                } else {
+                                    v.send(
+                                        Command::PreviewTrim {
+                                            media: v.media.id,
+                                            trim: v.selection,
+                                        },
+                                        cx,
+                                    );
+                                }
+                            })),
+                        Look::Solid(&theme::MINT),
+                        Height::Hero,
+                        busy || self.preview_pending.is_some(),
+                        cx,
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(14.))
+                    .py(px(14.))
+                    .px(px(16.))
+                    .rounded(px(18.))
+                    .bg(theme::c(theme::CREAM))
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::EXTRA_BOLD)
+                                    .child("Égaliser le volume"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(theme::c(theme::MUTED))
+                                    .child("Utile quand une chanson est beaucoup plus forte que les autres."),
+                            ),
+                    )
+                    .child(
+                        Switch::new("normalize")
+                            .accessibility_label("Égaliser le volume")
+                            .checked(self.normalization == Normalization::Loudness)
+                            .disabled(busy)
+                            .on_click(cx.listener(|v, checked, _, cx| {
+                                v.normalization = if *checked {
+                                    Normalization::Loudness
+                                } else {
+                                    Normalization::Preserve
+                                };
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(if busy {
+                        Spinner::new()
+                            .color(theme::c(theme::SKY.accent))
+                            .into_any_element()
+                    } else {
+                        theme::icon_tile(IconName::ShieldCheck, &theme::MINT, 28., 14.)
+                            .into_any_element()
+                    })
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(200.))
+                            .text_size(px(14.))
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(theme::c(theme::INK_SOFT))
+                            .child(if self.status.is_empty() {
+                                "Votre original est conservé. Appliquer crée une version pour vos playlists.".to_owned()
+                            } else {
+                                self.status.clone()
+                            }),
+                    )
+                    .child(DialogClose::new().child(theme::pill(
+                        Button::new("cancel-trim").label(if ready { "Fermer" } else { "Annuler" }),
+                        Look::Outline,
+                        Height::Large,
+                        busy,
+                        cx,
+                    )))
+                    .child(theme::pill(
+                        Button::new("apply-handles")
+                            .label(if busy { "Préparation…" } else { "Appliquer" })
+                            .loading(busy)
+                            .on_click(cx.listener(|v, _, _, cx| v.prepare(cx))),
+                        Look::Primary,
+                        Height::Large,
+                        busy || ready,
+                        cx,
+                    )),
+            )
             .into_any_element()
     }
 }
@@ -969,14 +1274,45 @@ impl Render for TrimPanel {
             )
     }
 }
-fn clock(seconds: f64) -> String {
-    let millis = (seconds.max(0.) * 1000.).round() as u64;
-    format!(
-        "{}:{:02}.{:03}",
-        millis / 60_000,
-        (millis / 1000) % 60,
-        millis % 1000
-    )
+/// A trim bound as a parent reads it: « 1:05 », or « 1:05,4 » when it falls between seconds.
+fn trim_text(seconds: f64) -> String {
+    let tenths = (seconds.max(0.) * 10.).round() as u64;
+    let (whole, tenth) = (tenths / 10, tenths % 10);
+    let clock = if whole >= 3600 {
+        format!(
+            "{}:{:02}:{:02}",
+            whole / 3600,
+            (whole / 60) % 60,
+            whole % 60
+        )
+    } else {
+        format!("{}:{:02}", whole / 60, whole % 60)
+    };
+    if tenth == 0 {
+        clock
+    } else {
+        format!("{clock},{tenth}")
+    }
+}
+/// Parse « 75 », « 1:15 », « 1:15,5 », « 1:15.5 » or « 1:01:15 » into seconds.
+fn parse_time(text: &str) -> Option<f64> {
+    let text = text.trim().replace(',', ".");
+    if text.is_empty() {
+        return None;
+    }
+    let mut seconds = 0.;
+    let parts: Vec<_> = text.split(':').collect();
+    if parts.len() > 3 {
+        return None;
+    }
+    for (index, part) in parts.iter().enumerate() {
+        let value = part.trim().parse::<f64>().ok().filter(|v| *v >= 0.)?;
+        if index > 0 && value >= 60. {
+            return None;
+        }
+        seconds = seconds * 60. + value;
+    }
+    seconds.is_finite().then_some(seconds)
 }
 fn bounded_slider_range(
     start: f32,
@@ -1001,9 +1337,17 @@ mod tests {
         assert!(bounded_slider_range(5., 5., duration).is_err());
     }
     #[core::prelude::v1::test]
-    fn player_displays_duration_without_losing_subseconds() {
-        assert_eq!(clock(131.181), "2:11.181");
-        assert_eq!(clock(59.9996), "1:00.000");
-        assert_eq!(clock(0.), "0:00.000");
+    fn trim_bounds_read_as_minutes_and_seconds() {
+        assert_eq!(trim_text(131.181), "2:11,2");
+        assert_eq!(trim_text(59.9996), "1:00");
+        assert_eq!(trim_text(0.), "0:00");
+        assert_eq!(trim_text(3725.), "1:02:05");
+        assert!((parse_time("2:11,2").unwrap() - 131.2).abs() < 1e-9);
+        assert_eq!(parse_time("1:05"), Some(65.));
+        assert!((parse_time("75.5").unwrap() - 75.5).abs() < 1e-9);
+        assert_eq!(parse_time("1:02:05"), Some(3725.));
+        assert_eq!(parse_time("1:75"), None);
+        assert_eq!(parse_time("abc"), None);
+        assert_eq!(parse_time(""), None);
     }
 }
