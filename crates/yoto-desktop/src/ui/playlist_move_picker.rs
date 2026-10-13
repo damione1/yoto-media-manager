@@ -44,14 +44,14 @@ impl Render for MovePicker {
                 }).collect()
             })).h(px(300.)))
             .child(div().flex().gap_2().items_center().child(div().flex_1())
-                .child(DialogClose::new().child(Button::new("cancel-move").label("Annuler").disabled(busy)))
-                .child(Button::new("confirm-move").label("Déplacer").primary().disabled(blocked || self.selected.is_none()).on_click(cx.listener(|v, _, _, cx| {
+                .child(DialogClose::new().child(theme::pill(Button::new("cancel-move").label("Annuler"), theme::Look::Ghost, theme::Height::Medium, busy, cx)))
+                .child(theme::pill(Button::new("confirm-move").label("Déplacer").on_click(cx.listener(|v, _, _, cx| {
                     if let Some((chapter, end)) = v.selected { let track = v.track; let _ = v.owner.update(cx, |owner, cx| {
                         if owner.blocked() || owner.owning_remote(cx).is_err() { return }
                         if let Err(error) = owner.draft.move_track(track, chapter, end) { owner.status = failure_text(&error); cx.notify(); return }
                         owner.persist(CommitTarget::MovePicker, cx);
                     }); }
-                }))))
+                })), theme::Look::Primary, theme::Height::Medium, blocked || self.selected.is_none(), cx)))
             .children(busy.then(|| div().flex().gap_2().child(Spinner::new().small()).child(status.clone())))
             .children((!busy && blocked).then(|| div().text_sm().child(status)))
     }

@@ -47,6 +47,8 @@ pub const MUTED_WARM: u32 = 0x6B6158;
 pub const BROWN: u32 = 0x6B4A2B;
 /// Text on the peach primary button.
 pub const ON_PRIMARY: u32 = 0x2A1A12;
+/// Track numbers in the playlist editor.
+pub const NUMBER: u32 = 0x9A8B7A;
 /// Offline dot.
 pub const OFFLINE: u32 = 0xB9AC9C;
 
@@ -107,6 +109,14 @@ pub const ROSE: Family = Family {
     ink: 0xA1262B,
     icon: 0xA1262B,
     step: 0xC93A3F,
+};
+/// Quiet sand buttons on the cream background (refresh, close).
+pub const LIGHT_SAND: Family = Family {
+    soft: SAND,
+    accent: BOX_BORDER,
+    ink: BROWN,
+    icon: BROWN,
+    step: BORDER,
 };
 /// Families a thumbnail color is drawn from.
 const THUMBNAILS: [&Family; 5] = [&PEACH, &MINT, &SKY, &BUTTER, &LILAC];
@@ -322,6 +332,16 @@ pub fn card() -> Div {
         .flex_col()
         .gap(px(12.))
 }
+/// Cream inset inside a card.
+pub fn inset() -> Div {
+    div()
+        .bg(c(CREAM))
+        .rounded(px(16.))
+        .p(px(14.))
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+}
 /// Small pill label: a pastel family is one meaning (content type or sending state).
 pub fn tag(text: impl Into<SharedString>, family: &Family) -> Div {
     tag_colors(text, family.soft, family.ink)
@@ -483,6 +503,8 @@ pub enum Height {
     Medium,
     /// 36 px: compact chips and filters.
     Small,
+    /// 34 px: actions inside list cards.
+    Tiny,
 }
 impl Height {
     fn px(self) -> f32 {
@@ -491,12 +513,14 @@ impl Height {
             Self::Large => 44.,
             Self::Medium => 40.,
             Self::Small => 36.,
+            Self::Tiny => 34.,
         }
     }
     fn text(self) -> f32 {
         match self {
             Self::Hero | Self::Large => 15.,
             Self::Medium | Self::Small => 14.,
+            Self::Tiny => 13.,
         }
     }
 }
@@ -621,7 +645,7 @@ pub fn pill(button: Button, look: Look, height: Height, disabled: bool, cx: &App
     let pad = match height {
         Height::Hero | Height::Large => 20.,
         Height::Medium => 16.,
-        Height::Small => 12.,
+        Height::Small | Height::Tiny => 12.,
     };
     painted(button, look, disabled, cx)
         .with_size(Size::Large)
@@ -696,6 +720,71 @@ pub fn field(input: Input) -> Input {
         .border_2()
         .border_color(c(BORDER))
         .bg(c(SURFACE))
+}
+/// A compact field for forms inside cards: 40 px, radius 12.
+pub fn small_field(input: Input) -> Input {
+    input
+        .h(px(40.))
+        .rounded(px(12.))
+        .border_2()
+        .border_color(c(BORDER))
+        .bg(c(SURFACE))
+}
+/// Collapsible section header row: title, summary and chevron, as one button.
+pub fn disclosure(
+    id: impl Into<ElementId>,
+    title: impl Into<SharedString>,
+    summary: impl Into<SharedString>,
+    open: bool,
+    cx: &App,
+) -> Button {
+    let title = title.into();
+    let variant = ButtonCustomVariant::new(cx)
+        .color(c(SURFACE))
+        .foreground(c(INK))
+        .hover(c(CREAM))
+        .active(c(SAND));
+    Button::new(id)
+        .custom(variant)
+        .toggled(open)
+        .accessibility_label(title.clone())
+        .bg(c(SURFACE))
+        .rounded(ButtonRounded::Size(px(16.)))
+        .h(px(52.))
+        .px(px(16.))
+        .w_full()
+        .shadow(step(BORDER, 2.))
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .child(
+                    div()
+                        .flex_1()
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .text_size(px(15.))
+                        .child(title),
+                )
+                .child(
+                    div()
+                        .text_size(px(13.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(c(MUTED))
+                        .truncate()
+                        .child(summary.into()),
+                )
+                .child(
+                    gpui_kit::component::Icon::new(if open {
+                        IconName::ChevronUp
+                    } else {
+                        IconName::ChevronDown
+                    })
+                    .size(px(18.))
+                    .text_color(c(MUTED)),
+                ),
+        )
 }
 
 #[cfg(test)]

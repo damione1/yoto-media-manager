@@ -54,9 +54,9 @@ pub struct PlaylistEditor {
     operation: Option<PlaylistOperation>,
     picker_window: Option<AnyWindowHandle>,
     _subscriptions: Vec<Subscription>,
-    advanced: bool,
+    options_open: bool,
+    advanced_open: bool,
     expanded_tracks: std::collections::BTreeSet<TrackId>,
-    chapter_list: ListState,
 }
 impl PlaylistEditor {
     pub fn new(
@@ -176,7 +176,6 @@ impl PlaylistEditor {
                 }
             }
         }
-        let chapter_list = ListState::new(draft.chapters.len(), ListAlignment::Top, px(200.));
         let mut view = Self {
             parent,
             replacement: None,
@@ -190,9 +189,9 @@ impl PlaylistEditor {
             operation: None,
             picker_window: None,
             _subscriptions: vec![],
-            advanced: false,
+            options_open: false,
+            advanced_open: false,
             expanded_tracks: Default::default(),
-            chapter_list,
             draft,
             service,
             runtime,
@@ -273,6 +272,12 @@ impl PlaylistEditor {
         cx.notify();
     }
     fn adopt(&mut self, draft: Playlist, window: &mut Window, cx: &mut Context<Self>) {
+        // Sections the parent opened stay open across the reload that follows each save.
+        let open = (
+            self.options_open,
+            self.advanced_open,
+            std::mem::take(&mut self.expanded_tracks),
+        );
         *self = Self::new(
             draft,
             self.parent.clone(),
@@ -281,6 +286,7 @@ impl PlaylistEditor {
             window,
             cx,
         );
+        (self.options_open, self.advanced_open, self.expanded_tracks) = open;
         self.status = "Playlist actualisée depuis Yoto.".into();
         cx.notify();
     }
@@ -732,96 +738,162 @@ impl PlaylistEditor {
                 })
         });
     }
+    /// The 48 px tile showing a track or chapter icon, or a stable pastel glyph without one.
+    fn icon_tile(&self, icon: &Option<IconReference>, seed: &str, cx: &App) -> Div {
+        let family = theme::family_for(seed);
+        let tile = div()
+            .size(px(48.))
+            .flex_shrink_0()
+            .rounded(px(14.))
+            .bg(theme::c(family.soft))
+            .flex()
+            .items_center()
+            .justify_center();
+        match self.preview_icon(icon, cx) {
+            Some(icon) => tile.child(icon),
+            None => tile.child(theme::pixel_glyph(
+                theme::Glyph::for_seed(seed),
+                family.accent,
+                3.,
+            )),
+        }
+    }
+    /// Round icon button opening the icon picker for a chapter or one of its tracks.
+    fn icon_button(
+        &self,
+        id: ElementId,
+        icon: &Option<IconReference>,
+        seed: &str,
+        chapter: ChapterId,
+        track: Option<TrackId>,
+        cx: &mut Context<Self>,
+    ) -> Button {
+        use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
+        let variant = ButtonCustomVariant::new(cx)
+            .color(theme::c(theme::SURFACE).opacity(0.))
+            .hover(theme::c(theme::CREAM))
+            .active(theme::c(theme::SAND));
+        Button::new(id)
+            .custom(variant)
+            .rounded(ButtonRounded::Size(px(14.)))
+            .size(px(48.))
+            .p(px(0.))
+            .accessibility_label(if track.is_some() {
+                "Changer l’icône de la piste"
+            } else {
+                "Changer l’icône du chapitre"
+            })
+            .tooltip("Changer l’icône")
+            .child(self.icon_tile(icon, seed, cx))
+            .on_click(
+                cx.listener(move |v, _, window, cx| v.open_icon_picker(chapter, track, window, cx)),
+            )
+    }
     fn render_chapter(
         &mut self,
         index: usize,
-        _window: &mut Window,
+        snapshot: &Snapshot,
+        state: (&'static str, &'static theme::Family),
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        use theme::{Height, Look};
         let Some(chapter) = self.base.chapters.get(index) else {
             return div().into_any_element();
         };
         let id = chapter.id;
         let single = chapter.tracks.len() == 1;
         let count = self.base.chapters.len();
-        let mut group = div()
-            .w_full()
-            .p_3()
-            .rounded_lg()
-            .border_1()
-            .border_color(cx.theme().border)
-            .flex()
-            .flex_col()
-            .gap_3();
+        let mut group = div().w_full().flex().flex_col().gap(px(8.));
         if !single {
             let owner = cx.entity().downgrade();
             group = group.child(
                 div()
                     .w_full()
                     .flex()
-                    .gap_2()
+                    .gap(px(12.))
                     .items_center()
-                    .children(self.preview_icon(&chapter.icon, cx))
-                    .child(format!("{}", index + 1))
+                    .px(px(10.))
+                    .child(
+                        div()
+                            .w(px(22.))
+                            .text_center()
+                            .font_weight(FontWeight::EXTRA_BOLD)
+                            .text_size(px(14.))
+                            .text_color(theme::c(theme::NUMBER))
+                            .child(format!("{}", index + 1)),
+                    )
+                    .child(self.icon_button(
+                        element_id("chapter-icon", id),
+                        &chapter.icon,
+                        &id.to_string(),
+                        id,
+                        None,
+                        cx,
+                    ))
                     .children(
                         self.chapter_titles
                             .get(&id)
-                            .map(|input| Input::new(input).flex_1().min_w_0()),
+                            .map(|input| title_field(Input::new(input), 17.).flex_1().min_w_0()),
                     )
                     .child(
-                        Button::new(element_id("chapter-menu", id))
-                            .label("⋯")
-                            .accessibility_label("Options du chapitre")
-                            .tooltip("Options du chapitre")
-                            .ghost()
-                            .dropdown_menu(move |menu, _, _| {
-                                menu.item(editor_menu_item(
+                        theme::round(
+                            Button::new(element_id("chapter-menu", id))
+                                .icon(IconName::EllipsisVertical)
+                                .accessibility_label("Options du chapitre")
+                                .tooltip("Options du chapitre"),
+                            Look::Ghost,
+                            36.,
+                            false,
+                            cx,
+                        )
+                        .dropdown_menu(move |menu, _, _| {
+                            menu.item(editor_menu_item(
+                                &owner,
+                                "Changer l’icône du chapitre",
+                                move |v, window, cx| v.open_icon_picker(id, None, window, cx),
+                            ))
+                            .item(
+                                editor_menu_item(
                                     &owner,
-                                    "Changer l’icône du chapitre",
-                                    move |v, window, cx| v.open_icon_picker(id, None, window, cx),
-                                ))
-                                .item(
-                                    editor_menu_item(
-                                        &owner,
-                                        "Remonter le chapitre",
-                                        move |v, _, cx| {
-                                            if let Err(error) = v.draft.move_chapter(id, -1) {
-                                                v.status = failure_text(&error);
-                                                return;
-                                            }
-                                            v.save(cx);
-                                        },
-                                    )
-                                    .disabled(index == 0),
-                                )
-                                .item(
-                                    editor_menu_item(
-                                        &owner,
-                                        "Descendre le chapitre",
-                                        move |v, _, cx| {
-                                            if let Err(error) = v.draft.move_chapter(id, 1) {
-                                                v.status = failure_text(&error);
-                                                return;
-                                            }
-                                            v.save(cx);
-                                        },
-                                    )
-                                    .disabled(index + 1 == count),
-                                )
-                                .separator()
-                                .item(editor_menu_item(
-                                    &owner,
-                                    "Séparer les pistes en chapitres",
-                                    move |v, window, cx| {
-                                        if let Err(error) = v.draft.ungroup(id) {
+                                    "Remonter le chapitre",
+                                    move |v, _, cx| {
+                                        if let Err(error) = v.draft.move_chapter(id, -1) {
                                             v.status = failure_text(&error);
                                             return;
                                         }
-                                        v.refresh_inputs(window, cx);
                                         v.save(cx);
                                     },
-                                ))
-                            }),
+                                )
+                                .disabled(index == 0),
+                            )
+                            .item(
+                                editor_menu_item(
+                                    &owner,
+                                    "Descendre le chapitre",
+                                    move |v, _, cx| {
+                                        if let Err(error) = v.draft.move_chapter(id, 1) {
+                                            v.status = failure_text(&error);
+                                            return;
+                                        }
+                                        v.save(cx);
+                                    },
+                                )
+                                .disabled(index + 1 == count),
+                            )
+                            .separator()
+                            .item(editor_menu_item(
+                                &owner,
+                                "Séparer les pistes en chapitres",
+                                move |v, window, cx| {
+                                    if let Err(error) = v.draft.ungroup(id) {
+                                        v.status = failure_text(&error);
+                                        return;
+                                    }
+                                    v.refresh_inputs(window, cx);
+                                    v.save(cx);
+                                },
+                            ))
+                        }),
                     ),
             );
         }
@@ -830,182 +902,238 @@ impl PlaylistEditor {
             let track_count = chapter.tracks.len();
             let owner = cx.entity().downgrade();
             let has_icon = track.icon.is_some();
-            let mut row = div()
-                .w_full()
-                .flex()
-                .gap_2()
-                .items_center()
-                .children(self.preview_icon(
-                    if track.icon.is_some() {
-                        &track.icon
-                    } else {
-                        &chapter.icon
-                    },
-                    cx,
-                ))
-                .child(if single {
-                    format!("{}", index + 1)
-                } else {
-                    format!("{}.{}", index + 1, track_index + 1)
-                })
-                .children(
-                    self.track_titles
-                        .get(&tid)
-                        .map(|input| Input::new(input).flex_1().min_w_0()),
-                )
-                .child(
-                    Button::new(element_id("track-menu", tid))
-                        .label("⋯")
-                        .accessibility_label("Options de la piste")
-                        .tooltip("Options de la piste")
-                        .ghost()
-                        .dropdown_menu(move |menu, _, _| {
-                            menu.item(editor_menu_item(
-                                &owner,
-                                "Changer l’icône",
-                                move |v, window, cx| v.open_icon_picker(id, Some(tid), window, cx),
-                            ))
-                            .item(
-                                editor_menu_item(&owner, "Retirer l’icône", move |v, _, cx| {
-                                    v.assign_icon(id, Some(tid), None);
-                                    v.save(cx);
-                                })
-                                .disabled(!has_icon),
+            let (meta, playable) = match &track.media {
+                TrackMedia::Local { recipe, .. } => (
+                    snapshot
+                        .recipes
+                        .iter()
+                        .find(|r| r.id == *recipe)
+                        .map(|r| {
+                            duration_text(
+                                r.info
+                                    .as_ref()
+                                    .map_or(r.trim.duration(), |info| info.duration)
+                                    .seconds(),
                             )
-                            .separator()
-                            .item(editor_menu_item(
-                                &owner,
-                                "Remplacer l’audio…",
-                                move |v, window, cx| {
-                                    v.replacement = Some(tid);
-                                    v.open_media_picker(window, cx);
-                                },
-                            ))
-                            .item(
-                                editor_menu_item(
-                                    &owner,
-                                    "Déplacer / regrouper…",
-                                    move |v, window, cx| v.open_move_picker(id, tid, window, cx),
-                                )
-                                .disabled(count < 2),
-                            )
-                            .item(
-                                editor_menu_item(&owner, "Remonter", move |v, _, cx| {
-                                    let result = if single {
-                                        v.draft.move_chapter(id, -1)
-                                    } else {
-                                        v.draft.move_track(tid, id, track_index - 1)
-                                    };
-                                    if let Err(error) = result {
-                                        v.status = failure_text(&error);
-                                        return;
-                                    }
-                                    v.save(cx);
-                                })
-                                .disabled(if single {
-                                    index == 0
-                                } else {
-                                    track_index == 0
-                                }),
-                            )
-                            .item(
-                                editor_menu_item(&owner, "Descendre", move |v, _, cx| {
-                                    let result = if single {
-                                        v.draft.move_chapter(id, 1)
-                                    } else {
-                                        v.draft.move_track(tid, id, track_index + 1)
-                                    };
-                                    if let Err(error) = result {
-                                        v.status = failure_text(&error);
-                                        return;
-                                    }
-                                    v.save(cx);
-                                })
-                                .disabled(if single {
-                                    index + 1 == count
-                                } else {
-                                    track_index + 1 == track_count
-                                }),
-                            )
-                            .separator()
-                            .item(editor_menu_item(
-                                &owner,
-                                "Réglages avancés",
-                                move |v, _, cx| {
-                                    if !v.expanded_tracks.remove(&tid) {
-                                        v.expanded_tracks.insert(tid);
-                                    }
-                                    v.chapter_list.splice(index..index + 1, 1);
-                                    cx.notify();
-                                },
-                            ))
-                            .item(editor_menu_item(
-                                &owner,
-                                "Retirer de la playlist",
-                                move |v, _, cx| {
-                                    if let Err(error) = v.draft.remove_track(tid) {
-                                        v.status = failure_text(&error);
-                                        return;
-                                    }
-                                    v.save(cx);
-                                },
-                            ))
-                        }),
-                );
-            match &track.media {
-                TrackMedia::Local { recipe, .. } => {
-                    let recipe = *recipe;
-                    row =
-                        row.child(
-                            Button::new(element_id("preview-track-basic", tid))
-                                .label("Écouter")
-                                .small()
-                                .on_click(cx.listener(move |v, _, _, cx| {
-                                    v.send(Command::Preview(recipe), cx)
-                                })),
-                        );
+                        })
+                        .unwrap_or_else(|| "Audio de la médiathèque".into()),
+                    Some(*recipe),
+                ),
+                TrackMedia::RemoteAudio { info, .. } => {
+                    (duration_text(info.duration.seconds()), None)
                 }
-                TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => {}
-            }
-            group = group.child(row);
-            if self.expanded_tracks.contains(&tid) {
-                if single {
-                    let owner = cx.entity().downgrade();
-                    group = group
+                TrackMedia::Stream { .. } => ("Streaming".into(), None),
+            };
+            let menu = theme::round(
+                Button::new(element_id("track-menu", tid))
+                    .icon(IconName::EllipsisVertical)
+                    .accessibility_label("Options de la piste")
+                    .tooltip("Options de la piste"),
+                Look::Ghost,
+                36.,
+                false,
+                cx,
+            )
+            .dropdown_menu(move |menu, _, _| {
+                menu.item(editor_menu_item(
+                    &owner,
+                    "Changer l’icône",
+                    move |v, window, cx| v.open_icon_picker(id, Some(tid), window, cx),
+                ))
+                .item(
+                    editor_menu_item(&owner, "Retirer l’icône", move |v, _, cx| {
+                        v.assign_icon(id, Some(tid), None);
+                        v.save(cx);
+                    })
+                    .disabled(!has_icon),
+                )
+                .separator()
+                .item(editor_menu_item(
+                    &owner,
+                    "Remplacer l’audio…",
+                    move |v, window, cx| {
+                        v.replacement = Some(tid);
+                        v.open_media_picker(window, cx);
+                    },
+                ))
+                .item(
+                    editor_menu_item(&owner, "Déplacer / regrouper…", move |v, window, cx| {
+                        v.open_move_picker(id, tid, window, cx)
+                    })
+                    .disabled(count < 2),
+                )
+                .item(
+                    editor_menu_item(&owner, "Remonter", move |v, _, cx| {
+                        let result = if single {
+                            v.draft.move_chapter(id, -1)
+                        } else {
+                            v.draft.move_track(tid, id, track_index - 1)
+                        };
+                        if let Err(error) = result {
+                            v.status = failure_text(&error);
+                            return;
+                        }
+                        v.save(cx);
+                    })
+                    .disabled(if single {
+                        index == 0
+                    } else {
+                        track_index == 0
+                    }),
+                )
+                .item(
+                    editor_menu_item(&owner, "Descendre", move |v, _, cx| {
+                        let result = if single {
+                            v.draft.move_chapter(id, 1)
+                        } else {
+                            v.draft.move_track(tid, id, track_index + 1)
+                        };
+                        if let Err(error) = result {
+                            v.status = failure_text(&error);
+                            return;
+                        }
+                        v.save(cx);
+                    })
+                    .disabled(if single {
+                        index + 1 == count
+                    } else {
+                        track_index + 1 == track_count
+                    }),
+                )
+                .separator()
+                .item(editor_menu_item(
+                    &owner,
+                    "Réglages avancés",
+                    move |v, _, cx| {
+                        if !v.expanded_tracks.remove(&tid) {
+                            v.expanded_tracks.insert(tid);
+                        }
+                        cx.notify();
+                    },
+                ))
+                .item(editor_menu_item(
+                    &owner,
+                    "Retirer de la playlist",
+                    move |v, _, cx| {
+                        if let Err(error) = v.draft.remove_track(tid) {
+                            v.status = failure_text(&error);
+                            return;
+                        }
+                        v.save(cx);
+                    },
+                ))
+            });
+            let icon = if track.icon.is_some() {
+                &track.icon
+            } else {
+                &chapter.icon
+            };
+            group = group.child(
+                div().w_full().when(!single, |row| row.pl(px(34.))).child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .gap(px(12.))
+                        .items_center()
+                        .py(px(8.))
+                        .px(px(10.))
+                        .rounded(px(18.))
+                        .bg(theme::c(theme::SURFACE))
+                        .border_2()
+                        .border_color(theme::c(theme::SURFACE))
+                        .shadow(theme::step(theme::BORDER, 2.))
                         .child(
                             div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(
-                                    "Titre du chapitre (facultatif, distinct du titre de la piste)",
-                                ),
+                                .w(px(22.))
+                                .flex_shrink_0()
+                                .text_center()
+                                .font_weight(FontWeight::EXTRA_BOLD)
+                                .text_size(px(14.))
+                                .text_color(theme::c(theme::NUMBER))
+                                .child(if single {
+                                    format!("{}", index + 1)
+                                } else {
+                                    format!("{}.{}", index + 1, track_index + 1)
+                                }),
                         )
+                        .child(self.icon_button(
+                            element_id("track-icon", tid),
+                            icon,
+                            &tid.to_string(),
+                            id,
+                            Some(tid),
+                            cx,
+                        ))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .children(
+                                    self.track_titles
+                                        .get(&tid)
+                                        .map(|input| title_field(Input::new(input), 17.).w_full()),
+                                )
+                                .child(theme::meta(meta).pl(px(8.))),
+                        )
+                        .child(theme::tag(state.0, state.1))
+                        .children(playable.map(|recipe| {
+                            theme::round(
+                                Button::new(element_id("preview-track-basic", tid))
+                                    .icon(IconName::Play)
+                                    .accessibility_label(format!("Écouter {}", track.title))
+                                    .tooltip("Écouter sur cet ordinateur")
+                                    .on_click(cx.listener(move |v, _, _, cx| {
+                                        v.send(Command::Preview(recipe), cx)
+                                    })),
+                                Look::Soft(&theme::PEACH),
+                                36.,
+                                false,
+                                cx,
+                            )
+                        }))
+                        .child(menu),
+                ),
+            );
+            if self.expanded_tracks.contains(&tid) {
+                let mut advanced = theme::inset().ml(px(34.));
+                if single {
+                    let owner = cx.entity().downgrade();
+                    advanced = advanced
+                        .child(theme::note(
+                            "Titre du chapitre (facultatif, distinct du titre de la piste)",
+                        ))
                         .children(
                             self.chapter_titles
                                 .get(&id)
-                                .map(|input| Input::new(input).flex_1().min_w_0()),
+                                .map(|input| theme::small_field(Input::new(input))),
                         )
                         .child(
-                            Button::new(element_id("advanced-chapter-menu", id))
-                                .label("Chapitre")
-                                .small()
-                                .dropdown_menu(move |menu, _, _| {
-                                    menu.item(editor_menu_item(
-                                        &owner,
-                                        "Changer l’icône du chapitre",
-                                        move |v, window, cx| {
-                                            v.open_icon_picker(id, None, window, cx)
-                                        },
-                                    ))
-                                    .item(editor_menu_item(
-                                        &owner,
-                                        "Retirer l’icône du chapitre",
-                                        move |v, _, cx| {
-                                            v.assign_icon(id, None, None);
-                                            v.save(cx);
-                                        },
-                                    ))
-                                }),
+                            theme::pill(
+                                Button::new(element_id("advanced-chapter-menu", id))
+                                    .label("Icône du chapitre")
+                                    .dropdown_caret(true),
+                                Look::Outline,
+                                Height::Small,
+                                false,
+                                cx,
+                            )
+                            .dropdown_menu(move |menu, _, _| {
+                                menu.item(editor_menu_item(
+                                    &owner,
+                                    "Changer l’icône du chapitre",
+                                    move |v, window, cx| v.open_icon_picker(id, None, window, cx),
+                                ))
+                                .item(editor_menu_item(
+                                    &owner,
+                                    "Retirer l’icône du chapitre",
+                                    move |v, _, cx| {
+                                        v.assign_icon(id, None, None);
+                                        v.save(cx);
+                                    },
+                                ))
+                            }),
                         );
                 }
                 if self.draft.playback.kind == PlaybackType::Interactive {
@@ -1017,19 +1145,29 @@ impl PlaylistEditor {
                             .and_then(|events| event(events, trigger).as_ref())
                             .map(|event| event.cmd);
                         let owner = cx.entity().downgrade();
-                        group = group.child(
+                        advanced = advanced.child(
                             div()
                                 .flex()
-                                .gap_2()
+                                .gap(px(8.))
                                 .items_center()
-                                .child(event_trigger_label(trigger))
                                 .child(
-                                    Button::new(element_id(
-                                        "event-command",
-                                        format!("{tid}-{}", trigger.wire()),
-                                    ))
-                                    .label(selected.map(event_command_label).unwrap_or("Aucun"))
-                                    .small()
+                                    div()
+                                        .font_weight(FontWeight::BOLD)
+                                        .child(event_trigger_label(trigger)),
+                                )
+                                .child(
+                                    theme::pill(
+                                        Button::new(element_id(
+                                            "event-command",
+                                            format!("{tid}-{}", trigger.wire()),
+                                        ))
+                                        .label(selected.map(event_command_label).unwrap_or("Aucun"))
+                                        .dropdown_caret(true),
+                                        Look::Outline,
+                                        Height::Small,
+                                        false,
+                                        cx,
+                                    )
                                     .dropdown_menu(
                                         move |mut menu, _, _| {
                                             menu = menu.item(
@@ -1067,11 +1205,19 @@ impl PlaylistEditor {
                                 ),
                         );
                         if selected.is_some() {
-                            group = group
-                                .children(self.event_params.get(&(tid, trigger)).map(Input::new));
+                            advanced = advanced.children(
+                                self.event_params
+                                    .get(&(tid, trigger))
+                                    .map(|input| theme::small_field(Input::new(input))),
+                            );
                         }
                     }
+                } else if !single {
+                    advanced = advanced.child(theme::note(
+                        "Les événements de piste s’activent avec la lecture interactive, dans les réglages avancés de la playlist.",
+                    ));
                 }
+                group = group.child(advanced);
             }
         }
         group.into_any_element()
@@ -1108,7 +1254,7 @@ impl PlaylistEditor {
             let close = weak.clone();
             dialog
                 .title("Choisir une icône")
-                .w(px(600.))
+                .w(px(440.))
                 .child(picker.clone())
                 .on_cancel(move |_, _, cx| {
                     cancel
@@ -1493,276 +1639,652 @@ impl PlaylistEditor {
     }
 }
 
-impl Render for PlaylistEditor {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.blocked() {
-            let mut pending = div()
-                .size_full()
-                .p_6()
+/// An inline-editable title: reads as heading text, shows its frame only when focused.
+fn title_field(input: Input, size: f32) -> Input {
+    input
+        .bg(theme::c(theme::SURFACE).opacity(0.))
+        .border_color(theme::c(theme::SURFACE).opacity(0.))
+        .font_family(theme::HEADING_FONT)
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_size(px(size))
+        .h(px((size * 1.75).round()))
+        .px(px(8.))
+}
+impl PlaylistEditor {
+    /// The sending state shown on every track and in the header.
+    fn sync_state(&self) -> (&'static str, &'static theme::Family) {
+        if self.busy() {
+            ("Envoi sur Yoto…", &theme::BUTTER)
+        } else if self.blocked() || self.external.is_some() || self.deleted {
+            ("À vérifier", &theme::ROSE)
+        } else {
+            ("Sur Yoto", &theme::MINT)
+        }
+    }
+    fn header(&self, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
+        use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
+        use theme::{Height, Look};
+        let tracks = self
+            .base
+            .chapters
+            .iter()
+            .flat_map(|c| &c.tracks)
+            .collect::<Vec<_>>();
+        let seconds: f64 = tracks
+            .iter()
+            .filter_map(|t| match &t.media {
+                TrackMedia::Local { recipe, .. } => snapshot
+                    .recipes
+                    .iter()
+                    .find(|r| r.id == *recipe)
+                    .map(|r| r.info.as_ref().map_or(r.trim.duration(), |i| i.duration)),
+                TrackMedia::RemoteAudio { info, .. } => Some(info.duration),
+                TrackMedia::Stream { .. } => None,
+            })
+            .map(|d| d.seconds())
+            .sum();
+        let meta = match tracks.len() {
+            0 => "Vide".to_owned(),
+            1 => format!("1 piste · {}", duration_text(seconds)),
+            n => format!("{n} pistes · {}", duration_text(seconds)),
+        };
+        let blocked = self.blocked();
+        let (state, family) = self.sync_state();
+        let seed = self.base.id.to_string();
+        let cover_family = theme::family_for(&seed);
+        let creating = self
+            .parent
+            .upgrade()
+            .is_some_and(|p| p.read(cx).creating_playlist);
+        let owner = cx.entity().downgrade();
+        let duplicate = owner.clone();
+        let remove = owner.clone();
+        let cover = Button::new("cover")
+            .custom(
+                ButtonCustomVariant::new(cx)
+                    .color(theme::c(cover_family.soft))
+                    .hover(theme::c(cover_family.soft))
+                    .active(theme::c(cover_family.step)),
+            )
+            .bg(theme::c(cover_family.soft))
+            .rounded(ButtonRounded::Size(px(26.)))
+            .size(px(120.))
+            .shadow(theme::step(cover_family.step, 3.))
+            .accessibility_label("Choisir une couverture")
+            .tooltip(if self.base.metadata.cover.is_some() {
+                "Changer la couverture"
+            } else {
+                "Choisir une couverture"
+            })
+            .disabled(blocked)
+            .child(theme::pixel_glyph(
+                theme::Glyph::for_seed(&seed),
+                cover_family.accent,
+                7.,
+            ))
+            .on_click(cx.listener(|v, _, _, cx| v.cover(cx)));
+        let mut tags = div().flex().gap(px(6.));
+        if self.base.metadata.category != Category::None {
+            tags = tags.child(theme::tag(
+                category_label(self.base.metadata.category),
+                &theme::LILAC,
+            ));
+        }
+        tags = tags.child(theme::tag(
+            if state == "Sur Yoto" {
+                "Enregistré sur Yoto"
+            } else {
+                state
+            },
+            family,
+        ));
+        div()
+            .flex()
+            .gap(px(20.))
+            .items_end()
+            .child(cover)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .child(tags)
+                    .child(if blocked {
+                        theme::heading(self.base.title.clone(), 32.).into_any_element()
+                    } else {
+                        title_field(Input::new(&self.title), 32.)
+                            .w_full()
+                            .ml(px(-8.))
+                            .into_any_element()
+                    })
+                    .child(theme::meta(meta).text_size(px(14.))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap(px(8.))
+                    .child(
+                        theme::round(
+                            Button::new("playlist-actions")
+                                .icon(IconName::Ellipsis)
+                                .accessibility_label("Plus d’actions")
+                                .tooltip("Plus d’actions"),
+                            Look::Outline,
+                            44.,
+                            false,
+                            cx,
+                        )
+                        .dropdown_menu(move |menu, _, _| {
+                            let duplicate = duplicate.clone();
+                            let remove = remove.clone();
+                            menu.item(
+                                PopupMenuItem::new("Dupliquer la playlist")
+                                    .disabled(blocked || creating)
+                                    .on_click(move |_, _, cx| {
+                                        let _ = duplicate.update(cx, |e, cx| e.duplicate(cx));
+                                    }),
+                            )
+                            .separator()
+                            .item(
+                                PopupMenuItem::new("Supprimer la playlist de mon compte Yoto")
+                                    .disabled(blocked)
+                                    .on_click(move |_, window, cx| {
+                                        let Some(title) =
+                                            remove.upgrade().map(|e| e.read(cx).draft.title.clone())
+                                        else {
+                                            return;
+                                        };
+                                        let remove = remove.clone();
+                                        confirm_destructive(
+                                            window,
+                                            cx,
+                                            format!("Supprimer « {title} » de votre compte Yoto ?"),
+                                            "La playlist disparaîtra de votre compte Yoto et de vos lecteurs. Vos fichiers audio restent dans la médiathèque. Cette action est irréversible.",
+                                            "Supprimer",
+                                            move |_, cx| {
+                                                let _ = remove.update(cx, |e, cx| e.delete_remote(cx));
+                                            },
+                                        );
+                                    }),
+                            )
+                        }),
+                    )
+                    .child(theme::pill(
+                        Button::new("playlist-add-media")
+                            .icon(IconName::Plus)
+                            .label("Ajouter des médias")
+                            .on_click(cx.listener(|_, _, window, cx| {
+                                let handle = window.window_handle();
+                                let editor = cx.entity();
+                                cx.defer(move |cx| {
+                                    let _ = cx.update_window(handle, move |_, window, cx| {
+                                        editor.update(cx, |e, cx| e.open_media_picker(window, cx));
+                                    });
+                                });
+                            })),
+                        Look::Primary,
+                        Height::Large,
+                        blocked,
+                        cx,
+                    )),
+            )
+    }
+    fn duplicate(&mut self, cx: &mut Context<Self>) {
+        let id = self.base.id;
+        let _ = self.parent.update(cx, |v, cx| {
+            if let Some(binding) = v.snapshot.bindings.iter().find(|b| {
+                b.playlist == id && Some(&b.account) == v.snapshot.active_account.as_ref()
+            }) {
+                v.send(
+                    Command::DuplicateYotoPlaylist {
+                        account: binding.account.clone(),
+                        card: binding.card.clone(),
+                    },
+                    cx,
+                );
+            }
+        });
+    }
+    fn options_panel(&self, cx: &mut Context<Self>) -> Div {
+        use theme::{Height, Look};
+        let owner = cx.entity().downgrade();
+        let category = self.draft.metadata.category;
+        let advance = self.draft.playback.autoadvance;
+        let advance_owner = owner.clone();
+        let labelled = |label: &'static str, child: AnyElement| {
+            div()
                 .flex()
                 .flex_col()
-                .gap_4()
-                .child(div().text_xl().child(self.base.title.clone()));
-            if self.busy() {
-                pending = pending.child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .items_center()
-                        .child(Spinner::new())
-                        .child(self.status.clone()),
-                );
-            } else {
-                pending = pending.child(self.status.clone());
-            }
-            for chapter in &self.base.chapters {
-                for track in &chapter.tracks {
-                    pending = pending.child(
-                        div()
-                            .p_3()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_md()
-                            .child(track.title.clone()),
-                    );
-                }
-            }
-            let parent = self.parent.clone();
-            return pending
+                .gap(px(4.))
+                .flex_1()
+                .min_w_0()
                 .child(
+                    div()
+                        .text_size(px(13.))
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .text_color(theme::c(theme::MUTED))
+                        .child(label),
+                )
+                .child(child)
+        };
+        theme::card()
+            .child(labelled(
+                "Description",
+                theme::small_field(Input::new(&self.description)).into_any_element(),
+            ))
+            .child(
+                div()
+                    .flex()
+                    .gap(px(10.))
+                    .child(labelled(
+                        "Auteur",
+                        theme::small_field(Input::new(&self.author)).into_any_element(),
+                    ))
+                    .child(labelled(
+                        "Narrateur",
+                        theme::small_field(Input::new(&self.narrator)).into_any_element(),
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap(px(10.))
+                    .child(labelled(
+                        "Langues",
+                        theme::small_field(Input::new(&self.languages)).into_any_element(),
+                    ))
+                    .child(labelled(
+                        "Âge minimum",
+                        theme::small_field(Input::new(&self.min_age)).into_any_element(),
+                    ))
+                    .child(labelled(
+                        "Âge maximum",
+                        theme::small_field(Input::new(&self.max_age)).into_any_element(),
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(10.))
+                    .items_end()
+                    .child(labelled(
+                        "Catégorie",
+                        theme::pill(
+                            Button::new("playlist-category")
+                                .label(category_label(category))
+                                .dropdown_caret(true),
+                            Look::Outline,
+                            Height::Medium,
+                            false,
+                            cx,
+                        )
+                        .dropdown_menu(move |mut menu, _, _| {
+                            for choice in Category::ALL {
+                                let choice = *choice;
+                                menu = menu.item(
+                                    editor_menu_item(
+                                        &owner,
+                                        category_label(choice),
+                                        move |v, _, cx| {
+                                            v.draft.metadata.category = choice;
+                                            v.save(cx);
+                                        },
+                                    )
+                                    .checked(category == choice),
+                                );
+                            }
+                            menu
+                        })
+                        .into_any_element(),
+                    ))
+                    .child(labelled(
+                        "Après une piste",
+                        theme::pill(
+                            Button::new("autoadvance-menu")
+                                .label(advance_label(advance))
+                                .dropdown_caret(true),
+                            Look::Outline,
+                            Height::Medium,
+                            false,
+                            cx,
+                        )
+                        .dropdown_menu(move |mut menu, _, _| {
+                            for choice in Autoadvance::ALL {
+                                let choice = *choice;
+                                menu = menu.item(
+                                    editor_menu_item(
+                                        &advance_owner,
+                                        advance_label(choice),
+                                        move |v, _, cx| {
+                                            v.draft.playback.autoadvance = choice;
+                                            v.save(cx);
+                                        },
+                                    )
+                                    .checked(advance == choice),
+                                );
+                            }
+                            menu
+                        })
+                        .into_any_element(),
+                    )),
+            )
+            .child(theme::note(
+                "Les modifications sont enregistrées sur Yoto quand vous quittez un champ ou appuyez sur Entrée.",
+            ))
+    }
+    fn advanced_panel(&self, cx: &mut Context<Self>) -> Div {
+        use theme::{Height, Look};
+        let owner = cx.entity().downgrade();
+        let kind = self.draft.playback.kind;
+        theme::card()
+            .child(
+                div()
+                    .flex()
+                    .gap(px(10.))
+                    .items_center()
+                    .child(div().font_weight(FontWeight::EXTRA_BOLD).child("Lecture"))
+                    .child(
+                        theme::pill(
+                            Button::new("playback-menu")
+                                .label(playback_label(kind))
+                                .dropdown_caret(true),
+                            Look::Outline,
+                            Height::Medium,
+                            false,
+                            cx,
+                        )
+                        .dropdown_menu(move |mut menu, _, _| {
+                            for choice in PlaybackType::ALL {
+                                let choice = *choice;
+                                menu = menu.item(
+                                    editor_menu_item(
+                                        &owner,
+                                        playback_label(choice),
+                                        move |v, _, cx| {
+                                            v.draft.playback.kind = choice;
+                                            v.save(cx);
+                                        },
+                                    )
+                                    .checked(kind == choice),
+                                );
+                            }
+                            menu
+                        }),
+                    ),
+            )
+            .child(
+                gpui_kit::component::checkbox::Checkbox::new("online-only")
+                    .label("Connexion requise sur le lecteur")
+                    .checked(self.draft.playback.online_only)
+                    .on_click(cx.listener(|v, checked, _, cx| {
+                        v.draft.playback.online_only = *checked;
+                        v.save(cx);
+                    })),
+            )
+            .child(theme::note(
+                "Lecture aléatoire : début-fin-limite (chapitres dès 1)",
+            ))
+            .child(theme::small_field(Input::new(&self.shuffle)))
+            .child(theme::note("Durée de reprise (secondes)"))
+            .child(theme::small_field(Input::new(&self.resume)))
+            .child(
+                div()
+                    .flex()
+                    .gap(px(8.))
+                    .child(theme::small_field(Input::new(&self.stream)).flex_1())
+                    .child(theme::pill(
+                        Button::new("add-stream")
+                            .label("Ajouter un stream")
+                            .on_click(cx.listener(|v, _, window, cx| v.add_stream(window, cx))),
+                        Look::Outline,
+                        Height::Medium,
+                        false,
+                        cx,
+                    )),
+            )
+            .child(
+                div().child(theme::pill(
+                    Button::new("abandon-draft-images")
+                        .label("Abandonner les images non enregistrées")
+                        .on_click(cx.listener(|v, _, _, cx| v.abandon_images(cx))),
+                    Look::Ghost,
+                    Height::Small,
+                    self.draft
+                        .image_assets()
+                        .difference(&self.base.image_assets())
+                        .next()
+                        .is_none(),
+                    cx,
+                )),
+            )
+            .child(theme::note(
+                "Les événements de chaque piste se règlent depuis son menu, « Réglages avancés ».",
+            ))
+    }
+    fn add_stream(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let url = self.stream.read(cx).value().to_string();
+        if let Ok(mut p) = Playlist::new("Streaming".into()) {
+            let track = Track {
+                events: None,
+                id: TrackId::new(),
+                key: TrackKey::new(uuid_string()).expect("uuid"),
+                title: "Streaming".into(),
+                icon: None,
+                media: TrackMedia::Stream {
+                    url,
+                    format: AudioFormat::Mp3,
+                },
+                extra: Extra::new(),
+            };
+            p.chapters.push(Chapter {
+                id: ChapterId::new(),
+                key: ChapterKey::new(uuid_string()).expect("uuid"),
+                title: "Streaming".into(),
+                icon: None,
+                tracks: vec![track],
+                extra: Extra::new(),
+            });
+            self.draft.chapters.extend(p.chapters);
+            self.refresh_inputs(window, cx);
+            self.save(cx);
+        }
+    }
+}
+
+impl Render for PlaylistEditor {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use theme::{Height, Look};
+        let snapshot = self
+            .parent
+            .upgrade()
+            .map(|p| p.read(cx).snapshot.clone())
+            .unwrap_or_default();
+        let mut body = div()
+            .id("editor-scroll")
+            .size_full()
+            .overflow_y_scroll()
+            .py(px(24.))
+            .px(px(28.))
+            .flex()
+            .flex_col()
+            .gap(px(18.))
+            .child(self.header(&snapshot, cx));
+        if self.blocked() {
+            let mut pending = theme::inset().child(
+                div()
+                    .flex()
+                    .gap(px(10.))
+                    .items_center()
+                    .children(self.busy().then(|| {
+                        Spinner::new()
+                            .color(theme::c(theme::BUTTER.accent))
+                            .into_any_element()
+                    }))
+                    .child(
+                        div()
+                            .flex_1()
+                            .font_weight(FontWeight::BOLD)
+                            .child(self.status.clone()),
+                    ),
+            );
+            let parent = self.parent.clone();
+            pending = pending.child(
+                div().child(theme::pill(
                     Button::new("remote-operation-details")
                         .label("Voir le suivi")
-                        .ghost()
                         .on_click(move |_, _, cx| {
                             let _ = parent.update(cx, |p, cx| p.navigate(Route::Imports, cx));
                         }),
-                )
-                .into_any_element();
-        }
-        let mut body = div()
-            .id("editor-scroll").size_full().p_6().overflow_y_scroll().flex().flex_col().gap_3()
-            .child(div().text_sm().child("Titre de la playlist"))
-            .child(Input::new(&self.title))
-            .child(div().flex().gap_2().flex_wrap()
-                .child(Button::new("playlist-advanced").label(if self.advanced {"Masquer les options"} else {"Options de la playlist"}).ghost().on_click(cx.listener(|v,_,_,cx|{v.advanced = !v.advanced;cx.notify();}))))
-            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("Les modifications sont enregistrées directement sur Yoto. Validez les titres avec Entrée ou en quittant le champ."));
-        if self.advanced {
-            body = body
-                .child(Input::new(&self.description))
-                .child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .child(Input::new(&self.author))
-                        .child(Input::new(&self.narrator)),
-                )
-                .child(Input::new(&self.languages))
-                .child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .child(Input::new(&self.min_age))
-                        .child(Input::new(&self.max_age)),
-                )
-                .child(
-                    Button::new("cover")
-                        .label("Choisir une couverture")
-                        .on_click(cx.listener(|v, _, _, cx| v.cover(cx))),
-                );
+                    Look::Link(&theme::PEACH),
+                    Height::Small,
+                    false,
+                    cx,
+                )),
+            );
+            body = body.child(pending);
+            let (state, family) = self.sync_state();
+            for (index, chapter) in self.base.chapters.iter().enumerate() {
+                for track in &chapter.tracks {
+                    body = body.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(12.))
+                            .py(px(10.))
+                            .px(px(14.))
+                            .rounded(px(18.))
+                            .bg(theme::c(theme::SURFACE))
+                            .shadow(theme::step(theme::BORDER, 2.))
+                            .child(
+                                div()
+                                    .w(px(22.))
+                                    .text_center()
+                                    .font_weight(FontWeight::EXTRA_BOLD)
+                                    .text_color(theme::c(theme::NUMBER))
+                                    .child(format!("{}", index + 1)),
+                            )
+                            .child(theme::heading(track.title.clone(), 17.).flex_1().truncate())
+                            .child(theme::tag(state, family)),
+                    );
+                }
+            }
+            return body.into_any_element();
         }
         if self.draft.chapters.is_empty() {
-            body = body.child(div().p_4().child(
-                "Cette playlist est vide. Cliquez sur « Ajouter des médias » pour commencer.",
-            ));
-        }
-        if self.advanced {
-            let owner = cx.entity().downgrade();
-            let selected = self.draft.metadata.category;
             body = body.child(
+                theme::inset()
+                    .p(px(20.))
+                    .child(theme::heading("Cette playlist est vide", 19.))
+                    .child(theme::note(
+                        "Cliquez sur « Ajouter des médias » pour y mettre des audios de votre médiathèque.",
+                    )),
+            );
+        }
+        let state = self.sync_state();
+        let mut tracks = div().flex().flex_col().gap(px(8.));
+        for index in 0..self.base.chapters.len() {
+            tracks = tracks.child(self.render_chapter(index, &snapshot, state, cx));
+        }
+        body = body.child(tracks);
+        if self.external.is_some() || self.deleted {
+            body = body.child(
+                theme::inset()
+                    .bg(theme::c(theme::ROSE.soft))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::BOLD)
+                            .child(self.status.clone()),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap(px(8.))
+                            .child(theme::pill(
+                                Button::new("reload-playlist")
+                                    .label("Recharger la version actuelle")
+                                    .on_click(cx.listener(|v, _, window, cx| {
+                                        if let Some(p) = v.external.take() {
+                                            v.adopt(p, window, cx);
+                                        }
+                                    })),
+                                Look::Primary,
+                                Height::Medium,
+                                self.external.is_none(),
+                                cx,
+                            ))
+                            .child(theme::pill(
+                                Button::new("copy-conflicted-draft")
+                                    .label("Recharger depuis Yoto")
+                                    .on_click(cx.listener(|v, _, _, cx| {
+                                        if v.gather(cx).is_ok() {
+                                            let draft = Box::new(v.draft.clone());
+                                            let _ = v.parent.update(cx, |parent, cx| {
+                                                if let DraftOrigin::Existing { base } =
+                                                    &draft.origin
+                                                {
+                                                    parent.send(
+                                                        Command::LoadRemote {
+                                                            account: base.account.clone(),
+                                                            card: base.card.clone(),
+                                                        },
+                                                        cx,
+                                                    );
+                                                }
+                                            });
+                                        }
+                                    })),
+                                Look::Outline,
+                                Height::Medium,
+                                false,
+                                cx,
+                            )),
+                    ),
+            );
+        }
+        body = body
+            .child(
                 div()
                     .flex()
-                    .gap_2()
-                    .items_center()
-                    .child("Catégorie")
+                    .flex_col()
+                    .gap(px(8.))
                     .child(
-                        Button::new("playlist-category")
-                            .label(category_label(selected))
-                            .dropdown_menu(move |mut menu, _, _| {
-                                for category in Category::ALL {
-                                    let category = *category;
-                                    menu = menu.item(
-                                        editor_menu_item(
-                                            &owner,
-                                            category_label(category),
-                                            move |v, _, cx| {
-                                                v.draft.metadata.category = category;
-                                                v.save(cx);
-                                            },
-                                        )
-                                        .checked(selected == category),
-                                    );
-                                }
-                                menu
-                            }),
-                    ),
-            );
-        }
-        body = body.child(
-            gpui_kit::list(
-                self.chapter_list.clone(),
-                cx.processor(|v: &mut Self, index, window, cx| v.render_chapter(index, window, cx)),
-            )
-            .w_full()
-            .h(px(360.)),
-        );
-        let owner = cx.entity().downgrade();
-        let selected = self.draft.playback.autoadvance;
-        let options = div()
-            .flex()
-            .gap_2()
-            .items_center()
-            .child("Après une piste")
-            .child(
-                Button::new("autoadvance-menu")
-                    .label(advance_label(selected))
-                    .dropdown_menu(move |mut menu, _, _| {
-                        for advance in Autoadvance::ALL {
-                            let advance = *advance;
-                            menu = menu.item(
-                                editor_menu_item(
-                                    &owner,
-                                    advance_label(advance),
-                                    move |v, _, cx| {
-                                        v.draft.playback.autoadvance = advance;
-                                        v.save(cx);
-                                    },
-                                )
-                                .checked(selected == advance),
-                            );
-                        }
-                        menu
-                    }),
-            );
-        let owner = cx.entity().downgrade();
-        let selected = self.draft.playback.kind;
-        let playback = div().flex().gap_2().items_center().child("Lecture").child(
-            Button::new("playback-menu")
-                .label(playback_label(selected))
-                .dropdown_menu(move |mut menu, _, _| {
-                    for kind in PlaybackType::ALL {
-                        let kind = *kind;
-                        menu = menu.item(
-                            editor_menu_item(&owner, playback_label(kind), move |v, _, cx| {
-                                v.draft.playback.kind = kind;
-                                v.save(cx);
-                            })
-                            .checked(selected == kind),
-                        );
-                    }
-                    menu
-                }),
-        );
-        body.when(self.advanced, |body| {
-            body.child(options)
-                .child(playback)
-                .child(
-                    gpui_kit::component::checkbox::Checkbox::new("online-only")
-                        .label("Connexion requise sur le lecteur")
-                        .checked(self.draft.playback.online_only)
-                        .on_click(cx.listener(|v, checked, _, cx| {
-                            v.draft.playback.online_only = *checked;
-                            v.save(cx);
-                        })),
-                )
-                .child(Input::new(&self.shuffle))
-                .child("Durée de reprise (secondes)")
-                .child(Input::new(&self.resume))
-                .child(
-                    div().flex().gap_2().child(Input::new(&self.stream)).child(
-                        Button::new("add-stream")
-                            .label("Ajouter un stream")
-                            .on_click(cx.listener(|v, _, window, cx| {
-                                let url = v.stream.read(cx).value().to_string();
-                                if let Ok(mut p) = Playlist::new("Streaming".into()) {
-                                    let track = Track {
-                                        events: None,
-                                        id: TrackId::new(),
-                                        key: TrackKey::new(uuid_string()).expect("uuid"),
-                                        title: "Streaming".into(),
-                                        icon: None,
-                                        media: TrackMedia::Stream {
-                                            url,
-                                            format: AudioFormat::Mp3,
-                                        },
-                                        extra: Extra::new(),
-                                    };
-                                    p.chapters.push(Chapter {
-                                        id: ChapterId::new(),
-                                        key: ChapterKey::new(uuid_string()).expect("uuid"),
-                                        title: "Streaming".into(),
-                                        icon: None,
-                                        tracks: vec![track],
-                                        extra: Extra::new(),
-                                    });
-                                    v.draft.chapters.extend(p.chapters);
-                                    v.refresh_inputs(window, cx);
-                                    v.save(cx);
-                                }
-                            })),
-                    ),
-                )
-        })
-        .children((self.external.is_some() || self.deleted).then(|| {
-            div()
-                .flex()
-                .gap_2()
-                .child(
-                    Button::new("reload-playlist")
-                        .label("Recharger la version actuelle")
-                        .disabled(self.external.is_none())
-                        .on_click(cx.listener(|v, _, window, cx| {
-                            if let Some(p) = v.external.take() {
-                                v.adopt(p, window, cx);
-                            }
-                        })),
-                )
-                .child(
-                    Button::new("copy-conflicted-draft")
-                        .label("Recharger depuis Yoto")
+                        theme::disclosure(
+                            "playlist-options",
+                            "Options de la playlist",
+                            "Description, auteur, catégorie, langue, lecture",
+                            self.options_open,
+                            cx,
+                        )
                         .on_click(cx.listener(|v, _, _, cx| {
-                            if v.gather(cx).is_ok() {
-                                let draft = Box::new(v.draft.clone());
-                                let _ = v.parent.update(cx, |parent, cx| {
-                                    if let DraftOrigin::Existing { base } = &draft.origin {
-                                        parent.send(
-                                            Command::LoadRemote {
-                                                account: base.account.clone(),
-                                                card: base.card.clone(),
-                                            },
-                                            cx,
-                                        );
-                                    }
-                                });
-                            }
+                            v.options_open = !v.options_open;
+                            cx.notify();
                         })),
-                )
-        }))
-        .when(self.advanced, |body| {
-            body.child(
-                Button::new("abandon-draft-images")
-                    .label("Abandonner les images non enregistrées")
-                    .disabled(
-                        self.draft
-                            .image_assets()
-                            .difference(&self.base.image_assets())
-                            .next()
-                            .is_none(),
                     )
-                    .on_click(cx.listener(|v, _, _, cx| v.abandon_images(cx))),
+                    .children(self.options_open.then(|| self.options_panel(cx)))
+                    .child(
+                        theme::disclosure(
+                            "playlist-advanced",
+                            "Réglages avancés",
+                            "Lecture interactive, événements",
+                            self.advanced_open,
+                            cx,
+                        )
+                        .text_color(theme::c(theme::MUTED))
+                        .on_click(cx.listener(|v, _, _, cx| {
+                            v.advanced_open = !v.advanced_open;
+                            cx.notify();
+                        })),
+                    )
+                    .children(self.advanced_open.then(|| self.advanced_panel(cx))),
             )
-        })
-        .child(self.status.clone())
-        .into_any_element()
+            .children(
+                (!self.status.is_empty() && self.external.is_none() && !self.deleted)
+                    .then(|| theme::note(self.status.clone())),
+            );
+        body.into_any_element()
     }
 }
 impl Drop for PlaylistEditor {
@@ -1817,7 +2339,8 @@ pub struct PlaylistRow {
     pub title: String,
     pub target: PlaylistTarget,
     pub state: PlaylistSyncState,
-    pub has_cloud: bool,
+    /// Track count read from the remote card, when its document has one.
+    pub tracks: Option<usize>,
 }
 /// Build the catalog once on the snapshot worker, never while rendering/scrolling.
 fn publication_job_key(job: &Job) -> (u64, Revision, u8) {
@@ -1886,7 +2409,17 @@ pub fn playlist_rows(snapshot: &Snapshot) -> Vec<PlaylistRow> {
                     card: card.card.clone(),
                 },
                 state,
-                has_cloud: true,
+                tracks: card
+                    .document
+                    .pointer("/content/chapters")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|chapters| {
+                        chapters
+                            .iter()
+                            .filter_map(|c| c.get("tracks").and_then(serde_json::Value::as_array))
+                            .map(Vec::len)
+                            .sum()
+                    }),
             }
         })
         .collect::<Vec<_>>();
@@ -1905,80 +2438,105 @@ pub fn open_remote(
     view.send(Command::LoadRemote { account, card }, cx);
 }
 pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView>) -> AnyElement {
-    use gpui_kit::assets::IconName;
-    use gpui_kit::component::{
-        Icon,
-        menu::{DropdownMenu, PopupMenuItem},
-    };
-    let parent = cx.entity().downgrade();
+    use theme::{Height, Look};
+    let syncing = remote_syncing(&view.snapshot);
+    let mut header = div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .px(px(4.))
+        .child(theme::heading("Playlists", 26.));
+    if let Some(account) = view.snapshot.active_account.clone() {
+        header = header.child(theme::round(
+            Button::new("playlists-sync")
+                .icon(IconName::RefreshCw)
+                .accessibility_label("Actualiser depuis Yoto")
+                .tooltip("Actualiser depuis Yoto")
+                .loading(syncing)
+                .on_click(
+                    cx.listener(move |v, _, _, cx| v.send(Command::Sync(account.clone()), cx)),
+                ),
+            Look::Soft(&theme::LIGHT_SAND),
+            36.,
+            syncing,
+            cx,
+        ));
+    }
+    let can_create = view.snapshot.active_account.is_some()
+        && !view.creating_playlist
+        && Rules::title(view.new_title.read(cx).value().as_ref()).is_ok();
     let mut list = div()
         .id("playlists-sidebar")
-        .w(px(300.))
-        .p_5()
+        .w(px(268.))
+        .flex_shrink_0()
+        .h_full()
+        .py(px(24.))
+        .px(px(16.))
         .flex()
         .flex_col()
-        .gap_3()
-        .border_r_1()
-        .border_color(cx.theme().border)
-        .h_full()
-        .child(div().text_2xl().child("Playlists"))
-        .child(Input::new(&view.new_title))
-        .child(
-            Button::new("new-playlist")
-                .label("Créer une playlist")
-                .primary()
-                .disabled(
-                    view.snapshot.active_account.is_none()
-                        || view.creating_playlist
-                        || Rules::title(view.new_title.read(cx).value().as_ref()).is_err(),
-                )
-                .on_click(cx.listener(|v, _, _, cx| {
-                    let title = v.new_title.read(cx).value().trim().to_owned();
-                    if let Some(account) = v.snapshot.active_account.clone() {
-                        v.send(Command::CreateYotoPlaylist { account, title }, cx);
-                    }
-                })),
-        )
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("Les playlists de votre compte Yoto"),
-        );
-    if let Some(account) = view.snapshot.active_account.clone() {
-        list = list
-            .child(
-                Button::new("playlists-sync")
-                    .label("Actualiser depuis Yoto")
-                    .icon(IconName::RefreshCw)
-                    .disabled(remote_syncing(&view.snapshot))
-                    .on_click(
-                        cx.listener(move |v, _, _, cx| v.send(Command::Sync(account.clone()), cx)),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(remote_sync_message(
-                        &view.snapshot,
-                        RemoteCollection::Playlists,
-                    )),
-            );
-    } else {
+        .gap(px(10.))
+        .border_r_2()
+        .border_color(theme::c(theme::DIVIDER))
+        .child(header);
+    if view.snapshot.active_account.is_some() {
         list = list.child(
-            Button::new("playlists-account")
-                .label("Connecter Yoto")
-                .on_click(cx.listener(|v, _, _, cx| {
-                    v.navigate(Route::Account, cx);
-                })),
+            div()
+                .flex()
+                .gap(px(6.))
+                .child(
+                    theme::small_field(Input::new(&view.new_title))
+                        .flex_1()
+                        .min_w_0(),
+                )
+                .child(theme::round(
+                    Button::new("new-playlist")
+                        .icon(if view.creating_playlist {
+                            IconName::LoaderCircle
+                        } else {
+                            IconName::Plus
+                        })
+                        .accessibility_label("Créer une playlist")
+                        .tooltip("Créer une playlist avec ce titre")
+                        .on_click(cx.listener(|v, _, _, cx| {
+                            let title = v.new_title.read(cx).value().trim().to_owned();
+                            if let Some(account) = v.snapshot.active_account.clone() {
+                                v.send(Command::CreateYotoPlaylist { account, title }, cx);
+                            }
+                        })),
+                    Look::Primary,
+                    40.,
+                    !can_create,
+                    cx,
+                )),
         );
-    }
-    if view.playlist_rows.is_empty() {
-        list =
-            list.child(div().text_sm().child(
-                "Aucune playlist Yoto. Créez votre première playlist ou actualisez la liste.",
+        if !matches!(
+            view.snapshot.remote_sync.get(&RemoteCollection::Playlists),
+            Some(RemoteSyncState::Ready { .. })
+        ) {
+            list = list.child(theme::note(remote_sync_message(
+                &view.snapshot,
+                RemoteCollection::Playlists,
+            )));
+        }
+    } else {
+        list = list
+            .child(theme::note(
+                "Connectez votre compte Yoto pour retrouver et modifier vos playlists.",
+            ))
+            .child(theme::pill(
+                Button::new("playlists-account")
+                    .label("Connecter Yoto")
+                    .on_click(cx.listener(|v, _, _, cx| v.navigate(Route::Account, cx))),
+                Look::Primary,
+                Height::Medium,
+                false,
+                cx,
             ));
+    }
+    if view.snapshot.active_account.is_some() && view.playlist_rows.is_empty() {
+        list = list.child(theme::note(
+            "Aucune playlist Yoto. Créez votre première playlist ou actualisez la liste.",
+        ));
     }
     list = list.child(
         gpui_kit::uniform_list(
@@ -1989,6 +2547,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                  range: std::ops::Range<usize>,
                  _,
                  cx: &mut Context<AppView>| {
+                    use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
                     range
                         .map(|index| {
                             let row = &view.playlist_rows[index];
@@ -2001,47 +2560,68 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                             });
                             let loading = view.opening_playlist.as_ref()
                                 == Some(&(target.account.clone(), target.card.clone()));
-                            let mut icons = div().flex().gap_1().items_center();
-                            if row.has_cloud {
-                                icons = icons.child(Icon::new(IconName::Cloud).small());
-                            }
-                            div()
-                                .h(px(72.))
-                                .w_full()
-                                .flex()
-                                .flex_col()
-                                .justify_center()
-                                .gap_1()
-                                .child(
-                                    Button::new(element_id("playlist", key))
-                                        .label(row.title.clone())
-                                        .ghost()
-                                        .selected(selected)
-                                        .w_full()
-                                        .disabled(view.opening_playlist.is_some())
-                                        .on_click(cx.listener(move |v, _, _, cx| {
-                                            open_remote(
-                                                v,
-                                                target.account.clone(),
-                                                target.card.clone(),
-                                                cx,
-                                            )
-                                        })),
+                            let meta = if loading {
+                                "Ouverture depuis Yoto…".to_owned()
+                            } else {
+                                match (&row.state, row.tracks) {
+                                    (PlaylistSyncState::Synced, Some(0)) => "Vide".into(),
+                                    (PlaylistSyncState::Synced, Some(1)) => "1 piste".into(),
+                                    (PlaylistSyncState::Synced, Some(n)) => format!("{n} pistes"),
+                                    (state, _) => state.label().into(),
+                                }
+                            };
+                            let surface = if selected {
+                                theme::c(theme::SURFACE)
+                            } else {
+                                theme::c(theme::CREAM)
+                            };
+                            let item = Button::new(element_id("playlist", &key))
+                                .custom(
+                                    ButtonCustomVariant::new(cx)
+                                        .color(surface)
+                                        .foreground(theme::c(theme::INK))
+                                        .hover(theme::c(theme::SURFACE))
+                                        .active(theme::c(theme::SAND)),
                                 )
+                                .accessibility_label(format!("{} · {meta}", row.title))
+                                .toggled(selected)
+                                .bg(surface)
+                                .rounded(ButtonRounded::Size(px(16.)))
+                                .h(px(60.))
+                                .px(px(8.))
+                                .w_full()
+                                .disabled(view.opening_playlist.is_some() && !loading)
                                 .child(
                                     div()
+                                        .w_full()
                                         .flex()
                                         .items_center()
-                                        .gap_2()
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(icons)
-                                        .child(if loading {
-                                            "Ouverture depuis Yoto…"
-                                        } else {
-                                            row.state.label()
-                                        }),
+                                        .gap(px(12.))
+                                        .child(theme::thumbnail(&key, 44., 12.))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .flex()
+                                                .flex_col()
+                                                .child(
+                                                    div()
+                                                        .text_size(px(15.))
+                                                        .font_weight(FontWeight::EXTRA_BOLD)
+                                                        .truncate()
+                                                        .child(row.title.clone()),
+                                                )
+                                                .child(theme::meta(meta).text_size(px(12.))),
+                                        ),
                                 )
+                                .on_click(cx.listener(move |v, _, _, cx| {
+                                    open_remote(v, target.account.clone(), target.card.clone(), cx)
+                                }));
+                            div().h(px(64.)).pb(px(4.)).child(if selected {
+                                item.shadow(theme::lift())
+                            } else {
+                                item
+                            })
                         })
                         .collect()
                 },
@@ -2053,96 +2633,13 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
     if let Some(error) = &view.error {
         list = list.child(
             div()
-                .text_sm()
-                .text_color(cx.theme().danger)
+                .text_size(px(13.))
+                .text_color(theme::c(theme::ROSE.ink))
                 .child(failure_text(error)),
         );
     }
     let mut main = div().flex_1().min_w_0().h_full().flex().flex_col();
     if let Some(id) = view.selected_playlist {
-        let weak = parent.clone();
-        let blocked = view.editors.get(&id).is_none_or(|e| e.read(cx).blocked());
-        let creating = view.creating_playlist;
-        let mut toolbar = div().p_4().flex().gap_2().items_center().flex_wrap().child(
-            Button::new("playlist-add-media")
-                .label("Ajouter des médias")
-                .disabled(blocked)
-                .icon(IconName::Plus)
-                .on_click(cx.listener(move |v, _, window, cx| {
-                    if let Some(editor) = v.editors.get(&id).cloned() {
-                        let handle = window.window_handle();
-                        cx.defer(move |cx| {
-                            let _ = cx.update_window(handle, move |_, window, cx| {
-                                editor.update(cx, |e, cx| e.open_media_picker(window, cx));
-                            });
-                        });
-                    }
-                })),
-        );
-        toolbar = toolbar.child(
-            Button::new("playlist-actions")
-                .label("Plus")
-                .icon(IconName::Ellipsis)
-                .ghost()
-                .dropdown_menu(move |menu, _, _| {
-                    let duplicate = weak.clone();
-                    let remove = weak.clone();
-                    menu.item(
-                        PopupMenuItem::new("Dupliquer la playlist")
-                            .disabled(blocked || creating)
-                            .on_click(move |_, _, cx| {
-                                let _ = duplicate.update(cx, |v, cx| {
-                                    if let Some(binding) = v.snapshot.bindings.iter().find(|b| {
-                                        b.playlist == id
-                                            && Some(&b.account)
-                                                == v.snapshot.active_account.as_ref()
-                                    }) {
-                                        v.send(
-                                            Command::DuplicateYotoPlaylist {
-                                                account: binding.account.clone(),
-                                                card: binding.card.clone(),
-                                            },
-                                            cx,
-                                        );
-                                    }
-                                });
-                            }),
-                    )
-                    .separator()
-                    .item(
-                        PopupMenuItem::new("Supprimer la playlist de mon compte Yoto")
-                            .disabled(blocked)
-                            .on_click(move |_, window, cx| {
-                                let Some(title) = remove.upgrade().and_then(|v| {
-                                    let v = v.read(cx);
-                                    v.editors
-                                        .get(&id)
-                                        .map(|editor| editor.read(cx).draft.title.clone())
-                                }) else {
-                                    return;
-                                };
-                                let remove = remove.clone();
-                                confirm_destructive(
-                                    window,
-                                    cx,
-                                    format!("Supprimer « {title} » de votre compte Yoto ?"),
-                                    "La playlist disparaîtra de votre compte Yoto et de vos lecteurs. Vos fichiers audio restent dans la médiathèque. Cette action est irréversible.",
-                                    "Supprimer",
-                                    move |_, cx| {
-                                        let _ = remove.update(cx, |v, cx| {
-                                            if let Some(editor) = v.editors.get(&id).cloned() {
-                                                cx.defer(move |cx| {
-                                                    editor.update(cx, |e, cx| e.delete_remote(cx))
-                                                });
-                                            }
-                                        });
-                                    },
-                                );
-                            }),
-                    )
-                }),
-        );
-        main = main.child(toolbar);
         if let Some(editor) = view.editors.get(&id) {
             main = main.child(div().flex_1().min_h_0().child(editor.clone()));
         } else {
@@ -2163,24 +2660,30 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                 .unwrap_or("Création et vérification sur Yoto…");
             main = main.child(
                 div()
-                    .p_8()
+                    .p(px(28.))
                     .flex()
-                    .gap_3()
+                    .gap(px(10.))
                     .items_center()
-                    .child(Spinner::new())
+                    .font_weight(FontWeight::BOLD)
+                    .child(Spinner::new().color(theme::c(theme::LILAC.accent)))
                     .child(message),
             );
         }
     } else {
         main = main.child(
             div()
-                .p_8()
+                .p(px(28.))
                 .flex()
                 .flex_col()
-                .gap_3()
-                .child(div().text_2xl().child("Votre collection de playlists"))
-                .child("Choisissez une playlist à gauche pour la modifier et ajouter des médias.")
-                .child("Ajoutez des médias et modifiez vos playlists directement sur Yoto."),
+                .gap(px(12.))
+                .child(theme::thumbnail("playlists", 96., 26.))
+                .child(theme::heading("Vos playlists Yoto", 32.))
+                .child(div().text_color(theme::c(theme::INK_SOFT)).child(
+                    "Choisissez une playlist à gauche pour la modifier et y ajouter des audios de votre médiathèque.",
+                ))
+                .child(theme::note(
+                    "Les modifications sont enregistrées directement sur votre compte Yoto.",
+                )),
         );
     }
     div()

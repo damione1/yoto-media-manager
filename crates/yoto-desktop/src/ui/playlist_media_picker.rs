@@ -190,10 +190,12 @@ impl Render for MediaPicker {
                                 .flex()
                                 .gap_3()
                                 .items_center()
-                                .border_b_1()
-                                .border_color(cx.theme().border)
+                                .border_b_2()
+                                .border_color(theme::c(theme::DIVIDER))
                                 .child(
                                     Checkbox::new(element_id("choose-media", media))
+                                        .large()
+                                        .accessibility_label(row.title.clone())
                                         .checked(selected)
                                         .disabled(blocked)
                                         .on_click(cx.listener(move |v, checked, _, cx| {
@@ -209,23 +211,23 @@ impl Render for MediaPicker {
                                             cx.notify();
                                         })),
                                 )
+                                .child(theme::thumbnail(&media.to_string(), 48., 14.))
                                 .child(
                                     div()
                                         .flex_1()
                                         .min_w_0()
                                         .flex()
                                         .flex_col()
+                                        .items_start()
                                         .gap_2()
-                                        .child(
-                                            div()
-                                                .truncate()
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .child(row.title.clone()),
-                                        )
+                                        .child(theme::heading(row.title.clone(), 17.).truncate())
                                         .child(
                                             Button::new(element_id("choose-version", media))
                                                 .label(label)
                                                 .small()
+                                                .outline()
+                                                .rounded(px(999.))
+                                                .dropdown_caret(true)
                                                 .disabled(blocked)
                                                 .dropdown_menu(move |mut menu, _, _| {
                                                     for (id, label) in &versions {
@@ -261,18 +263,18 @@ impl Render for MediaPicker {
             .child(if self.rows.rows.is_empty() { div().p_6().child("Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer.").into_any_element() } else { rows.into_any_element() })
             .child(div().text_sm().text_color(cx.theme().muted_foreground).child("L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."))
             .child(div().flex().gap_2().items_center()
-                .child(Button::new("picker-import-media").label("Importer").disabled(busy).on_click(cx.listener(|v, _, window, cx| {
+                .child(theme::pill(Button::new("picker-import-media").label("Importer de l’audio").on_click(cx.listener(|v, _, window, cx| {
                     let editor = v.editor.clone();
                     window.close_dialog(cx);
                     let _ = editor.update(cx, |e, cx| { e.picker_window = None; let _ = e.parent.update(cx, |p, cx| p.navigate(Route::Imports, cx)); });
-                })))
+                })), theme::Look::Outline, theme::Height::Medium, busy, cx))
                 .child(div().flex_1())
-                .child(DialogClose::new().child(Button::new("picker-cancel").label("Annuler").disabled(busy)))
-                .child(Button::new("picker-add-selected").label(if busy { "Envoi en cours…".into() } else { format!("Ajouter ({selected})") }).primary().disabled(selected == 0 || blocked).on_click(cx.listener(|v, _, _, cx| {
+                .child(DialogClose::new().child(theme::pill(Button::new("picker-cancel").label("Annuler"), theme::Look::Ghost, theme::Height::Medium, busy, cx)))
+                .child(theme::pill(Button::new("picker-add-selected").label(if busy { "Envoi en cours…".into() } else { format!("Ajouter ({selected})") }).on_click(cx.listener(|v, _, _, cx| {
                     let mut batch = v.selected.iter().filter_map(|media| v.versions.get(media).map(|recipe| (*media, *recipe))).collect::<Vec<_>>();
                     batch.sort_by_key(|(media, _)| v.rows.positions.get(media).copied());
                     let _ = v.editor.update(cx, |e, cx| e.add_media_batch(batch, cx));
-                }))))
+                })), theme::Look::Primary, theme::Height::Medium, selected == 0 || blocked, cx)))
             .children(busy.then(|| div().flex().gap_2().items_center().child(Spinner::new().small()).child(status.clone())))
             .children((!busy && !status.is_empty()).then(|| div().text_sm().child(status)))
     }
