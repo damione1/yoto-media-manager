@@ -37,6 +37,6 @@ To recover one file, open its player and choose `Exporter l’original` in the `
 
 ## Clean up unused files
 
-In the `Médiathèque` `⋯` menu, `Nettoyer le cache` removes files no longer referenced by media, versions, playlists, or active tasks. Files still in use are preserved.
+In the `Médiathèque` `⋯` menu, `Libérer l’espace inutilisé` removes files no longer referenced by media, versions, playlists, or active tasks. Files still in use are preserved.
 
 To remove media used by a playlist, remove its tracks first. Keep a recent backup before reorganizing a large library.

@@ -239,11 +239,11 @@ impl Render for UpdatePanel {
                 );
             }
             UpdateState::Ready { release, issue } => {
-                body = body.children(
-                    issue
-                        .clone()
-                        .map(|message| div().text_color(cx.theme().danger).child(message)),
-                );
+                body = body.children(issue.clone().map(|message| {
+                    div()
+                        .text_color(cx.theme().danger)
+                        .child(failure_text(&Failure::Validation(message)))
+                }));
                 body = body.child(format!("La version {} est prête à être installée.", release.version)).child("Votre médiathèque est conservée. Terminez vos imports et envois avant de redémarrer.").child(Button::new("install-update").label("Installer et redémarrer").primary().on_click(cx.listener(|view, _, _, cx| view.install(cx))));
             }
             UpdateState::Installing => {

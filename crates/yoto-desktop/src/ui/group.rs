@@ -267,10 +267,20 @@ impl Render for GroupEditor {
                         range
                             .map(|index| {
                                 let id = v.cards[index].clone();
+                                let title = v
+                                    .available
+                                    .iter()
+                                    .find(|card| card.card == id)
+                                    .map_or_else(|| id.to_string(), |card| card.title.clone());
                                 div()
                                     .flex()
                                     .gap_2()
-                                    .child(format!("{} · {}", index + 1, id))
+                                    .items_center()
+                                    .child(div().flex_1().min_w_0().truncate().child(format!(
+                                        "{} · {}",
+                                        index + 1,
+                                        title
+                                    )))
                                     .child(
                                         Button::new(element_id("group-up", index.to_string()))
                                             .label("↑")

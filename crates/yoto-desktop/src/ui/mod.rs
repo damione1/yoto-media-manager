@@ -514,6 +514,16 @@ impl AppView {
                         }
                         let reply = match reply {
                             Ok(reply) => reply,
+                            Err(Failure::Authentication) if connecting => {
+                                // The browser round trip timed out or was abandoned.
+                                view.report_error(
+                                    Failure::Validation(
+                                        "La connexion Yoto n’a pas abouti. Cliquez de nouveau sur « Connecter mon compte Yoto », terminez la connexion dans votre navigateur, puis revenez ici.".into(),
+                                    ),
+                                    cx,
+                                );
+                                return;
+                            }
                             Err(error) => {
                                 view.report_error(error, cx);
                                 return;

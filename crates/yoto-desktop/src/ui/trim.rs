@@ -739,7 +739,7 @@ impl Render for TrimPanel {
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(self.media.title.clone()),
                     )
-                    .child(Button::new("audio-more").label("⋯").ghost().dropdown_menu(
+                    .child(Button::new("audio-more").label("⋯").accessibility_label("Options du média").tooltip("Options du média").ghost().dropdown_menu(
                         move |menu, _, _| {
                             let metadata = metadata.clone();
                             let export = export.clone();

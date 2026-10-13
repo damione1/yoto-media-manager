@@ -771,6 +771,8 @@ impl PlaylistEditor {
                     .child(
                         Button::new(element_id("chapter-menu", id))
                             .label("⋯")
+                            .accessibility_label("Options du chapitre")
+                            .tooltip("Options du chapitre")
                             .ghost()
                             .dropdown_menu(move |menu, _, _| {
                                 menu.item(editor_menu_item(
@@ -854,6 +856,8 @@ impl PlaylistEditor {
                 .child(
                     Button::new(element_id("track-menu", tid))
                         .label("⋯")
+                        .accessibility_label("Options de la piste")
+                        .tooltip("Options de la piste")
                         .ghost()
                         .dropdown_menu(move |menu, _, _| {
                             menu.item(editor_menu_item(

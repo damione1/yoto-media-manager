@@ -8,11 +8,11 @@ sidebar_position: 7
 
 ## Choose a player
 
-Connect your account, open `Lecteurs`, and refresh the data with `Synchroniser MYO, lecteurs et groupes`. Select the player you want to control. Actions apply to that player.
+Connect your account, open `Lecteurs`, and refresh the data with `Actualiser depuis Yoto`. Select the player you want to control. Actions apply to that player.
 
 A player must be connected to receive a command. If its state looks outdated, refresh again and check its Wi-Fi connection.
 
-From a creation in `Bibliothèque MYO`, choose `Lire sur le lecteur sélectionné`. The player panel offers the available controls, including pause, resume, stop, volume, and a timer.
+From a playlist in `Mes playlists Yoto`, choose `Lire sur le lecteur sélectionné`. The player panel offers the available controls, including pause, resume, stop, volume, and a timer.
 
 ## Understand confirmations
 
@@ -22,7 +22,7 @@ Some features, such as lighting or Bluetooth, depend on the model and the API's 
 
 ## Settings and shortcuts
 
-Choose `Charger la configuration` before changing settings. Adjust the values you want, then choose `Enregistrer ces réglages`. The app reads the configuration again to verify the result.
+Choose `Charger les réglages du lecteur` before changing settings. Adjust the values you want, then choose `Enregistrer ces réglages`. The app reads the configuration again to verify the result.
 
 Day and night shortcuts are shown separately. Changing one does not erase the other. Saving an empty selection for one mode explicitly removes its shortcuts. Some predefined Yoto shortcuts may be visible but cannot be edited.
 
