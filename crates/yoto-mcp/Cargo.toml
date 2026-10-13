@@ -1,0 +1,12 @@
+[package]
+name = "yoto-mcp"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+yoto-infra = { path = "../yoto-infra" }
+yoto-domain = { path = "../yoto-domain" }
+rmcp = { version = "=3.5.1", features = ["server", "transport-io"] }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars = "1"

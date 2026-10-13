@@ -1,0 +1,37 @@
+[package]
+name = "yoto-infra"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+yoto-domain = { path = "../yoto-domain" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+sha2.workspace = true
+hex.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "backup"] }
+keyring = { version = "3.6", features = ["apple-native", "windows-native"] }
+chacha20poly1305 = { version = "0.10", features = ["stream"] }
+rand = "0.8"
+zeroize = { version = "1", features = ["derive"] }
+directories = "6"
+fs2 = "0.4"
+base64 = "0.22"
+url = "2"
+webbrowser = "1"
+toml = "0.9"
+tokio-util = { version = "0.7", features = ["io"] }
+rodio = { version = "=0.23.0", default-features = false, features = ["playback", "mp3", "wav", "flac", "mp4", "vorbis"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+yoto-api-generated = { path = "../yoto-api-generated" }
+yoto-auth-generated = { path = "../yoto-auth-generated" }
+tempfile = "3"
+rumqttc = { version = "=0.25.1", features = ["websocket", "url"] }
+libc = "0.2"
+schemars = "1"
+[dev-dependencies]
+tempfile = "3"
+wiremock = "0.6"

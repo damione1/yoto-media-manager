@@ -1,0 +1,91 @@
+name: Signed packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apple:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Require signing and notarization credentials
+        shell: bash
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then echo "Missing required secret: $name"; exit 1; fi
+          done
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - name: Import identity into temporary keychain
+        shell: bash
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/yoto-signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 32)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/yoto-certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/yoto-certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          xcrun notarytool store-credentials yoto-release --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --keychain "$KEYCHAIN_PATH"
+          rm "$RUNNER_TEMP/yoto-certificate.p12"
+      - run: python3 scripts/prepare_tools.py --target ${{ matrix.target }}
+      - run: cargo test --workspace --locked --target ${{ matrix.target }}
+        env:
+          YOTO_TEST_TOOLS: ${{ github.workspace }}/tools/${{ matrix.target }}
+      - run: cargo build --workspace --release --locked --target ${{ matrix.target }}
+      - name: Sign every sidecar, notarize, staple and validate
+        run: python3 scripts/package_macos.py --target ${{ matrix.target }} --identity "$APPLE_SIGNING_IDENTITY" --notarize-profile yoto-release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Yoto-${{ matrix.target }}-signed-notarized
+          path: dist/${{ matrix.target }}/*.dmg
+      - name: Remove temporary signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/yoto-signing.keychain-db" || true
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - run: choco install strawberryperl nasm innosetup -y --no-progress
+      - run: python3 scripts/prepare_tools.py --target x86_64-pc-windows-msvc
+      - run: cargo test --workspace --locked --target x86_64-pc-windows-msvc
+        env:
+          YOTO_TEST_TOOLS: ${{ github.workspace }}/tools/x86_64-pc-windows-msvc
+      - run: cargo build --workspace --release --locked --target x86_64-pc-windows-msvc
+      - name: Validate packaged sidecars
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force target/x86_64-pc-windows-msvc/release/tools
+          Copy-Item -Recurse tools/x86_64-pc-windows-msvc/* target/x86_64-pc-windows-msvc/release/tools
+          & target/x86_64-pc-windows-msvc/release/yoto-mcp.exe --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe' distribution/windows.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Yoto-Windows-x64-installer
+          path: dist/x86_64-pc-windows-msvc/*-setup.exe

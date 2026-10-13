@@ -1,0 +1,79 @@
+{
+  "ffmpeg": {
+    "version": "9.0.2",
+    "source": {
+      "url": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+      "sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+    },
+    "targets": {
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n9.0.2-17-g2a571b6068-win64-lgpl-shared-9.0.zip",
+        "sha256": "7157177b8a6cb2174c1650ba8c71b363f2c78cba5330f88c4c02cf5b2b880646",
+        "version": "9.0.2+17-g2a571b6068",
+        "sources": [
+          {
+            "url": "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/2a571b606854520cf89804d8030c8b328e621689",
+            "sha256": "f02fc0809a13f37e3d4e1f74254d07e035a5ef01a6d91e727b915b1764d97540",
+            "filename": "ffmpeg-2a571b606854520cf89804d8030c8b328e621689.tar.gz"
+          },
+          {
+            "url": "https://codeload.github.com/BtbN/FFmpeg-Builds/tar.gz/6c9aec5fc9a72ec3abedd1fa84db141fa18cf52b",
+            "sha256": "81da4f7c878dc0f60e6b8d0049a112e32178e20f025d468fe4e99e77b2dfe0ec",
+            "filename": "btbn-6c9aec5fc9a72ec3abedd1fa84db141fa18cf52b.tar.gz"
+          }
+        ]
+      }
+    }
+  },
+  "lame": {
+    "version": "3.100",
+    "source": {
+      "url": "https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz",
+      "sha256": "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e"
+    }
+  },
+  "yt-dlp": {
+    "version": "2026.08.19",
+    "targets": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_macos.zip",
+        "sha256": "07e54b0865303c864006925913bce2604f8ee8cc6f18699bac9c309f9328a6d8"
+      },
+      "x86_64-apple-darwin": {
+        "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_macos.zip",
+        "sha256": "07e54b0865303c864006925913bce2604f8ee8cc6f18699bac9c309f9328a6d8"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_win.zip",
+        "sha256": "30b4c14aafab6082becff7881e41b76df46dc43ea7633479410a91e29da492bf"
+      }
+    },
+    "source": {
+      "url": "https://codeload.github.com/yt-dlp/yt-dlp/tar.gz/refs/tags/2026.08.19",
+      "sha256": "a0779c45179a846986a852bce31bddbe9259b594574f75c0ec146d0567058f7e",
+      "filename": "yoto-yt-dlp-2026.08.19.tar.gz"
+    }
+  },
+  "deno": {
+    "version": "2.9.7",
+    "targets": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.9.7/deno-aarch64-apple-darwin.zip",
+        "sha256": "5cd46d6268f6f78f5d88bdc7159d20bd44cdaa4b3303474839f87ec6fe7ae25c"
+      },
+      "x86_64-apple-darwin": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.9.7/deno-x86_64-apple-darwin.zip",
+        "sha256": "95daaff11c116a52ad54785e7914c8e9c9cdcaba793c5ed929c74ca2d8e6259a"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.9.7/deno-x86_64-pc-windows-msvc.zip",
+        "sha256": "a0c3101b4158d1dfb7d6a78a7bf0f3de80c96bb423c152beec8beb22786f2238"
+      }
+    },
+    "source": {
+      "url": "https://codeload.github.com/denoland/deno/tar.gz/refs/tags/v2.9.7",
+      "sha256": "28c9677ccee96f9ba0910067d3249fcee90a795063af8a14372769c17a6e1bb2",
+      "filename": "yoto-deno-v2.9.7.tar.gz"
+    }
+  }
+}

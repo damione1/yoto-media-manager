@@ -1,0 +1,15 @@
+# Public OAuth configuration. User tokens are stored separately in the OS vault.
+[oauth]
+client_id = "tpc_vbQ5viEhBMgXgZdFGUAJKx"
+redirect_uri = "http://127.0.0.1:8787/callback"
+requested_scopes = [
+    "family:library:view",
+    "family:library:manage",
+    "user:content:view",
+    "user:content:manage",
+    "user:icons:manage",
+    "family:devices:view",
+    "family:devices:manage",
+    "family:devices:control",
+    "offline_access",
+]

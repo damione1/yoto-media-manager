@@ -1,0 +1,362 @@
+[
+  {
+    "method": "get",
+    "path": "/authorize",
+    "operation": "get-authorize",
+    "service": "TokenBroker::authorize",
+    "commands": [
+      "Connect"
+    ],
+    "ui": "Comptes → Connecter",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "PKCE S256, callback/state tests; public client registration still requires a dedicated live Yoto test."
+  },
+  {
+    "method": "post",
+    "path": "/oauth/token",
+    "operation": "post-oauth-token",
+    "service": "TokenBroker::exchange/refresh",
+    "commands": [
+      "Connect",
+      "Sync",
+      "Publish"
+    ],
+    "ui": "Comptes + actions authentifiées",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Canonical-profile/account grants, single-flight refresh, rotation/replacement/logout tests with mock and synthetic native-vault records; no production grant."
+  },
+  {
+    "method": "post",
+    "path": "/oauth/device/code",
+    "operation": "post-oauth-device-code",
+    "service": "Generated OAuth client",
+    "commands": [],
+    "ui": "Non proposé : navigateur PKCE",
+    "mcp": "not selected",
+    "status": "contract-gated",
+    "evidence_or_gate": "Device flow is deliberately not selected. Desktop uses the public-client browser PKCE flow from canonical config."
+  },
+  {
+    "method": "get",
+    "path": "/content/{cardId}",
+    "operation": "getContent",
+    "service": "YotoGateway::card; read_playlist",
+    "commands": [
+      "LoadRemote",
+      "Reconcile",
+      "Publish",
+      "AttachPublicationReceipt"
+    ],
+    "ui": "Lecteurs → Importer le brouillon; tâches → Réconcilier",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Typed rich round-trip, known recipe reassociation, cancellation on logout, atomic accepted conflict base, explicit minimal receipt recovery; no live account read."
+  },
+  {
+    "method": "delete",
+    "path": "/content/{cardId}",
+    "operation": "deleteContent",
+    "service": "YotoGateway::delete_card",
+    "commands": [
+      "DeleteRemote"
+    ],
+    "ui": "Lecteurs → Supprimer de Yoto",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Generated request; live mutation remains unperformed."
+  },
+  {
+    "method": "post",
+    "path": "/content",
+    "operation": "createOrUpdateContent",
+    "service": "YotoGateway::write_card; durable publication runner",
+    "commands": [
+      "Publish",
+      "Reconcile"
+    ],
+    "ui": "Éditeur → Publier; tâches → Réconcilier",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Transactional account+PlaylistId admission and pre-commit guard cover concurrent/fresh/legacy/restart Publish. Definitive 400/401/403/422 remain retryable; uncertain response keeps receipt and refuses re-POST."
+  },
+  {
+    "method": "get",
+    "path": "/content/mine",
+    "operation": "getUserSMyoContent",
+    "service": "YotoGateway::library",
+    "commands": [
+      "Sync",
+      "Reconcile"
+    ],
+    "ui": "Lecteurs → Bibliothèque MYO",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Named generated MYO summary DTO. Commercial family-library enumeration is not documented by this endpoint."
+  },
+  {
+    "method": "get",
+    "path": "/device-v2/devices/mine",
+    "operation": "getDevices",
+    "service": "YotoGateway::devices",
+    "commands": [
+      "Sync"
+    ],
+    "ui": "Lecteurs → sélectionner un lecteur",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Required typed online boolean; missing/malformed fields fail compatibility instead of showing offline."
+  },
+  {
+    "method": "get",
+    "path": "/device-v2/{deviceId}/status",
+    "operation": "getDeviceStatus",
+    "service": "YotoGateway::device_status",
+    "commands": [
+      "DeviceStatus"
+    ],
+    "ui": "Lecteur → État détaillé",
+    "mcp": "yoto_execute Command schema",
+    "status": "permission-gated",
+    "evidence_or_gate": "Requires family:device-status:view, absent from the fixed requested scope list; returns explicit permission failure until a suitable grant exists."
+  },
+  {
+    "method": "get",
+    "path": "/device-v2/{deviceId}/config",
+    "operation": "getDeviceConfig",
+    "service": "YotoGateway::device_config",
+    "commands": [
+      "DeviceConfig",
+      "SaveDeviceConfig",
+      "RenameDevice"
+    ],
+    "ui": "Lecteur → Charger la configuration",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Generated settings DTO; write fetches current config and preserves unmanaged settings/alarms/extensions."
+  },
+  {
+    "method": "put",
+    "path": "/device-v2/{deviceId}/config",
+    "operation": "updateDeviceConfig",
+    "service": "YotoGateway::update_device",
+    "commands": [
+      "SaveDeviceConfig",
+      "RenameDevice"
+    ],
+    "ui": "Lecteur → Enregistrer ces réglages",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Complete documented typed patch, shared validation, fresh read/merge/write/re-read. Independent open-field preservation fixture, numeric-string validation without invented maxima; alarms have no usable item semantics. No live device write."
+  },
+  {
+    "method": "post",
+    "path": "/device-v2/{deviceId}/command/status",
+    "operation": "sendDeviceCommand",
+    "service": "Generated REST dispatcher; players::send via MQTT",
+    "commands": [
+      "Player"
+    ],
+    "ui": "Lecteur → commandes",
+    "mcp": "yoto_execute Command schema",
+    "status": "contract-gated",
+    "evidence_or_gate": "Official REST schema has no actionable command body. Confirmed MQTT commands are used instead; unknown Bluetooth on/delete/connect payloads fail explicitly."
+  },
+  {
+    "method": "put",
+    "path": "/device-v2/{deviceId}/shortcuts",
+    "operation": "updateShortcutsBeta",
+    "service": "YotoGateway::shortcuts",
+    "commands": [
+      "SaveShortcuts"
+    ],
+    "ui": "Lecteur → Raccourcis jour/nuit",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Typed partial day/night patches: None preserves, Some([]) clears; template order/extensions and unchanged round-trip preserved, inputs loaded before Save."
+  },
+  {
+    "method": "get",
+    "path": "/media/family/images",
+    "operation": "getFamilyImages",
+    "service": "YotoGateway::family_images",
+    "commands": [
+      "FamilyImages"
+    ],
+    "ui": "Groupe → Images de la famille",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Generated family-image DTO, account-specific opaque IDs."
+  },
+  {
+    "method": "post",
+    "path": "/media/family/images",
+    "operation": "uploadAFamilyImage",
+    "service": "YotoGateway::upload_family_image",
+    "commands": [
+      "UploadFamilyImage"
+    ],
+    "ui": "Groupe → Ajouter une image",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Binary PNG body, required media type and resulting opaque imageId validated by HTTP fixture."
+  },
+  {
+    "method": "get",
+    "path": "/card/family/library/groups",
+    "operation": "getGroups",
+    "service": "YotoGateway::groups",
+    "commands": [
+      "Sync"
+    ],
+    "ui": "Lecteurs → Groupes familiaux",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Generated items[].contentId contract; account partitioning."
+  },
+  {
+    "method": "post",
+    "path": "/card/family/library/groups",
+    "operation": "createAGroup",
+    "service": "YotoGateway::save_group",
+    "commands": [
+      "SaveGroup"
+    ],
+    "ui": "Lecteurs → Créer un groupe",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Ordered cards including duplicates survive rename and explicit reorder through HTTP fixtures; image removal remains contract-gated."
+  },
+  {
+    "method": "get",
+    "path": "/card/family/library/groups/{groupId}",
+    "operation": "getAGroup",
+    "service": "YotoGateway::group",
+    "commands": [
+      "LoadGroup",
+      "SaveGroup"
+    ],
+    "ui": "Groupes → Modifier (snapshot); read available via MCP",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Generated full group document. Dedicated read command also exposed through MCP."
+  },
+  {
+    "method": "put",
+    "path": "/card/family/library/groups/{groupId}",
+    "operation": "updateAGroup",
+    "service": "YotoGateway::save_group",
+    "commands": [
+      "SaveGroup"
+    ],
+    "ui": "Groupe → Enregistrer",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Ordered cards including duplicates survive rename and explicit reorder through HTTP fixtures; image removal remains contract-gated."
+  },
+  {
+    "method": "delete",
+    "path": "/card/family/library/groups/{groupId}",
+    "operation": "deleteAGroup",
+    "service": "YotoGateway::delete_group",
+    "commands": [
+      "DeleteGroup"
+    ],
+    "ui": "Groupe → Supprimer",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Generated deletion; live deletion unperformed."
+  },
+  {
+    "method": "get",
+    "path": "/media/displayIcons/user/yoto",
+    "operation": "getPublicIcons",
+    "service": "YotoGateway::icons",
+    "commands": [
+      "Sync"
+    ],
+    "ui": "Éditeur → Icônes Yoto",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Shared generated icon DTO and virtualized chooser; personal/public collections refreshed together."
+  },
+  {
+    "method": "get",
+    "path": "/media/displayIcons/user/me",
+    "operation": "getUserIcons",
+    "service": "YotoGateway::icons",
+    "commands": [
+      "Sync"
+    ],
+    "ui": "Éditeur → Icônes Yoto",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Account-specific icon IDs; no cookie extraction."
+  },
+  {
+    "method": "post",
+    "path": "/media/displayIcons/user/me/upload",
+    "operation": "uploadCustomIcon",
+    "service": "YotoGateway::upload_icon",
+    "commands": [
+      "Publish"
+    ],
+    "ui": "Éditeur → importer/dessiner puis Publier",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "16×16 canonical RGBA PNG, local preview and correct user:icons:manage scope; actual upload awaits live test."
+  },
+  {
+    "method": "get",
+    "path": "/media/transcode/audio/uploadUrl",
+    "operation": "getAnUploadUrl",
+    "service": "YotoGateway::reserve",
+    "commands": [
+      "Publish"
+    ],
+    "ui": "Éditeur → Publier / tâches",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "SHA256 base64url query tested, null uploadUrl skips PUT; exact server hash encoding still needs an authorized live fixture."
+  },
+  {
+    "method": "post",
+    "path": "/media/coverImage/user/me/upload",
+    "operation": "uploadCoverImage",
+    "service": "YotoGateway::upload_cover",
+    "commands": [
+      "Publish"
+    ],
+    "ui": "Éditeur → Couverture puis Publier",
+    "mcp": "yoto_execute Command schema",
+    "status": "implemented",
+    "evidence_or_gate": "Actual local image and generated binary upload; remote success not asserted without a live account."
+  },
+  {
+    "method": "get",
+    "path": "/media/family/images/{imageId}",
+    "operation": "getAFamilyImage",
+    "service": "YotoGateway::family_image",
+    "commands": [
+      "FamilyImage"
+    ],
+    "ui": "Groupe → sélectionner une image",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Generated 302 Location and typed size; unsigned HTTPS fetch is bounded, signed location never persisted as identity."
+  },
+  {
+    "method": "get",
+    "path": "/media/upload/{uploadId}/transcoded",
+    "operation": "getTranscodedUpload",
+    "service": "YotoGateway::ingestion",
+    "commands": [
+      "Publish"
+    ],
+    "ui": "Tâches → ingestion après préparation locale",
+    "mcp": "yoto_execute Command schema",
+    "status": "mock-tested",
+    "evidence_or_gate": "Official SDK route added to overlay, loudnorm=false, opaque remote media ID distinct from local SHA. Local encode always happens first."
+  }
+]

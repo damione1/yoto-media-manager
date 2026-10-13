@@ -1,0 +1,11 @@
+[package]
+name = "yoto-domain"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+yoto-contracts = { path = "../yoto-contracts" }
+schemars = { version = "1", features = ["uuid1"] }

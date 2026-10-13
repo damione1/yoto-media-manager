@@ -1,0 +1,922 @@
+mod account;
+mod device;
+mod editor;
+mod group;
+mod imports;
+mod library;
+mod pixelart;
+mod players;
+mod reconciliation;
+mod trim;
+use gpui_kit::component::{
+    ActiveTheme, Disableable, Selectable, Sizable,
+    button::{Button, ButtonVariants},
+    input::{Input, InputState},
+};
+use gpui_kit::*;
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use yoto_domain::*;
+use yoto_infra::{Command, Reply, Session as Service, Snapshot};
+pub struct AppView {
+    pub service: Arc<Service>,
+    pub runtime: Arc<tokio::runtime::Runtime>,
+    pub snapshot: Arc<Snapshot>,
+    revisions: Vec<u64>,
+    search_index: Arc<Vec<SearchRow>>,
+    pub job_page: Option<Arc<Vec<Job>>>,
+    pub job_offset: usize,
+    pub receipt_card: Entity<InputState>,
+    pub route: Route,
+    pub selected_media: Option<MediaId>,
+    pub selected_media_set: std::collections::BTreeSet<MediaId>,
+    pub sort: CatalogueSort,
+    search_generation: u64,
+    pub recovery_key: Entity<InputState>,
+    recovery_visible: bool,
+    pub account_sync_details_open: bool,
+    pub account_backup_open: bool,
+    pub restored_profile: Option<std::path::PathBuf>,
+    pub library_rows: Vec<usize>,
+    playlist_media_choices: Arc<editor::MediaChoices>,
+    playlist_icon_choices: Arc<pixelart::IconChoices>,
+    pub playlist_rows: Arc<Vec<editor::PlaylistRow>>,
+    pub selected_playlist: Option<PlaylistId>,
+    pub opening_playlist: Option<(AccountId, CardId)>,
+    playlist_open_generation: u64,
+    pub selected_device: Option<DeviceId>,
+    pub device_panels: BTreeMap<(AccountId, DeviceId), Entity<device::DevicePanel>>,
+    pub editors: BTreeMap<PlaylistId, Entity<editor::PlaylistEditor>>,
+    pub trims: BTreeMap<MediaId, Entity<trim::TrimPanel>>,
+    pub search: Entity<InputState>,
+    pub new_title: Entity<InputState>,
+    pub youtube: Entity<InputState>,
+    pub youtube_entries: Vec<SourceEntry>,
+    pub selected_entries: std::collections::BTreeSet<String>,
+    pub youtube_import_pending: bool,
+    pub youtube_inspection_generation: u64,
+    pub youtube_selection_url: Option<String>,
+    pub status: String,
+    connecting: bool,
+    pub creating_playlist: bool,
+    pub error: Option<Failure>,
+    pub _tasks: Vec<Task<()>>,
+    pub _subscriptions: Vec<Subscription>,
+    pub group_editors: BTreeMap<(AccountId, Option<GroupId>), Entity<group::GroupEditor>>,
+    pub selected_group: Option<Option<GroupId>>,
+}
+impl AppView {
+    pub fn navigate(&mut self, route: Route, cx: &mut Context<Self>) {
+        let entering_playlists = self.route != Route::Playlists && route == Route::Playlists;
+        self.route = route;
+        self.error = None;
+        self.status = "Prêt.".into();
+        if entering_playlists {
+            self.refresh_playlists(cx);
+        }
+        cx.notify();
+    }
+    pub fn refresh_playlists(&mut self, cx: &mut Context<Self>) {
+        if let Some(account) = self.snapshot.active_account.clone()
+            && !matches!(
+                self.snapshot.remote_sync.get(&RemoteCollection::Playlists),
+                Some(RemoteSyncState::Syncing)
+            )
+        {
+            self.send(Command::RefreshPlaylists(account), cx);
+        }
+    }
+    pub fn new(
+        service: Arc<Service>,
+        runtime: Arc<tokio::runtime::Runtime>,
+        prepared: PreparedSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let search =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher dans vos médias…"));
+        let new_title =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Titre de la playlist"));
+        let youtube = cx
+            .new(|cx| InputState::new(window, cx).placeholder("https://www.youtube.com/watch?v=…"));
+        let mut subscriptions = vec![cx.observe(&search, |view, _, cx| {
+            view.filter_library(cx);
+            cx.notify();
+        })];
+        subscriptions.push(cx.observe(&new_title, |_, _, cx| cx.notify()));
+        subscriptions.push(cx.observe(&youtube, |_, _, cx| cx.notify()));
+        subscriptions.push(cx.observe_window_appearance(window, |_, window, cx| {
+            gpui_kit::component::Theme::sync_system_appearance(Some(window), cx);
+            cx.notify();
+        }));
+        let PreparedSnapshot {
+            snapshot,
+            revisions,
+            playlist_media_choices,
+            playlist_icon_choices,
+            playlist_rows,
+            media_ids: _,
+            index: search_index,
+        } = prepared;
+        let service_clone = service.clone();
+        let rt = runtime.clone();
+        let task = cx.spawn(async move |weak, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+                let Ok((base, previous)) = weak.update(cx, |view, _| {
+                    (view.snapshot.clone(), view.revisions.clone())
+                }) else {
+                    break;
+                };
+                let service = service_clone.clone();
+                let base_for_worker = base.clone();
+                let result = rt
+                    .spawn(async move {
+                        let delta = service.interface_changes(previous).await?;
+                        if delta.parts.is_empty() {
+                            return Ok::<_, Failure>(None);
+                        }
+                        tokio::task::spawn_blocking(move || {
+                            let mut snapshot = (*base_for_worker).clone();
+                            let revisions = delta.apply(&mut snapshot);
+                            Some(PreparedSnapshot::new(snapshot, revisions))
+                        })
+                        .await
+                        .map_err(|e| Failure::Storage(e.to_string()))
+                    })
+                    .await;
+                if let Ok(Ok(Some(prepared))) = result
+                    && weak
+                        .update(cx, |view, cx| {
+                            if Arc::ptr_eq(&view.snapshot, &base) {
+                                view.adopt(prepared, cx);
+                            }
+                        })
+                        .is_err()
+                {
+                    break;
+                }
+            }
+        });
+        let library_rows = (0..snapshot.media.len()).collect();
+        let mut view = Self {
+            service,
+            runtime,
+            snapshot,
+            revisions,
+            search_index,
+            job_page: None,
+            job_offset: 0,
+            receipt_card: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("ID de la carte Yoto à associer après déconnexion")
+            }),
+            route: Route::Library,
+            selected_media: None,
+            selected_media_set: Default::default(),
+            sort: CatalogueSort::Title,
+            search_generation: 0,
+            recovery_visible: false,
+            account_sync_details_open: false,
+            account_backup_open: false,
+            restored_profile: None,
+            recovery_key: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .masked(true)
+                    .placeholder("Clé de récupération : 64 caractères hexadécimaux")
+            }),
+            library_rows,
+            playlist_media_choices,
+            playlist_icon_choices,
+            playlist_rows,
+            selected_playlist: None,
+            opening_playlist: None,
+            playlist_open_generation: 0,
+            selected_device: None,
+            device_panels: BTreeMap::new(),
+            editors: BTreeMap::new(),
+            trims: BTreeMap::new(),
+            search,
+            new_title,
+            youtube,
+            youtube_entries: vec![],
+            selected_entries: Default::default(),
+            youtube_import_pending: false,
+            youtube_inspection_generation: 0,
+            youtube_selection_url: None,
+            status: "Votre collection personnelle, même hors ligne.".into(),
+            connecting: false,
+            creating_playlist: false,
+            error: None,
+            _tasks: vec![task],
+            _subscriptions: subscriptions,
+            group_editors: BTreeMap::new(),
+            selected_group: None,
+        };
+        view.refresh_playlists(cx);
+        view
+    }
+    fn adopt(&mut self, prepared: PreparedSnapshot, cx: &mut Context<Self>) {
+        let PreparedSnapshot {
+            snapshot,
+            revisions,
+            playlist_media_choices,
+            playlist_icon_choices,
+            playlist_rows,
+            media_ids,
+            index,
+        } = prepared;
+        let account_changed = self.snapshot.active_account != snapshot.active_account;
+        if account_changed {
+            self.selected_device = None;
+            self.selected_group = None;
+            self.selected_playlist = None;
+            self.opening_playlist = None;
+            self.playlist_open_generation = self.playlist_open_generation.wrapping_add(1);
+            self.editors.clear();
+        }
+        if self
+            .selected_media
+            .is_some_and(|id| !media_ids.contains(&id))
+        {
+            self.selected_media = None;
+        }
+        self.selected_media_set.retain(|id| media_ids.contains(id));
+        self.trims.retain(|id, _| media_ids.contains(id));
+        for panel in self.trims.values() {
+            panel.update(cx, |p, cx| p.apply_snapshot(&snapshot, cx));
+        }
+        for (id, editor) in &self.editors {
+            editor.update(cx, |e, cx| {
+                e.apply_snapshot(&snapshot, cx);
+                e.reconcile(snapshot.playlists.iter().find(|p| p.id == *id).cloned(), cx);
+            });
+        }
+        self.playlist_media_choices = playlist_media_choices;
+        self.playlist_icon_choices = playlist_icon_choices;
+        self.playlist_rows = playlist_rows;
+        self.snapshot = snapshot;
+        self.revisions = revisions;
+        self.search_index = index;
+        if let Some(id) = self.selected_playlist
+            && !self.editors.contains_key(&id)
+            && self
+                .snapshot
+                .playlists
+                .iter()
+                .any(|playlist| playlist.id == id)
+            && let Some(window) = cx.windows().first().copied()
+        {
+            let weak = cx.entity().downgrade();
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    let _ = weak.update(cx, |view, cx| {
+                        if view.selected_playlist == Some(id) && !view.editors.contains_key(&id) {
+                            view.select_playlist(id, window, cx);
+                        }
+                    });
+                });
+            });
+        }
+        self.filter_library(cx);
+        if account_changed {
+            self.refresh_playlists(cx);
+        }
+        cx.notify();
+    }
+    fn filter_library(&mut self, cx: &mut Context<Self>) {
+        let query = self.search.read(cx).value().to_lowercase();
+        let sort = self.sort;
+        self.search_generation = self.search_generation.wrapping_add(1);
+        let generation = self.search_generation;
+        let index = self.search_index.clone();
+        cx.spawn(async move |weak, cx| {
+            let indices = cx
+                .background_executor()
+                .spawn(async move {
+                    let mut rows = index
+                        .iter()
+                        .filter(|row| row.search.contains(&query))
+                        .collect::<Vec<_>>();
+                    rows.sort_by(|a, b| match sort {
+                        CatalogueSort::Title => a.title.cmp(&b.title),
+                        CatalogueSort::Author => a.author.cmp(&b.author),
+                        CatalogueSort::Duration => a.duration.cmp(&b.duration),
+                        CatalogueSort::RecentlyImported => b.index.cmp(&a.index),
+                    });
+                    rows.into_iter().map(|row| row.index).collect::<Vec<_>>()
+                })
+                .await;
+            let _ = weak.update(cx, |view, cx| {
+                if view.search_generation == generation {
+                    view.library_rows = indices;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+    pub fn load_job_page(&mut self, offset: usize, cx: &mut Context<Self>) {
+        if offset == 0 {
+            self.job_page = None;
+            self.job_offset = 0;
+            cx.notify();
+            return;
+        }
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        cx.spawn(async move |weak, cx| {
+            let result = rt
+                .spawn(async move {
+                    match service
+                        .execute(Command::JobsPage { offset, limit: 200 })
+                        .await?
+                    {
+                        Reply::Data(value) => serde_json::from_value::<Vec<Job>>(value)
+                            .map_err(|e| Failure::Storage(e.to_string())),
+                        Reply::Updated
+                        | Reply::Saved(_)
+                        | Reply::OpenedPlaylist(_)
+                        | Reply::PlaylistOperation { .. }
+                        | Reply::Entries(_)
+                        | Reply::Waveform(_)
+                        | Reply::Prepared(_)
+                        | Reply::Asset(_)
+                        | Reply::PixelArt(_)
+                        | Reply::Image(_)
+                        | Reply::Images(_)
+                        | Reply::Player(_) => {
+                            Err(Failure::Compatibility("Unexpected job page reply".into()))
+                        }
+                    }
+                })
+                .await;
+            let _ = weak.update(cx, |view, cx| {
+                match result {
+                    Ok(Ok(jobs)) => {
+                        view.job_page = Some(Arc::new(jobs));
+                        view.job_offset = offset;
+                    }
+                    Ok(Err(e)) => view.error = Some(e),
+                    Err(e) => view.error = Some(Failure::Storage(e.to_string())),
+                };
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+    pub fn send(&mut self, command: Command, cx: &mut Context<Self>) {
+        let creating_playlist = matches!(
+            &command,
+            Command::CreateYotoPlaylist { .. } | Command::DuplicateYotoPlaylist { .. }
+        );
+        if creating_playlist && self.creating_playlist {
+            return;
+        }
+        let clear_new_title = if let Command::CreateYotoPlaylist { title, .. } = &command {
+            Some(title.clone())
+        } else {
+            None
+        };
+        if creating_playlist {
+            self.creating_playlist = true;
+        }
+        self.error = None;
+        cx.notify();
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        let window = cx.windows().first().copied();
+        let connecting = matches!(&command, Command::Connect);
+        if connecting {
+            self.connecting = true;
+        }
+        let synchronizing = matches!(&command, Command::Sync(_) | Command::RefreshPlaylists(_));
+        if matches!(
+            &command,
+            Command::NewPlaylist(_)
+                | Command::Duplicate(_)
+                | Command::SaveCopy(_)
+                | Command::LoadRemote { .. }
+                | Command::CreateYotoPlaylist { .. }
+                | Command::DuplicateYotoPlaylist { .. }
+        ) {
+            self.playlist_open_generation = self.playlist_open_generation.wrapping_add(1);
+        }
+        let playlist_open_generation = self.playlist_open_generation;
+        if matches!(
+            &command,
+            Command::NewPlaylist(_)
+                | Command::Duplicate(_)
+                | Command::SaveCopy(_)
+                | Command::CreateYotoPlaylist { .. }
+                | Command::DuplicateYotoPlaylist { .. }
+        ) {
+            self.opening_playlist = None;
+        }
+        let requested_route = self.route;
+        let opening_account = if let Command::LoadRemote { account, .. } = &command {
+            Some(account.clone())
+        } else if let Command::CreateYotoPlaylist { account, .. }
+        | Command::DuplicateYotoPlaylist { account, .. } = &command
+        {
+            Some(account.clone())
+        } else {
+            None
+        };
+        let opening_remote = if let Command::LoadRemote { account, card } = &command {
+            Some((account.clone(), card.clone()))
+        } else {
+            None
+        };
+        if let Some(request) = &opening_remote {
+            self.opening_playlist = Some(request.clone());
+        }
+        self.status = if connecting {
+            "Connexion Yoto en cours dans votre navigateur…"
+        } else if synchronizing {
+            "Chargement depuis Yoto…"
+        } else {
+            "Traitement en cours…"
+        }
+        .into();
+        let selection = self.selected_media;
+        let base = self.snapshot.clone();
+        let worker_base = base.clone();
+        let previous = self.revisions.clone();
+        cx.spawn(async move |weak, cx| {
+            let result = rt
+                .spawn(async move {
+                    let reply = service.execute(command).await;
+                    let delta = service.interface_changes(previous).await?;
+                    let prepared = tokio::task::spawn_blocking(move || {
+                        let mut snapshot = (*worker_base).clone();
+                        let revisions = delta.apply(&mut snapshot);
+                        PreparedSnapshot::new(snapshot, revisions)
+                    })
+                    .await
+                    .map_err(|e| Failure::Storage(e.to_string()))?;
+                    Ok::<_, Failure>((reply, prepared))
+                })
+                .await;
+            let opened = match &result {
+                Ok(Ok((Ok(Reply::OpenedPlaylist(id)), _))) => Some(*id),
+                Ok(Ok((Ok(Reply::PlaylistOperation { playlist, .. }), _))) if creating_playlist => {
+                    Some(*playlist)
+                }
+                _ => None,
+            };
+            let _ = weak.update(cx, |view, cx| {
+                if creating_playlist {
+                    view.creating_playlist = false;
+                }
+                if opening_remote.is_some() && view.opening_playlist == opening_remote {
+                    view.opening_playlist = None;
+                }
+                if connecting {
+                    view.connecting = false;
+                }
+                match result {
+                    Ok(Ok((reply, prepared))) => {
+                        if Arc::ptr_eq(&view.snapshot, &base)
+                            || (view.revisions.len() == prepared.revisions.len()
+                                && view
+                                    .revisions
+                                    .iter()
+                                    .zip(&prepared.revisions)
+                                    .all(|(current, next)| next >= current))
+                        {
+                            view.adopt(prepared, cx);
+                        }
+                        view.status = if connecting {
+                            "Compte connecté. Chargement de vos playlists Yoto…"
+                        } else if synchronizing {
+                            "Données Yoto actualisées."
+                        } else {
+                            "Enregistré."
+                        }
+                        .into();
+                        let reply = match reply {
+                            Ok(reply) => reply,
+                            Err(error) => {
+                                view.status = error.to_string();
+                                view.error = Some(error);
+                                cx.notify();
+                                return;
+                            }
+                        };
+                        match reply {
+                            Reply::Updated
+                            | Reply::Saved(_)
+                            | Reply::Prepared(_)
+                            | Reply::Asset(_)
+                            | Reply::PixelArt(_)
+                            | Reply::Image(_)
+                            | Reply::Images(_) => {}
+                            Reply::OpenedPlaylist(id) => {
+                                if view.playlist_open_generation == playlist_open_generation
+                                    && view.route == requested_route
+                                    && opening_account.as_ref().is_none_or(|account| {
+                                        view.snapshot.active_account.as_ref() == Some(account)
+                                    })
+                                {
+                                    view.route = Route::Playlists;
+                                    view.selected_playlist = Some(id);
+                                }
+                                view.status = "Playlist Yoto ouverte.".into();
+                            }
+                            Reply::PlaylistOperation { playlist, .. } => {
+                                if clear_new_title.as_ref().is_some_and(|title| {
+                                    view.new_title.read(cx).value().trim() == title.trim()
+                                }) && opening_account.as_ref()
+                                    == view.snapshot.active_account.as_ref()
+                                    && let Some(window_handle) = window
+                                {
+                                    let input = view.new_title.clone();
+                                    cx.defer(move |cx| {
+                                        let _ = cx.update_window(window_handle, |_, window, cx| {
+                                            input.update(cx, |input, cx| {
+                                                input.set_value("", window, cx)
+                                            });
+                                        });
+                                    });
+                                }
+                                if creating_playlist
+                                    && view.playlist_open_generation == playlist_open_generation
+                                    && view.route == requested_route
+                                    && opening_account.as_ref().is_none_or(|account| {
+                                        view.snapshot.active_account.as_ref() == Some(account)
+                                    })
+                                {
+                                    view.route = Route::Playlists;
+                                    view.selected_playlist = Some(playlist);
+                                }
+                                view.status = "Enregistrement sur Yoto en cours…".into();
+                            }
+                            Reply::Entries(entries) => {
+                                view.youtube_entries = entries.entries;
+                                view.selected_entries.clear();
+                            }
+                            Reply::Waveform(w) => {
+                                if view.selected_media == selection
+                                    && let Some(id) = selection
+                                    && let Some(panel) = view.trims.get(&id)
+                                {
+                                    panel.update(cx, |p, cx| {
+                                        p.waveform = Some(w);
+                                        cx.notify();
+                                    });
+                                }
+                            }
+                            Reply::Player(result) => {
+                                view.status = match result {
+                                    yoto_infra::players::CommandResult::Sent => {
+                                        "Commande envoyée ; effet non confirmé.".into()
+                                    }
+                                    yoto_infra::players::CommandResult::Accepted => {
+                                        "Commande acceptée par le lecteur.".into()
+                                    }
+                                    yoto_infra::players::CommandResult::Observed { .. } => {
+                                        "État du lecteur reçu.".into()
+                                    }
+                                };
+                            }
+                            Reply::Data(value) => {
+                                if let Some(profile) = value
+                                    .get("restored_profile")
+                                    .and_then(serde_json::Value::as_str)
+                                {
+                                    view.restored_profile = Some(profile.into());
+                                    view.status = format!("Profil restauré : {profile}");
+                                } else if let Some(backup) =
+                                    value.get("backup").and_then(serde_json::Value::as_str)
+                                {
+                                    view.status = format!("Sauvegarde créée : {backup}");
+                                } else {
+                                    view.status = "Opération terminée.".into();
+                                }
+                            }
+                        }
+                    }
+                    Ok(Err(e)) => {
+                        view.status = e.to_string();
+                        view.error = Some(e);
+                    }
+                    Err(e) => {
+                        view.error = Some(Failure::Storage(e.to_string()));
+                    }
+                }
+                cx.notify();
+            });
+            if let (Some(id), Some(window)) = (opened, window) {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    let _ = weak.update(cx, |view, cx| {
+                        if view.route == Route::Playlists && view.selected_playlist == Some(id) {
+                            view.select_playlist(id, window, cx);
+                        }
+                    });
+                });
+            }
+        })
+        .detach();
+    }
+    pub fn open_profile(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
+        let runtime = self.runtime.clone();
+        cx.spawn(async move|weak,cx|{
+            let result=runtime.spawn_blocking(move|| {let profile=yoto_infra::canonical_profile(&path)?;if !profile.join("catalogue.db").is_file(){return Err(Failure::Validation("Choisissez un profil Yoto existant contenant catalogue.db".into()));}let mut command=std::process::Command::new(std::env::current_exe().map_err(|e|Failure::Storage(e.to_string()))?);command.env("YOTO_PROFILE",profile);if cfg!(debug_assertions)&&std::env::args().any(|a|a=="--isolated"){command.arg("--isolated");}command.spawn().map_err(|e|Failure::Storage(e.to_string()))?;Ok(())}).await;
+            let _=weak.update(cx,|v,cx|{match result {Ok(Ok(()))=>v.status="Le profil choisi s’ouvre dans une autre fenêtre ; le profil courant reste disponible.".into(),Ok(Err(e))=>v.error=Some(e),Err(e)=>v.error=Some(Failure::Storage(e.to_string()))}cx.notify();});
+        }).detach();
+    }
+    pub fn choose_profile(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |weak, cx| {
+            if let Some(folder) = rfd::AsyncFileDialog::new()
+                .set_title("Ouvrir une autre médiathèque Yoto")
+                .pick_folder()
+                .await
+            {
+                let _ = weak.update(cx, |v, cx| v.open_profile(folder.path().to_owned(), cx));
+            }
+        })
+        .detach();
+    }
+    pub fn add_files(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |weak, cx| {
+            let files = rfd::AsyncFileDialog::new()
+                .set_title("Ajouter vos fichiers audio")
+                .add_filter(
+                    "Audio",
+                    &["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "aiff"],
+                )
+                .pick_files()
+                .await;
+            if let Some(files) = files {
+                let selections = files
+                    .into_iter()
+                    .map(|f| ImportSelection::LocalFile {
+                        path: f.path().to_owned(),
+                    })
+                    .collect();
+                let _ = weak.update(cx, |view, cx| {
+                    view.route = Route::Imports;
+                    view.send(Command::Import(selections), cx);
+                });
+            }
+        })
+        .detach();
+    }
+    pub fn select_media(&mut self, id: MediaId, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_media != Some(id) {
+            self.send(Command::StopPreview, cx);
+        }
+        self.selected_media = Some(id);
+        if !self.trims.contains_key(&id)
+            && let Some(media) = self.snapshot.media.iter().find(|m| m.id == id)
+        {
+            let panel = cx.new(|cx| {
+                trim::TrimPanel::new(
+                    media.clone(),
+                    self.service.clone(),
+                    self.runtime.clone(),
+                    window,
+                    cx,
+                )
+            });
+            panel.update(cx, |p, cx| p.apply_snapshot(&self.snapshot, cx));
+            self.trims.insert(id, panel);
+        }
+        self.send(Command::Waveform(id), cx);
+    }
+    pub fn select_playlist(&mut self, id: PlaylistId, window: &mut Window, cx: &mut Context<Self>) {
+        self.playlist_open_generation = self.playlist_open_generation.wrapping_add(1);
+        self.opening_playlist = None;
+        self.selected_playlist = Some(id);
+        if !self.editors.contains_key(&id)
+            && let Some(p) = self.snapshot.playlists.iter().find(|p| p.id == id)
+        {
+            let parent = cx.entity().downgrade();
+            let editor = cx.new(|cx| {
+                editor::PlaylistEditor::new(
+                    p.clone(),
+                    parent,
+                    self.service.clone(),
+                    self.runtime.clone(),
+                    window,
+                    cx,
+                )
+            });
+            self.editors.insert(id, editor);
+        }
+        cx.notify();
+    }
+}
+struct SearchRow {
+    index: usize,
+    title: String,
+    author: String,
+    search: String,
+    duration: MediaTime,
+}
+pub struct PreparedSnapshot {
+    snapshot: Arc<Snapshot>,
+    revisions: Vec<u64>,
+    playlist_media_choices: Arc<editor::MediaChoices>,
+    playlist_icon_choices: Arc<pixelart::IconChoices>,
+    playlist_rows: Arc<Vec<editor::PlaylistRow>>,
+    media_ids: std::collections::BTreeSet<MediaId>,
+    index: Arc<Vec<SearchRow>>,
+}
+impl PreparedSnapshot {
+    pub fn new(snapshot: Snapshot, revisions: Vec<u64>) -> Self {
+        let index = Arc::new(
+            snapshot
+                .media
+                .iter()
+                .enumerate()
+                .map(|(index, m)| SearchRow {
+                    index,
+                    title: m.title.to_lowercase(),
+                    author: m.author.to_lowercase(),
+                    search: format!("{} {} {}", m.title, m.author, m.tags.join(" ")).to_lowercase(),
+                    duration: m.info.duration,
+                })
+                .collect(),
+        );
+        let playlist_media_choices = editor::prepare_media_choices(&snapshot);
+        let playlist_icon_choices = pixelart::prepare_icon_choices(&snapshot);
+        let playlist_rows = Arc::new(editor::playlist_rows(&snapshot));
+        let media_ids = snapshot.media.iter().map(|media| media.id).collect();
+        Self {
+            snapshot: Arc::new(snapshot),
+            revisions,
+            playlist_media_choices,
+            playlist_icon_choices,
+            playlist_rows,
+            media_ids,
+            index,
+        }
+    }
+}
+impl Render for AppView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let body = match self.route {
+            Route::Library => library::render(self, window, cx),
+            Route::Playlists => editor::render(self, window, cx),
+            Route::Imports => imports::render(self, window, cx),
+            Route::Players => players::render(self, window, cx),
+            Route::Account => account::render(self, cx),
+        };
+        let nav = div()
+            .w(px(210.))
+            .h_full()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_4()
+            .border_r_1()
+            .border_color(cx.theme().border)
+            .child(
+                div()
+                    .text_xl()
+                    .font_weight(FontWeight::BOLD)
+                    .child("Yoto Atelier"),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child("Votre audio. Vos histoires."),
+            )
+            .children(Route::ALL.iter().copied().map(|route| {
+                Button::new(route.label())
+                    .label(route.label())
+                    .ghost()
+                    .selected(self.route == route)
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        view.navigate(route, cx);
+                    }))
+            }))
+            .child(div().flex_1())
+            .child(div().text_sm().child(account_summary(&self.snapshot)))
+            .child(
+                Button::new("add-sidebar")
+                    .label("+ Ajouter un fichier")
+                    .primary()
+                    .on_click(cx.listener(|view, _, _, cx| view.add_files(cx))),
+            );
+        div()
+            .size_full()
+            .on_drop(cx.listener(|view, files: &ExternalPaths, _, cx| {
+                view.send(
+                    Command::Import(
+                        files
+                            .paths()
+                            .iter()
+                            .cloned()
+                            .map(|path| ImportSelection::LocalFile { path })
+                            .collect(),
+                    ),
+                    cx,
+                );
+            }))
+            .flex()
+            .flex_col()
+            .bg(cx.theme().background)
+            .text_color(cx.theme().foreground)
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h_0()
+                    .child(nav)
+                    .child(div().flex_1().min_w_0().h_full().child(body)),
+            )
+            .child(
+                div()
+                    .px_5()
+                    .py_2()
+                    .border_t_1()
+                    .border_color(cx.theme().border)
+                    .text_sm()
+                    .text_color(if self.error.is_some() {
+                        cx.theme().danger
+                    } else {
+                        cx.theme().muted_foreground
+                    })
+                    .child(self.status.clone()),
+            )
+    }
+}
+impl AppView {
+    fn recovery(&mut self, restore: bool, cx: &mut Context<Self>) {
+        let key = self.recovery_key.read(cx).value().to_string();
+        cx.spawn(async move |weak, cx| {
+            let source = if restore {
+                rfd::AsyncFileDialog::new()
+                    .set_title("Dossier de sauvegarde chiffrée")
+                    .pick_folder()
+                    .await
+                    .map(|f| f.path().to_owned())
+            } else {
+                None
+            };
+            if restore && source.is_none() {
+                return;
+            }
+            let parent = rfd::AsyncFileDialog::new()
+                .set_title("Dossier parent (un nouveau dossier Yoto sera créé)")
+                .pick_folder()
+                .await;
+            if let Some(parent) = parent {
+                let destination = parent.path().join(format!(
+                    "Yoto-{}",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                ));
+                let command = match source {
+                    Some(source) => Command::Restore {
+                        source,
+                        destination,
+                        recovery_key: key,
+                    },
+                    None => Command::Backup {
+                        destination,
+                        recovery_key: key,
+                    },
+                };
+                let _ = weak.update(cx, |v, cx| v.send(command, cx));
+            }
+        })
+        .detach();
+    }
+}
+
+fn element_id(label: &str, id: impl std::fmt::Display) -> ElementId {
+    SharedString::from(format!("{label}:{id}")).into()
+}
+fn account_summary(snapshot: &Snapshot) -> String {
+    match snapshot
+        .active_account
+        .as_ref()
+        .and_then(|id| snapshot.accounts.iter().find(|a| &a.id == id))
+    {
+        Some(account) => format!("Connecté à Yoto · {}", account.label),
+        None => "Aucun compte Yoto actif. Connectez ou sélectionnez un compte.".into(),
+    }
+}
+fn remote_syncing(snapshot: &Snapshot) -> bool {
+    snapshot
+        .remote_sync
+        .values()
+        .any(|state| matches!(state, RemoteSyncState::Syncing))
+}
+fn remote_sync_message(snapshot: &Snapshot, collection: RemoteCollection) -> String {
+    let label = collection.label();
+    match snapshot.remote_sync.get(&collection) {
+        None => format!("{label} · Synchroniser pour actualiser les données Yoto."),
+        Some(RemoteSyncState::Syncing) => format!("{label} · Synchronisation en cours…"),
+        Some(RemoteSyncState::Ready { .. }) => format!("{label} · À jour"),
+        Some(RemoteSyncState::Failed { failure }) => {
+            format!("{label} · Actualisation impossible : {failure}")
+        }
+    }
+}

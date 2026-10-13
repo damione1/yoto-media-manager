@@ -1,0 +1,27 @@
+{
+  "name": "yoto-atelier-user-guide",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prestart": "node scripts/prepare-assets.mjs",
+    "start": "docusaurus start",
+    "prebuild": "node scripts/prepare-assets.mjs",
+    "build": "docusaurus build",
+    "serve": "docusaurus serve",
+    "clear": "docusaurus clear"
+  },
+  "dependencies": {
+    "@docusaurus/core": "3.10.2",
+    "@docusaurus/preset-classic": "3.10.2",
+    "@mdx-js/react": "3.1.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "engines": { "node": ">=22.0" },
+  "overrides": {
+    "postcss-selector-parser": "7.1.6",
+    "serialize-javascript": "7.1.2",
+    "tinypool": "2.2.0",
+    "uuid": "11.1.1"
+  }
+}

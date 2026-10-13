@@ -1,0 +1,12 @@
+CREATE TABLE assets(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+CREATE TABLE media_items(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+CREATE TABLE recipes(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+CREATE TABLE playlists(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+CREATE TABLE chapters(id TEXT PRIMARY KEY NOT NULL,playlist TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,position INTEGER NOT NULL CHECK(position>=0),UNIQUE(playlist,position));
+CREATE TABLE tracks(id TEXT PRIMARY KEY NOT NULL,chapter TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,position INTEGER NOT NULL CHECK(position>=0),UNIQUE(chapter,position));
+CREATE TABLE jobs(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+CREATE TABLE accounts(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+CREATE TABLE mappings(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+CREATE TABLE bindings(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+CREATE TABLE remote_cache(id TEXT PRIMARY KEY NOT NULL,payload TEXT NOT NULL CHECK(json_valid(payload)));
+PRAGMA user_version=1;

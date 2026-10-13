@@ -1,0 +1,8 @@
+[package]
+name = "yoto-contracts"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+serde.workspace = true
+schemars = "1"
+serde_json.workspace = true

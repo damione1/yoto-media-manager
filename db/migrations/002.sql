@@ -1,0 +1,14 @@
+CREATE TABLE media_assets(media TEXT PRIMARY KEY REFERENCES media_items(id) ON DELETE CASCADE,original TEXT NOT NULL REFERENCES assets(id));
+CREATE TABLE recipe_assets(recipe TEXT PRIMARY KEY REFERENCES recipes(id) ON DELETE CASCADE,media TEXT NOT NULL REFERENCES media_items(id),original TEXT NOT NULL REFERENCES assets(id),derived TEXT REFERENCES assets(id));
+CREATE TABLE track_recipes(track TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,recipe TEXT NOT NULL REFERENCES recipes(id));
+CREATE TABLE mapping_refs(mapping TEXT PRIMARY KEY REFERENCES mappings(id) ON DELETE CASCADE,account TEXT NOT NULL REFERENCES accounts(id),recipe TEXT NOT NULL REFERENCES recipes(id),remote_media TEXT NOT NULL,digest TEXT NOT NULL,UNIQUE(account,recipe,digest));
+INSERT INTO media_assets SELECT id,json_extract(payload,'$.value.original') FROM media_items;
+INSERT INTO recipe_assets SELECT id,json_extract(payload,'$.value.media'),json_extract(payload,'$.value.original'),json_extract(payload,'$.value.result') FROM recipes;
+INSERT INTO mapping_refs SELECT id,json_extract(payload,'$.value.account'),json_extract(payload,'$.value.recipe'),json_extract(payload,'$.value.media'),json_extract(payload,'$.value.digest') FROM mappings;
+CREATE TRIGGER media_assets_insert AFTER INSERT ON media_items BEGIN INSERT INTO media_assets VALUES(NEW.id,json_extract(NEW.payload,'$.value.original')); END;
+CREATE TRIGGER media_assets_update AFTER UPDATE ON media_items BEGIN UPDATE media_assets SET original=json_extract(NEW.payload,'$.value.original') WHERE media=NEW.id; END;
+CREATE TRIGGER recipe_assets_insert AFTER INSERT ON recipes BEGIN INSERT INTO recipe_assets VALUES(NEW.id,json_extract(NEW.payload,'$.value.media'),json_extract(NEW.payload,'$.value.original'),json_extract(NEW.payload,'$.value.result')); END;
+CREATE TRIGGER recipe_assets_update AFTER UPDATE ON recipes BEGIN UPDATE recipe_assets SET media=json_extract(NEW.payload,'$.value.media'),original=json_extract(NEW.payload,'$.value.original'),derived=json_extract(NEW.payload,'$.value.result') WHERE recipe=NEW.id; END;
+CREATE TRIGGER mapping_refs_insert AFTER INSERT ON mappings BEGIN INSERT INTO mapping_refs VALUES(NEW.id,json_extract(NEW.payload,'$.value.account'),json_extract(NEW.payload,'$.value.recipe'),json_extract(NEW.payload,'$.value.media'),json_extract(NEW.payload,'$.value.digest')); END;
+CREATE TRIGGER mapping_refs_update AFTER UPDATE ON mappings BEGIN UPDATE mapping_refs SET account=json_extract(NEW.payload,'$.value.account'),recipe=json_extract(NEW.payload,'$.value.recipe'),remote_media=json_extract(NEW.payload,'$.value.media'),digest=json_extract(NEW.payload,'$.value.digest') WHERE mapping=NEW.id; END;
+PRAGMA user_version=2;
