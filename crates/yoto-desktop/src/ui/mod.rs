@@ -8,6 +8,7 @@ mod pixelart;
 mod players;
 mod reconciliation;
 mod trim;
+mod update;
 use gpui_kit::component::{
     ActiveTheme, Disableable, Selectable, Sizable,
     button::{Button, ButtonVariants},
@@ -18,6 +19,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use yoto_domain::*;
 use yoto_infra::{Command, Reply, Session as Service, Snapshot};
 pub struct AppView {
+    updater: Entity<update::UpdatePanel>,
     pub service: Arc<Service>,
     pub runtime: Arc<tokio::runtime::Runtime>,
     pub snapshot: Arc<Snapshot>,
@@ -158,7 +160,10 @@ impl AppView {
             }
         });
         let library_rows = (0..snapshot.media.len()).collect();
+        let updater = cx.new(|cx| update::UpdatePanel::new(runtime.clone(), service.clone(), cx));
+        subscriptions.push(cx.observe(&updater, |_, _, cx| cx.notify()));
         let mut view = Self {
+            updater,
             service,
             runtime,
             snapshot,
@@ -333,7 +338,8 @@ impl AppView {
                     {
                         Reply::Data(value) => serde_json::from_value::<Vec<Job>>(value)
                             .map_err(|e| Failure::Storage(e.to_string())),
-                        Reply::Updated
+                        Reply::AppUpdate(_)
+                        | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
                         | Reply::PlaylistOperation { .. }
@@ -504,7 +510,8 @@ impl AppView {
                             }
                         };
                         match reply {
-                            Reply::Updated
+                            Reply::AppUpdate(_)
+                            | Reply::Updated
                             | Reply::Saved(_)
                             | Reply::Prepared(_)
                             | Reply::Asset(_)
@@ -795,6 +802,19 @@ impl Render for AppView {
             }))
             .child(div().flex_1())
             .child(div().text_sm().child(account_summary(&self.snapshot)))
+            .child(
+                Button::new("updates-sidebar")
+                    .label(self.updater.read(cx).sidebar_label())
+                    .ghost()
+                    .small()
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        let updater = view.updater.clone();
+                        // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
+                        window.defer(cx, move |window, cx| {
+                            update::UpdatePanel::open(updater, window, cx)
+                        });
+                    })),
+            )
             .child(
                 Button::new("add-sidebar")
                     .label("+ Ajouter un fichier")

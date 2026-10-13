@@ -190,6 +190,55 @@ impl Session {
                 .ok_or(Failure::Connection),
         }
     }
+    /// Stop accepting mutations only after all admitted work has finished.
+    /// A proxy cannot replace the app while another process owns its workers.
+    pub async fn prepare_update_shutdown(&self) -> Result<()> {
+        match &self.owner {
+            Some(owner) => owner.prepare_update_shutdown().await,
+            None => Err(Failure::Validation(
+                "Close the other Yoto instance or MCP owner before installing an update".into(),
+            )),
+        }
+    }
+    pub fn cancel_update_shutdown(&self) {
+        if let Some(owner) = &self.owner {
+            owner.cancel_update_shutdown();
+        }
+    }
+    pub async fn install_update(&self) -> Result<()> {
+        let owner = self.owner.clone().ok_or_else(|| {
+            Failure::Validation(
+                "Close the other Yoto instance or MCP owner before installing an update".into(),
+            )
+        })?;
+        let prepared = owner.updater.prepared().map_err(crate::storage)?;
+        if let Err(error) = owner.prepare_update_shutdown().await {
+            owner.updater.install_blocked(error.to_string());
+            return Err(error);
+        }
+        owner.updater.installing();
+        let launched = tokio::task::spawn_blocking(move || prepared.launch_helper()).await;
+        match launched {
+            Ok(Ok(())) => {
+                self.shutdown();
+                Ok(())
+            }
+            Ok(Err(error)) => {
+                owner.cancel_update_shutdown();
+                owner.updater.failed(error);
+                Err(Failure::Validation(
+                    "The update helper could not start".into(),
+                ))
+            }
+            Err(error) => {
+                owner.cancel_update_shutdown();
+                owner
+                    .updater
+                    .failed(yoto_updater::UpdateError::Install(error.to_string()));
+                Err(crate::storage(error))
+            }
+        }
+    }
     pub fn is_owner(&self) -> bool {
         self.owner.is_some()
     }

@@ -101,6 +101,7 @@ impl GroupEditor {
                     Ok(Ok(Reply::PixelArt(art))) => v.preview = Some(*art),
                     Ok(Ok(
                         Reply::Data(_)
+                        | Reply::AppUpdate(_)
                         | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
@@ -146,7 +147,8 @@ impl GroupEditor {
                         .await?;
                     match reply {
                         Reply::Asset(asset) => service.execute(Command::Thumbnail(asset)).await,
-                        Reply::Updated
+                        Reply::AppUpdate(_)
+                        | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
                         | Reply::PlaylistOperation { .. }
@@ -168,7 +170,8 @@ impl GroupEditor {
                     match result {
                         Ok(Ok(Reply::PixelArt(art))) => v.preview = Some(*art),
                         Ok(Ok(
-                            Reply::Updated
+                            Reply::AppUpdate(_)
+                            | Reply::Updated
                             | Reply::Saved(_)
                             | Reply::OpenedPlaylist(_)
                             | Reply::PlaylistOperation { .. }

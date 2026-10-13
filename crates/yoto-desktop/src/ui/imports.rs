@@ -51,7 +51,7 @@ impl AppView {
                             view.status = if view.youtube_entries.is_empty() { "Cette playlist ne contient aucune vidéo disponible.".into() } else { "Choisissez les vidéos de cette playlist à importer.".into() };
                         }
                     },
-                    Ok(Ok(Reply::Updated | Reply::Saved(_) | Reply::OpenedPlaylist(_) | Reply::PlaylistOperation { .. } | Reply::Waveform(_) | Reply::Prepared(_) | Reply::Asset(_) | Reply::PixelArt(_) | Reply::Image(_) | Reply::Images(_) | Reply::Player(_) | Reply::Data(_))) => {
+                    Ok(Ok(Reply::AppUpdate(_) | Reply::Updated | Reply::Saved(_) | Reply::OpenedPlaylist(_) | Reply::PlaylistOperation { .. } | Reply::Waveform(_) | Reply::Prepared(_) | Reply::Asset(_) | Reply::PixelArt(_) | Reply::Image(_) | Reply::Images(_) | Reply::Player(_) | Reply::Data(_))) => {
                         view.status = "Impossible de lire les informations YouTube. Réessayez.".into();
                         view.error = Some(Failure::Validation(view.status.clone()));
                     }

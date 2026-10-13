@@ -1,6 +1,11 @@
-#define AppVersion "0.1.0"
+#ifndef AppVersion
+#error AppVersion must be provided from the validated release version
+#endif
+#ifndef YotoAppId
+#error YotoAppId must be provided from distribution/windows-app-id.txt
+#endif
 [Setup]
-AppId={{DA05F87D-145F-413D-80E4-C3C61D448D5B}
+AppId={{{#YotoAppId}}
 AppName=Yoto
 AppVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\Yoto

@@ -22,6 +22,8 @@ The current app interface uses French labels. This guide keeps those labels in `
 
 The [getting started guide](getting-started.md) walks you through your first playlist.
 
+[Keep the app up to date](updates.md) with downloads and installation directly in the app.
+
 ## Find your way around
 
 | App screen | What you can do |

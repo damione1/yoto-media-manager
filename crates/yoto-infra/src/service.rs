@@ -36,6 +36,7 @@ pub struct Snapshot {
 }
 #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub enum Command {
+    AppUpdate(yoto_updater::UpdateAction),
     Import(Vec<ImportSelection>),
     InspectYoutube(String),
     NewPlaylist(String),
@@ -231,6 +232,7 @@ pub enum ConflictChoice {
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Reply {
+    AppUpdate(std::sync::Arc<yoto_updater::UpdateState>),
     Updated,
     Saved(Revision),
     OpenedPlaylist(PlaylistId),
@@ -268,7 +270,10 @@ pub struct Service {
     login_gate: tokio::sync::RwLock<()>,
     login_session: Mutex<Arc<AccountSession>>,
     sessions: Mutex<BTreeMap<AccountId, Arc<AccountSession>>>,
+    pub(crate) updater: Arc<yoto_updater::Updater>,
     players: PlayerOwners,
+    update_gate: tokio::sync::RwLock<()>,
+    update_shutdown: std::sync::atomic::AtomicBool,
 }
 struct AccountSession {
     cancelled: std::sync::atomic::AtomicBool,
@@ -427,7 +432,10 @@ impl Service {
             login_gate: tokio::sync::RwLock::new(()),
             login_session: Mutex::new(Arc::new(AccountSession::new())),
             sessions: Mutex::new(BTreeMap::new()),
+            updater: yoto_updater::Updater::new().map_err(storage)?,
             players: tokio::sync::Mutex::new(BTreeMap::new()),
+            update_gate: tokio::sync::RwLock::new(()),
+            update_shutdown: false.into(),
         });
         for mut job in service.db.list::<Job>(Table::Job)? {
             match service.db.publication_outcome(&job)? {
@@ -553,6 +561,42 @@ impl Service {
             Err(Failure::Authentication)
         }
     }
+    pub async fn prepare_update_shutdown(&self) -> Result<()> {
+        let _gate = self.update_gate.write().await;
+        if self
+            .update_shutdown
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(Failure::Validation(
+                "An application restart is already pending".into(),
+            ));
+        }
+        for job in self.db.list::<Job>(Table::Job)? {
+            match job.state {
+                JobState::Queued
+                | JobState::Running { .. }
+                | JobState::Retry { .. }
+                | JobState::Reconciling => {
+                    return Err(Failure::Validation(
+                        "Finish imports, audio processing and Yoto uploads before restarting"
+                            .into(),
+                    ));
+                }
+                JobState::WaitingForAuthentication
+                | JobState::Conflict { .. }
+                | JobState::Completed { .. }
+                | JobState::Failed { .. }
+                | JobState::Cancelled => {}
+            }
+        }
+        self.update_shutdown
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    }
+    pub fn cancel_update_shutdown(&self) {
+        self.update_shutdown
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
     pub fn shutdown(&self) {
         if let Ok(jobs) = self.jobs.lock() {
             for flag in jobs.values() {
@@ -640,7 +684,8 @@ impl Service {
                 JobRequest::Publish { account, .. } => Some(account),
                 JobRequest::Import { .. } | JobRequest::Encode { .. } => None,
             },
-            Command::Import(_)
+            Command::AppUpdate(_)
+            | Command::Import(_)
             | Command::InspectYoutube(_)
             | Command::NewPlaylist(_)
             | Command::SavePlaylist { .. }
@@ -675,6 +720,19 @@ impl Service {
         })
     }
     pub async fn execute(self: &Arc<Self>, command: Command) -> Result<Reply> {
+        if let Command::AppUpdate(action) = &command {
+            self.updater.request(*action);
+            return Ok(Reply::AppUpdate(self.updater.state()));
+        }
+        let _update_guard = self.update_gate.read().await;
+        if self
+            .update_shutdown
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(Failure::Validation(
+                "The application is restarting for an update".into(),
+            ));
+        }
         if matches!(&command, Command::StopPreview) {
             self.stop_preview()?;
             return Ok(Reply::Updated);
@@ -774,6 +832,9 @@ impl Service {
             None
         };
         match command {
+            Command::AppUpdate(_) => {
+                unreachable!("Updater command was handled before mutation admission")
+            }
             Command::Connect => {
                 let account = self.auth.login().await?;
                 self.connected_account(account.clone()).await?;
@@ -1399,6 +1460,7 @@ impl Service {
     }
     fn execute_local(&self, command: Command) -> Result<Reply> {
         let _assets = match &command {
+            Command::AppUpdate(_) => None,
             Command::SavePlaylist { .. }
             | Command::SaveCopy(_)
             | Command::Duplicate(_)
@@ -1461,6 +1523,9 @@ impl Service {
             | Command::UploadFamilyImage { .. } => None,
         };
         match command {
+            Command::AppUpdate(_) => Err(Failure::Validation(
+                "Updater command requires the async service".into(),
+            )),
             Command::Import(selections) => {
                 for selection in selections {
                     self.enqueue(JobRequest::Import { selection })?;
@@ -3229,3 +3294,7 @@ mod icons;
 #[cfg(test)]
 #[path = "service_icons_tests.rs"]
 mod icon_refresh_tests;
+
+#[cfg(test)]
+#[path = "service_update_tests.rs"]
+mod update_tests;

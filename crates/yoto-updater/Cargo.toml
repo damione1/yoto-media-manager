@@ -1,0 +1,21 @@
+[package]
+name = "yoto-updater"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+serde = { workspace = true, features = ["rc"] }
+schemars = "1"
+serde_json.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+minisign-verify = "0.2"
+semver = { version = "1", features = ["serde"] }
+base64 = "0.22"
+flate2 = "1"
+tar = "0.4"
+zip = { version = "7.2", default-features = false, features = ["deflate-flate2"] }
+tempfile = "3"
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }

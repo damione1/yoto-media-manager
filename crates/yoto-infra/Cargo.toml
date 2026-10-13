@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 [dependencies]
 yoto-domain = { path = "../yoto-domain" }
+yoto-updater = { path = "../yoto-updater" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

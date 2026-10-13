@@ -49,7 +49,7 @@ fn tools() -> Vec<Tool> {
     vec![
         Tool::new(
             "yoto_execute",
-            "Execute any typed Yoto action. The command union contains every service action: local imports, recipes, playlists, OAuth, sync, publication, jobs, players and settings. Network mutations and physical commands have real effects; invoke only for the user's requested action.",
+            "Execute any typed Yoto action. The command union contains every service action: local imports, recipes, playlists, OAuth, sync, publication, jobs, players, settings and application update check/state/download/cancel. Installation and restart require the desktop app. Network mutations and physical commands have real effects; invoke only for the user's requested action.",
             Arc::new(execute),
         ),
         Tool::new(

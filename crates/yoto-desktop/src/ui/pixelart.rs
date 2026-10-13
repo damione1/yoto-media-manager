@@ -145,7 +145,8 @@ impl IconPicker {
             let staged = match result {
                 Ok(Ok(Reply::Asset(asset))) => Ok(asset),
                 Ok(Ok(
-                    Reply::Updated
+                    Reply::AppUpdate(_)
+                    | Reply::Updated
                     | Reply::Saved(_)
                     | Reply::OpenedPlaylist(_)
                     | Reply::PlaylistOperation { .. }

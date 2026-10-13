@@ -270,7 +270,8 @@ impl DevicePanel {
                         }
                     }
                     Ok(Ok(
-                        Reply::Updated
+                        Reply::AppUpdate(_)
+                        | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
                         | Reply::PlaylistOperation { .. }

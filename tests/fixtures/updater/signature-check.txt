@@ -1,0 +1,1 @@
+YotoMediaManager updater signature verification fixture.

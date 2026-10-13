@@ -371,7 +371,8 @@ impl PlaylistEditor {
             let _ = weak.update(cx, |view, cx| {
                 view.status = match result {
                     Ok(Ok(
-                        Reply::Updated
+                        Reply::AppUpdate(_)
+                        | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
                         | Reply::PlaylistOperation { .. }
@@ -560,7 +561,8 @@ impl PlaylistEditor {
                     Ok(Err(e)) => v.fail_operation(e, cx),
                     Err(e) => v.fail_operation(Failure::Storage(e.to_string()), cx),
                     Ok(Ok(
-                        Reply::Updated
+                        Reply::AppUpdate(_)
+                        | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
                         | Reply::Entries(_)
@@ -1284,7 +1286,8 @@ impl PlaylistEditor {
                     Ok(Err(e)) => v.fail_operation(e, cx),
                     Err(e) => v.fail_operation(Failure::Storage(e.to_string()), cx),
                     Ok(Ok(
-                        Reply::Saved(_)
+                        Reply::AppUpdate(_)
+                        | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
                         | Reply::PlaylistOperation { .. }
                         | Reply::Entries(_)
@@ -1349,7 +1352,8 @@ impl PlaylistEditor {
                         v.icon_previews.insert(asset, *art);
                     }
                     Ok(Ok(
-                        Reply::Updated
+                        Reply::AppUpdate(_)
+                        | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
                         | Reply::PlaylistOperation { .. }
@@ -1464,7 +1468,8 @@ impl PlaylistEditor {
                             v.save(cx);
                         }
                         Ok(Ok(
-                            Reply::Updated
+                            Reply::AppUpdate(_)
+                            | Reply::Updated
                             | Reply::Saved(_)
                             | Reply::OpenedPlaylist(_)
                             | Reply::PlaylistOperation { .. }

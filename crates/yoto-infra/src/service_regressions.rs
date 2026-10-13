@@ -7,7 +7,8 @@ use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
 fn returned_asset(reply: Reply) -> AssetId {
     match reply {
         Reply::Asset(asset) => asset,
-        Reply::Updated
+        Reply::AppUpdate(_)
+        | Reply::Updated
         | Reply::Saved(_)
         | Reply::PlaylistOperation { .. }
         | Reply::OpenedPlaylist(_)
@@ -824,7 +825,8 @@ async fn deep_unicode_and_restored_profile_paths_share_short_authenticated_endpo
 fn opened_playlist(reply: Reply) -> PlaylistId {
     match reply {
         Reply::OpenedPlaylist(id) => id,
-        Reply::Updated
+        Reply::AppUpdate(_)
+        | Reply::Updated
         | Reply::Saved(_)
         | Reply::PlaylistOperation { .. }
         | Reply::Entries(_)

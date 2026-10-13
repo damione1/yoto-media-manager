@@ -8,10 +8,23 @@ use yoto_infra::{Session, media::Tools};
 fn main() {
     if let Err(e) = launch() {
         eprintln!("{e}");
+        if std::env::args_os()
+            .nth(1)
+            .is_some_and(|arg| arg == "--apply-update")
+        {
+            rfd::MessageDialog::new()
+                .set_title("YotoMediaManager update")
+                .set_description(e.to_string())
+                .set_level(rfd::MessageLevel::Error)
+                .show();
+        }
         std::process::exit(1);
     }
 }
 fn launch() -> Result<(), Box<dyn std::error::Error>> {
+    if yoto_updater::apply_pending_update()? {
+        return Ok(());
+    }
     let runtime = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
