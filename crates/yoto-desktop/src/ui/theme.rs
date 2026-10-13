@@ -371,6 +371,23 @@ pub fn badge(count: usize, family: &Family) -> Div {
         .font_weight(FontWeight::EXTRA_BOLD)
         .child(count.to_string())
 }
+/// Rounded square with a centered icon on a soft pastel background.
+pub fn icon_tile(icon: IconName, family: &Family, size: f32, radius: f32) -> Div {
+    div()
+        .size(px(size))
+        .flex_shrink_0()
+        .rounded(px(radius))
+        .bg(c(family.soft))
+        .text_color(c(family.icon))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            gpui_kit::component::Icon::new(icon)
+                .size(px((size * 0.5).round()))
+                .text_color(c(family.icon)),
+        )
+}
 /// Small round status dot.
 pub fn dot(color: u32) -> Div {
     div()
@@ -378,6 +395,22 @@ pub fn dot(color: u32) -> Div {
         .flex_shrink_0()
         .rounded_full()
         .bg(c(color))
+}
+/// Round check mark on a solid mint disc, for finished things.
+pub fn done_mark(size: f32) -> Div {
+    div()
+        .size(px(size))
+        .flex_shrink_0()
+        .rounded_full()
+        .bg(c(MINT.accent))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            gpui_kit::component::Icon::new(IconName::Check)
+                .size(px((size * 0.55).round()))
+                .text_color(c(SURFACE)),
+        )
 }
 
 /// Pixel glyphs drawn in the thumbnails, from the design's 8×7 grid.
