@@ -3,7 +3,6 @@ use gpui_kit::component::{
     WindowExt,
     checkbox::Checkbox,
     dialog::DialogClose,
-    menu::{DropdownMenu, PopupMenuItem},
     slider::{Slider, SliderState},
 };
 
@@ -65,6 +64,7 @@ pub struct TrimPanel {
     editor_window: Option<AnyWindowHandle>,
     tasks: Vec<Task<()>>,
     status: String,
+    more_open: bool,
     selection: TrimRange,
     _subscriptions: Vec<Subscription>,
 }
@@ -183,6 +183,7 @@ impl TrimPanel {
             editor_window: None,
             tasks: vec![],
             status: String::new(),
+            more_open: false,
         };
         let service = view.service.clone();
         let rt = view.runtime.clone();
@@ -448,6 +449,22 @@ impl TrimPanel {
         self.preview_pending = None;
         self.send(Command::StopPreview, cx);
     }
+    pub fn is_playing(&self) -> bool {
+        self.playing
+    }
+    /// Play the chosen version (or the original) from the cursor, or stop.
+    pub fn toggle_play(&mut self, cx: &mut Context<Self>) {
+        if self.preview_pending.is_some() {
+            return;
+        }
+        if self.playing {
+            self.stop(cx);
+        } else if let Some(recipe) = self.prepared {
+            self.send(Command::Preview(recipe), cx);
+        } else {
+            self.play_from_cursor(cx);
+        }
+    }
     pub fn chosen_recipe(&self) -> Option<RecipeId> {
         self.prepared
     }
@@ -712,181 +729,244 @@ impl Render for AudioEditorView {
             })
     }
 }
+impl TrimPanel {
+    fn export_original(&mut self, cx: &mut Context<Self>) {
+        let media = self.media.id;
+        let name = self.media.title.clone();
+        self.tasks.push(cx.spawn(async move |weak, cx| {
+            if let Some(file) = rfd::AsyncFileDialog::new()
+                .set_file_name(name)
+                .save_file()
+                .await
+            {
+                let destination = file.path().to_owned();
+                let _ = weak.update(cx, |v, cx| {
+                    v.send(Command::Export { media, destination }, cx)
+                });
+            }
+        }));
+    }
+    fn confirm_delete(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let title = self.media.title.clone();
+        let remove = cx.entity().downgrade();
+        confirm_destructive(
+            window,
+            cx,
+            format!("Supprimer « {title} » ?"),
+            "L’audio et ses versions préparées seront effacés de cet ordinateur. Cette action est irréversible. Un média utilisé dans une playlist ne peut pas être supprimé.",
+            "Supprimer",
+            move |_, cx| {
+                let _ = remove.update(cx, |v, cx| {
+                    v.send(
+                        Command::DeleteMedia {
+                            media: v.media.id,
+                            policy: ReferencePolicy::RejectReferenced,
+                        },
+                        cx,
+                    )
+                });
+            },
+        );
+    }
+}
 impl Render for TrimPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let panel = cx.entity().downgrade();
-        let metadata = panel.clone();
-        let export = panel.clone();
-        let remove = panel.clone();
+        use theme::{Height, Look};
         let range = self.playback_range();
+        let seed = self.media.id.to_string();
+        let family = theme::family_for(&seed);
+        let elapsed = (self.cursor_seconds - range.start().seconds()).max(0.);
+        let mut tags = div().flex().flex_wrap().gap(px(6.));
+        tags = if self.prepared.is_some() {
+            tags.child(theme::tag("Version découpée", &theme::SKY))
+                .child(theme::tag_colors(
+                    "Original conservé",
+                    theme::SAND,
+                    theme::BROWN,
+                ))
+        } else {
+            tags.child(theme::tag_colors("Original", theme::SAND, theme::BROWN))
+        };
+        let player = theme::card().rounded(px(20.)).p(px(16.)).child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(theme::round(
+                    Button::new("play-audio")
+                        .icon(if self.playing {
+                            IconName::Pause
+                        } else {
+                            IconName::Play
+                        })
+                        .accessibility_label(if self.playing {
+                            "Arrêter l’écoute"
+                        } else {
+                            "Écouter"
+                        })
+                        .loading(self.preview_pending.is_some())
+                        .on_click(cx.listener(|v, _, _, cx| v.toggle_play(cx))),
+                    Look::Solid(&theme::MINT),
+                    48.,
+                    false,
+                    cx,
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.))
+                        .child(Slider::new(&self.cursor).bg(theme::c(theme::MINT.accent)))
+                        .child(
+                            div()
+                                .flex()
+                                .justify_between()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(theme::c(theme::MUTED))
+                                .child(wording::position_text(elapsed))
+                                .child(wording::position_text(range.duration().seconds())),
+                        ),
+                ),
+        );
+        let more = if self.more_open {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(theme::pill(
+                    Button::new("export-original")
+                        .label("Exporter l’original")
+                        .on_click(cx.listener(|v, _, _, cx| v.export_original(cx))),
+                    Look::Ghost,
+                    Height::Small,
+                    false,
+                    cx,
+                ))
+                .child(theme::pill(
+                    Button::new("collect-garbage")
+                        .label("Nettoyer le cache audio")
+                        .tooltip("Supprime les fichiers audio préparés que plus rien n’utilise.")
+                        .on_click(cx.listener(|v, _, _, cx| v.send(Command::CollectGarbage, cx))),
+                    Look::Ghost,
+                    Height::Small,
+                    false,
+                    cx,
+                ))
+                .child(theme::pill(
+                    Button::new("delete-media")
+                        .label("Supprimer ce média local")
+                        .on_click(cx.listener(|v, _, window, cx| v.confirm_delete(window, cx))),
+                    Look::Link(&theme::ROSE),
+                    Height::Small,
+                    false,
+                    cx,
+                ))
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
         div()
             .id("audio-player")
             .size_full()
-            .p_5()
+            .overflow_y_scroll()
+            .p(px(24.))
             .flex()
             .flex_col()
-            .gap_4()
+            .gap(px(16.))
             .child(
                 div()
+                    .h(px(150.))
+                    .flex_shrink_0()
+                    .rounded(px(22.))
+                    .bg(theme::c(family.soft))
                     .flex()
                     .items_center()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_lg()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(self.media.title.clone()),
-                    )
-                    .child(Button::new("audio-more").label("⋯").accessibility_label("Options du média").tooltip("Options du média").ghost().dropdown_menu(
-                        move |menu, _, _| {
-                            let metadata = metadata.clone();
-                            let export = export.clone();
-                            let remove = remove.clone();
-                            menu.item(PopupMenuItem::new("Modifier les informations").on_click(
-                                move |_, window, cx| {
-                                    let _ = metadata.update(cx, |v, cx| {
-                                        v.open_editor(AudioEditor::Metadata, window, cx)
-                                    });
-                                },
-                            ))
-                            .item(PopupMenuItem::new("Exporter l’original").on_click(
-                                move |_, _, cx| {
-                                    let _ = export.update(cx, |v, cx| {
-                                        let media = v.media.id;
-                                        let name = v.media.title.clone();
-                                        v.tasks.push(cx.spawn(async move |weak, cx| {
-                                            if let Some(file) = rfd::AsyncFileDialog::new()
-                                                .set_file_name(name)
-                                                .save_file()
-                                                .await
-                                            {
-                                                let destination = file.path().to_owned();
-                                                let _ = weak.update(cx, |v, cx| {
-                                                    v.send(
-                                                        Command::Export { media, destination },
-                                                        cx,
-                                                    )
-                                                });
-                                            }
-                                        }));
-                                    });
-                                },
-                            ))
-                            .separator()
-                            .item(
-                                PopupMenuItem::new("Supprimer de la médiathèque").on_click(
-                                    move |_, window, cx| {
-                                        let Some(title) =
-                                            remove.upgrade().map(|v| v.read(cx).media.title.clone())
-                                        else {
-                                            return;
-                                        };
-                                        let remove = remove.clone();
-                                        confirm_destructive(
-                                            window,
-                                            cx,
-                                            format!("Supprimer « {title} » ?"),
-                                            "L’audio et ses versions préparées seront effacés de cet ordinateur. Cette action est irréversible. Un média utilisé dans une playlist ne peut pas être supprimé.",
-                                            "Supprimer",
-                                            move |_, cx| {
-                                                let _ = remove.update(cx, |v, cx| {
-                                                    v.send(
-                                                        Command::DeleteMedia {
-                                                            media: v.media.id,
-                                                            policy: ReferencePolicy::RejectReferenced,
-                                                        },
-                                                        cx,
-                                                    )
-                                                });
-                                            },
-                                        );
-                                    },
-                                ),
-                            )
-                        },
+                    .justify_center()
+                    .child(theme::pixel_glyph(
+                        theme::Glyph::for_seed(&seed),
+                        family.accent,
+                        9.,
                     )),
             )
             .child(
                 div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(if self.media.author.is_empty() {
-                        format!(
-                            "{} · {}",
-                            clock(range.duration().seconds()),
-                            self.media.info.codec
-                        )
-                    } else {
-                        format!(
-                            "{} · {}",
-                            self.media.author,
-                            clock(range.duration().seconds())
-                        )
-                    }),
-            )
-            .child(
-                div()
-                    .p_4()
-                    .rounded_lg()
-                    .bg(cx.theme().muted)
-                    .flex()
-                    .flex_col()
-                    .gap_3()
+                    .child(theme::heading(self.media.title.clone(), 22.))
                     .child(
-                        Button::new("play-audio")
-                            .label(if self.preview_pending.is_some() {
-                                "Préparation de l’écoute…"
-                            } else if self.playing {
-                                "■ Arrêter"
-                            } else {
-                                "▶ Écouter"
-                            })
-                            .disabled(self.preview_pending.is_some())
-                            .primary()
-                            .on_click(cx.listener(|v, _, _, cx| {
-                                if v.playing {
-                                    v.stop(cx);
-                                } else if let Some(recipe) = v.prepared {
-                                    v.send(Command::Preview(recipe), cx);
-                                } else {
-                                    v.play_from_cursor(cx);
-                                }
-                            })),
-                    )
-                    .child(Slider::new(&self.cursor))
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .text_sm()
-                            .child(clock(
-                                (self.cursor_seconds - range.start().seconds()).max(0.),
-                            ))
-                            .child(clock(range.duration().seconds())),
+                        theme::meta(if self.media.author.trim().is_empty() {
+                            format!(
+                                "{} · {}",
+                                duration_text(range.duration().seconds()),
+                                library::source_label(&self.media)
+                            )
+                        } else {
+                            format!(
+                                "{} · {} · {}",
+                                duration_text(range.duration().seconds()),
+                                self.media.author,
+                                library::source_label(&self.media)
+                            )
+                        })
+                        .text_size(px(14.)),
                     ),
             )
-            .child(
+            .child(tags)
+            .child(player)
+            .child(theme::pill(
                 Button::new("edit-audio")
+                    .icon(IconName::Scissors)
                     .label("Découper l’audio")
+                    .w_full()
                     .on_click(
                         cx.listener(|v, _, window, cx| {
                             v.open_editor(AudioEditor::Trim, window, cx)
                         }),
                     ),
-            )
+                Look::Soft(&theme::SKY),
+                Height::Hero,
+                false,
+                cx,
+            ))
+            .child(theme::pill(
+                Button::new("edit-metadata")
+                    .label("Modifier les informations")
+                    .w_full()
+                    .on_click(cx.listener(|v, _, window, cx| {
+                        v.open_editor(AudioEditor::Metadata, window, cx)
+                    })),
+                Look::Outline,
+                Height::Large,
+                false,
+                cx,
+            ))
+            .children((!self.status.is_empty()).then(|| theme::note(self.status.clone())))
+            .child(div().flex_1())
             .child(
                 div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(if self.prepared.is_some() {
-                        "Version préparée · Original conservé"
-                    } else {
-                        "Original · Aucune découpe"
-                    }),
+                    .flex()
+                    .flex_col()
+                    .child(theme::pill(
+                        Button::new("audio-more")
+                            .label("Plus d’options")
+                            .icon(if self.more_open {
+                                IconName::ChevronUp
+                            } else {
+                                IconName::ChevronDown
+                            })
+                            .toggled(self.more_open)
+                            .on_click(cx.listener(|v, _, _, cx| {
+                                v.more_open = !v.more_open;
+                                cx.notify();
+                            })),
+                        Look::Ghost,
+                        Height::Small,
+                        false,
+                        cx,
+                    ))
+                    .child(more),
             )
-            .child(self.status.clone())
     }
 }
 fn clock(seconds: f64) -> String {

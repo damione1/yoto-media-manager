@@ -56,7 +56,7 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
         .with_assets(gpui_kit::assets::AllAssets)
         .run(move |cx| {
             gpui_kit::init(cx);
-            gpui_kit::component::Theme::sync_system_appearance(None, cx);
+            ui::install_theme(cx);
             cx.on_action(|_: &Quit, cx| cx.quit());
             cx.bind_keys([KeyBinding::new(
                 if cfg!(target_os = "macos") {
@@ -73,7 +73,7 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
                 }
             })
             .detach();
-            let bounds = Bounds::centered(None, size(px(1220.), px(820.)), cx);
+            let bounds = Bounds::centered(None, size(px(1280.), px(820.)), cx);
             gpui_kit::open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -86,7 +86,6 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 cx,
                 move |window, cx| {
-                    gpui_kit::component::Theme::sync_system_appearance(Some(window), cx);
                     cx.new(|cx| {
                         ui::AppView::new(service.clone(), runtime.clone(), snapshot, window, cx)
                     })

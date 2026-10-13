@@ -7,9 +7,11 @@ mod library;
 mod pixelart;
 mod players;
 mod reconciliation;
+mod theme;
 mod trim;
 mod update;
 mod wording;
+use gpui_kit::assets::IconName;
 use gpui_kit::component::{
     ActiveTheme, Disableable, Selectable, Sizable,
     button::{Button, ButtonVariants},
@@ -17,6 +19,7 @@ use gpui_kit::component::{
 };
 use gpui_kit::*;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
+pub use theme::install as install_theme;
 pub use wording::failure_text;
 use wording::{confirm_destructive, duration_text};
 use yoto_domain::*;
@@ -112,10 +115,6 @@ impl AppView {
         })];
         subscriptions.push(cx.observe(&new_title, |_, _, cx| cx.notify()));
         subscriptions.push(cx.observe(&youtube, |_, _, cx| cx.notify()));
-        subscriptions.push(cx.observe_window_appearance(window, |_, window, cx| {
-            gpui_kit::component::Theme::sync_system_appearance(Some(window), cx);
-            cx.notify();
-        }));
         let PreparedSnapshot {
             snapshot,
             revisions,
@@ -830,57 +829,7 @@ impl Render for AppView {
             Route::Players => players::render(self, window, cx),
             Route::Account => account::render(self, cx),
         };
-        let nav = div()
-            .w(px(210.))
-            .h_full()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .p_4()
-            .border_r_1()
-            .border_color(cx.theme().border)
-            .child(
-                div()
-                    .text_xl()
-                    .font_weight(FontWeight::BOLD)
-                    .child("Yoto Atelier"),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("Votre audio. Vos histoires."),
-            )
-            .children(Route::ALL.iter().copied().map(|route| {
-                Button::new(route.label())
-                    .label(route.label())
-                    .ghost()
-                    .selected(self.route == route)
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.navigate(route, cx);
-                    }))
-            }))
-            .child(div().flex_1())
-            .child(div().text_sm().child(account_summary(&self.snapshot)))
-            .child(
-                Button::new("updates-sidebar")
-                    .label(self.updater.read(cx).sidebar_label())
-                    .ghost()
-                    .small()
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        let updater = view.updater.clone();
-                        // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
-                        window.defer(cx, move |window, cx| {
-                            update::UpdatePanel::open(updater, window, cx)
-                        });
-                    })),
-            )
-            .child(
-                Button::new("add-sidebar")
-                    .label("+ Ajouter un fichier")
-                    .primary()
-                    .on_click(cx.listener(|view, _, _, cx| view.add_files(cx))),
-            );
+        let nav = sidebar(self, cx);
         div()
             .size_full()
             .on_drop(cx.listener(|view, files: &ExternalPaths, _, cx| {
@@ -888,8 +837,8 @@ impl Render for AppView {
             }))
             .flex()
             .flex_col()
-            .bg(cx.theme().background)
-            .text_color(cx.theme().foreground)
+            .bg(theme::c(theme::CREAM))
+            .text_color(theme::c(theme::INK))
             .child(
                 div()
                     .flex()
@@ -900,16 +849,17 @@ impl Render for AppView {
             )
             .child(
                 div()
-                    .px_5()
-                    .py_2()
-                    .border_t_1()
-                    .border_color(cx.theme().border)
-                    .text_sm()
-                    .text_color(if self.error.is_some() {
-                        cx.theme().danger
+                    .px(px(20.))
+                    .py(px(6.))
+                    .border_t_2()
+                    .border_color(theme::c(theme::DIVIDER))
+                    .text_size(px(13.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme::c(if self.error.is_some() {
+                        theme::ROSE.ink
                     } else {
-                        cx.theme().muted_foreground
-                    })
+                        theme::MUTED
+                    }))
                     .truncate()
                     .child(self.status.clone()),
             )
@@ -959,6 +909,261 @@ impl AppView {
         })
         .detach();
     }
+}
+
+/// Each section's pastel family and icon in the sidebar.
+fn route_style(route: Route) -> (&'static theme::Family, gpui_kit::assets::IconName) {
+    use gpui_kit::assets::IconName;
+    match route {
+        Route::Library => (&theme::PEACH, IconName::Music),
+        Route::Playlists => (&theme::LILAC, IconName::ListMusic),
+        Route::Imports => (&theme::BUTTER, IconName::Download),
+        Route::Players => (&theme::SKY, IconName::Speaker),
+        Route::Account => (&theme::MINT, IconName::User),
+    }
+}
+/// Jobs a parent is still waiting on, shown as the Imports counter.
+fn active_jobs(snapshot: &Snapshot) -> usize {
+    snapshot
+        .jobs
+        .iter()
+        .filter(|job| match job.state {
+            JobState::Queued
+            | JobState::Running { .. }
+            | JobState::Retry { .. }
+            | JobState::WaitingForAuthentication
+            | JobState::Conflict { .. }
+            | JobState::Reconciling => true,
+            JobState::Completed { .. } | JobState::Failed { .. } | JobState::Cancelled => false,
+        })
+        .count()
+}
+fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
+    use gpui_kit::component::{
+        Icon,
+        button::{ButtonCustomVariant, ButtonRounded},
+    };
+    let brand = div()
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .px(px(6.))
+        .pt(px(16.))
+        .pb(px(18.))
+        .child(theme::logo(40.))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .child(theme::heading("Yoto Atelier", 20.))
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme::c(theme::MUTED_WARM))
+                        .child("Votre audio. Vos histoires."),
+                ),
+        );
+    let items = Route::ALL.iter().copied().map(|route| {
+        let (family, icon) = route_style(route);
+        let active = view.route == route;
+        let count = match route {
+            Route::Library => view.snapshot.media.len(),
+            Route::Playlists => view.playlist_rows.len(),
+            Route::Imports => active_jobs(&view.snapshot),
+            Route::Players | Route::Account => 0,
+        };
+        let surface = if active {
+            theme::c(theme::SURFACE)
+        } else {
+            theme::c(theme::SAND)
+        };
+        let variant = ButtonCustomVariant::new(cx)
+            .color(surface)
+            .foreground(theme::c(theme::INK))
+            .hover(if active {
+                surface
+            } else {
+                theme::c(theme::CREAM)
+            })
+            .active(theme::c(theme::SURFACE));
+        let item = Button::new(route.label())
+            .custom(variant)
+            .accessibility_label(if count > 0 {
+                format!("{} ({count})", route.label())
+            } else {
+                route.label().to_owned()
+            })
+            .toggled(active)
+            .bg(surface)
+            .rounded(ButtonRounded::Size(px(14.)))
+            .h(px(48.))
+            .px(px(10.))
+            .w_full()
+            .text_size(px(15.))
+            .font_weight(if active {
+                FontWeight::EXTRA_BOLD
+            } else {
+                FontWeight::BOLD
+            })
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .size(px(32.))
+                            .flex_shrink_0()
+                            .rounded(px(10.))
+                            .bg(theme::c(family.soft))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                Icon::new(icon)
+                                    .size(px(17.))
+                                    .text_color(theme::c(family.icon)),
+                            ),
+                    )
+                    .child(div().flex_1().child(route.label()))
+                    .children((count > 0).then(|| theme::badge(count, family))),
+            )
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.navigate(route, cx);
+            }));
+        if active {
+            item.shadow(theme::lift())
+        } else {
+            item
+        }
+    });
+    let account = view
+        .snapshot
+        .active_account
+        .as_ref()
+        .and_then(|id| view.snapshot.accounts.iter().find(|a| &a.id == id));
+    let (initial, name, state, connected) = match account {
+        Some(account) => (
+            account
+                .label
+                .chars()
+                .find(|c| c.is_alphanumeric())
+                .map(|c| c.to_uppercase().to_string())
+                .unwrap_or_else(|| "Y".into()),
+            account.label.clone(),
+            "Connecté à Yoto",
+            true,
+        ),
+        None => ("?".into(), "Compte Yoto".into(), "Non connecté", false),
+    };
+    let account_card = Button::new("sidebar-account")
+        .custom(
+            ButtonCustomVariant::new(cx)
+                .color(theme::c(theme::SURFACE))
+                .foreground(theme::c(theme::INK))
+                .hover(theme::c(theme::CREAM))
+                .active(theme::c(theme::SAND)),
+        )
+        .accessibility_label(format!("{name} · {state}"))
+        .bg(theme::c(theme::SURFACE))
+        .rounded(ButtonRounded::Size(px(16.)))
+        .h(px(58.))
+        .px(px(12.))
+        .w_full()
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .child(
+                    div()
+                        .size(px(34.))
+                        .flex_shrink_0()
+                        .rounded_full()
+                        .bg(theme::c(if connected {
+                            theme::MINT.soft
+                        } else {
+                            theme::SAND
+                        }))
+                        .text_color(theme::c(if connected {
+                            theme::MINT.ink
+                        } else {
+                            theme::MUTED_WARM
+                        }))
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(initial),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .font_weight(FontWeight::EXTRA_BOLD)
+                                .truncate()
+                                .child(name),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(theme::c(if connected {
+                                    theme::MINT.ink
+                                } else {
+                                    theme::MUTED_WARM
+                                }))
+                                .child(theme::dot(if connected {
+                                    theme::MINT.accent
+                                } else {
+                                    theme::OFFLINE
+                                }))
+                                .child(state),
+                        ),
+                ),
+        )
+        .on_click(cx.listener(|view, _, _, cx| view.navigate(Route::Account, cx)));
+    div()
+        .w(px(244.))
+        .flex_shrink_0()
+        .h_full()
+        .bg(theme::c(theme::SAND))
+        .px(px(16.))
+        .pt(px(8.))
+        .pb(px(18.))
+        .flex()
+        .flex_col()
+        .gap(px(6.))
+        .child(brand)
+        .children(items)
+        .child(div().flex_1())
+        .child(theme::pill(
+            Button::new("updates-sidebar")
+                .label(view.updater.read(cx).sidebar_label())
+                .on_click(cx.listener(|view, _, window, cx| {
+                    let updater = view.updater.clone();
+                    // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
+                    window.defer(cx, move |window, cx| {
+                        update::UpdatePanel::open(updater, window, cx)
+                    });
+                })),
+            theme::Look::Ghost,
+            theme::Height::Small,
+            false,
+            cx,
+        ))
+        .child(account_card)
 }
 
 fn element_id(label: &str, id: impl std::fmt::Display) -> ElementId {

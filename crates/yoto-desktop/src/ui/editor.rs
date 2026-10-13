@@ -1197,16 +1197,11 @@ impl PlaylistEditor {
                 })
         });
     }
-    pub fn add_media(
+    pub(super) fn add_media_batch(
         &mut self,
-        media: &MediaItem,
-        recipe: RecipeId,
-        _window: &mut Window,
+        media: Vec<(MediaId, RecipeId)>,
         cx: &mut Context<Self>,
     ) {
-        self.add_media_batch(vec![(media.id, recipe)], cx);
-    }
-    fn add_media_batch(&mut self, media: Vec<(MediaId, RecipeId)>, cx: &mut Context<Self>) {
         if media.is_empty() || self.blocked() {
             return;
         }
