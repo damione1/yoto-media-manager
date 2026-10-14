@@ -1014,6 +1014,21 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
                     Height::Medium,
                     false,
                     cx,
+                )))
+                .child(theme::note(
+                    tr!("Vous avez regardé dans l’application Yoto et la playlist vous convient ? Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour ici."),
+                ))
+                .child(actions().child(theme::pill(
+                    Button::new(element_id("keep-yoto", id))
+                        .label(tr!("Garder la version de Yoto"))
+                        .on_click(cx.listener(move |v, _, window, cx| {
+                            v.send(Command::KeepYotoVersion(id), cx);
+                            window.close_dialog(cx);
+                        })),
+                    Look::Outline,
+                    Height::Medium,
+                    false,
+                    cx,
                 )));
             if view.advanced {
                 body = body.child(

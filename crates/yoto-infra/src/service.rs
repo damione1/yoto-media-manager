@@ -178,6 +178,9 @@ pub enum Command {
     },
     Retry(JobId),
     Reconcile(JobId),
+    /// Close an uncertain publication by taking the playlist Yoto currently holds as the
+    /// confirmed version. Nothing is sent to Yoto; the parent checked it there.
+    KeepYotoVersion(JobId),
     /// After logout purged a private checkpoint, explicitly select its remote receipt; never re-POST.
     AttachPublicationReceipt {
         job: JobId,
@@ -790,6 +793,7 @@ impl Service {
             | Command::UploadFamilyImage { account, .. } => Some(account.clone()),
             Command::Retry(id)
             | Command::Reconcile(id)
+            | Command::KeepYotoVersion(id)
             | Command::Cancel(id)
             | Command::Resolve { job: id, .. }
             | Command::AttachPublicationReceipt { job: id, .. } => match self.job(*id)?.request {
@@ -1267,6 +1271,58 @@ impl Service {
                 self.save_job(&job)?;
                 Ok(Reply::Updated)
             }
+            Command::KeepYotoVersion(id) => {
+                let mut job = self.job(id)?;
+                if !matches!(job.state, JobState::Reconciling) {
+                    return Err(Failure::Validation(
+                        "Only an uncertain publication can keep Yoto's version".into(),
+                    ));
+                }
+                let JobRequest::Publish { account, snapshot } = &job.request else {
+                    return Err(Failure::Validation("Publication required".into()));
+                };
+                let key = format!("{account}:commit:{id}");
+                let mut pending: PendingPublication = self
+                    .db
+                    .get(Table::Remote, &key)?
+                    .ok_or(Failure::Ambiguous)?;
+                let bound: Option<PublicationBinding> = self
+                    .db
+                    .get(Table::Binding, &format!("{account}:{}", snapshot.id))?;
+                let card = pending
+                    .outcome
+                    .card()
+                    .cloned()
+                    .or_else(|| match &snapshot.origin {
+                        DraftOrigin::Existing { base } => Some(base.card.clone()),
+                        DraftOrigin::New => None,
+                    })
+                    .or_else(|| bound.map(|b| b.card))
+                    .ok_or_else(|| Failure::Validation(messages::YOTO_VERSION_UNKNOWN.into()))?;
+                let token = self.auth.access(account, Scope::UserContentView).await?;
+                let document = self.api.card(&token, &card).await?;
+                let revision = self
+                    .db
+                    .get::<Playlist>(Table::Playlist, &snapshot.id.to_string())?
+                    .map_or(snapshot.revision, |p| p.revision);
+                pending.outcome = PublicationOutcome::Accepted { card: card.clone() };
+                self.db.put(Table::Remote, &key, &pending)?;
+                let binding = PublicationBinding {
+                    account: account.clone(),
+                    playlist: snapshot.id,
+                    card: card.clone(),
+                    revision,
+                    document,
+                };
+                self.db.confirm_publication(&job, &pending, &binding)?;
+                self.install_confirmed_card(&binding.account)?;
+                job.checkpoint = None;
+                job.state = JobState::Completed {
+                    output: JobOutput::Published { card, revision },
+                };
+                self.save_job(&job)?;
+                Ok(Reply::Updated)
+            }
             Command::Reconcile(id) => {
                 let mut job = self.job(id)?;
                 if !matches!(job.state, JobState::Reconciling) {
@@ -1645,6 +1701,7 @@ impl Service {
             | Command::DeleteRemote { .. }
             | Command::Reconcile(_)
             | Command::AttachPublicationReceipt { .. }
+            | Command::KeepYotoVersion(_)
             | Command::Player { .. }
             | Command::DeviceConfig { .. }
             | Command::DeviceStatus { .. }
@@ -2127,6 +2184,7 @@ impl Service {
             | Command::DeleteRemote { .. }
             | Command::Reconcile(_)
             | Command::AttachPublicationReceipt { .. }
+            | Command::KeepYotoVersion(_)
             | Command::Player { .. }
             | Command::RenameDevice { .. }
             | Command::SaveGroup { .. }
@@ -3037,6 +3095,7 @@ fn document_difference(
             }
             let path = format!("{path}.{k}");
             match a.get(k) {
+                Some(Value::Null) | None if is_empty(v) => None,
                 Some(a) => document_difference(a, v, &path),
                 None => Some(format!("{path}: missing, expected {}", excerpt(v))),
             }
@@ -3056,6 +3115,16 @@ fn document_difference(
         }
         (a, e) if a == e => None,
         (a, e) => Some(format!("{path}: {}, expected {}", excerpt(a), excerpt(e))),
+    }
+}
+/// Yoto leaves out fields sent empty, such as an author of `""`.
+fn is_empty(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Null => true,
+        serde_json::Value::String(s) => s.is_empty(),
+        serde_json::Value::Array(a) => a.is_empty(),
+        serde_json::Value::Object(o) => o.values().all(is_empty),
+        serde_json::Value::Bool(_) | serde_json::Value::Number(_) => false,
     }
 }
 fn excerpt(value: &serde_json::Value) -> String {
@@ -3175,6 +3244,9 @@ mod tests {
         let sent = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"duration": 87.0}]}]}});
         let echoed = serde_json::json!({"cardId": "c", "content": {"chapters": [{"key": "a", "display": {}, "tracks": [{"duration": 87}]}]}});
         assert!(contains_document(&echoed, &sent));
+        let sent_empty = serde_json::json!({"metadata": {"author": "", "tags": [], "note": null}});
+        let trimmed = serde_json::json!({"metadata": {"category": "music"}});
+        assert!(contains_document(&trimmed, &sent_empty));
         let transcoded = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"duration": 88}]}]}});
         assert!(contains_document(&transcoded, &sent));
         let sent = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"trackUrl": "yoto:#a"}]}]}});

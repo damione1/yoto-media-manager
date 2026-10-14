@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 09:20-0400\n"
+"POT-Creation-Date: 2026-10-14 09:28-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1463,6 +1463,17 @@ msgid "Vérifier auprès de Yoto"
 msgstr ""
 
 #: src/ui/imports.rs
+msgid ""
+"Vous avez regardé dans l’application Yoto et la playlist vous convient ? "
+"Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour "
+"ici."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Garder la version de Yoto"
+msgstr ""
+
+#: src/ui/imports.rs
 msgid "La carte existe déjà ?"
 msgstr ""
 
@@ -1625,9 +1636,9 @@ msgstr ""
 
 #: src/ui/mod.rs
 msgid ""
-"Yoto ne montre pas encore cet envoi. Ouvrez la playlist dans « Playlists » "
-"pour voir son contenu actuel sur Yoto, puis réessayez la vérification dans "
-"quelques minutes."
+"Yoto ne montre pas exactement cet envoi. Si la playlist vous convient dans "
+"l’application Yoto, choisissez « Garder la version de Yoto » dans « Vérifier "
+"la publication »."
 msgstr ""
 
 #: src/ui/mod.rs
@@ -1795,6 +1806,14 @@ msgstr ""
 
 #: src/ui/mod.rs
 msgid "Tâche annulée."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Lecture de la playlist sur Yoto…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Version de Yoto gardée : la playlist est à jour."
 msgstr ""
 
 #: src/ui/mod.rs
@@ -3258,6 +3277,12 @@ msgstr ""
 
 #: src/ui/wording.rs
 msgid "Deux pistes portent la même clé Yoto."
+msgstr ""
+
+#: src/ui/wording.rs
+msgid ""
+"Cet envoi ne dit pas quelle playlist Yoto garder. Ouvrez-la dans "
+"« Playlists » pour la recharger depuis Yoto."
 msgstr ""
 
 #: src/ui/wording.rs

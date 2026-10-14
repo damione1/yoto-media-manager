@@ -795,6 +795,9 @@ fn known_message(message: &str) -> Option<&'static str> {
         }
         m::DUPLICATE_CHAPTER_KEY => tr!("Deux chapitres portent la même clé Yoto."),
         m::DUPLICATE_TRACK_KEY => tr!("Deux pistes portent la même clé Yoto."),
+        m::YOTO_VERSION_UNKNOWN => tr!(
+            "Cet envoi ne dit pas quelle playlist Yoto garder. Ouvrez-la dans « Playlists » pour la recharger depuis Yoto."
+        ),
         m::WIRE_KEY_LENGTH => tr!("Une clé de chapitre ou de piste est trop longue pour Yoto."),
         m::TRACK_KEY_COLLISION => {
             tr!(

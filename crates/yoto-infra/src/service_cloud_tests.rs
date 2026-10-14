@@ -397,3 +397,105 @@ async fn delete_and_remote_write_admission_cannot_cross_the_http_await() {
             .any(|request| request.method == "POST")
     );
 }
+
+#[tokio::test]
+async fn keeping_yoto_version_closes_an_unconfirmable_edit_without_a_second_post() {
+    let server = MockServer::start().await;
+    let root = tempfile::tempdir().unwrap();
+    let (service, account) = fixture(root.path().join("profile"), server.uri());
+    service
+        .execute(Command::SelectAccount(account.clone()))
+        .await
+        .unwrap();
+    let card = CardId::new("cloud-1").unwrap();
+    let mut doc =
+        crate::api::write_playlist(&streaming(), &account, &[], &Default::default(), None).unwrap();
+    doc["cardId"] = serde_json::json!(card);
+    let doc = Arc::new(Mutex::new(doc));
+    let state = doc.clone();
+    Mock::given(method("GET"))
+        .and(path("/content/cloud-1"))
+        .respond_with(move |_: &Request| {
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"card":state.lock().unwrap().clone()}))
+        })
+        .mount(&server)
+        .await;
+    let state = doc.clone();
+    Mock::given(method("GET")).and(path("/content/mine"))
+        .respond_with(move |_: &Request| ResponseTemplate::new(200).set_body_json(serde_json::json!({"cards":[{"cardId":"cloud-1","title":state.lock().unwrap()["title"]}]})))
+        .mount(&server).await;
+    let state = doc.clone();
+    Mock::given(method("POST"))
+        .and(path("/content"))
+        .respond_with(move |request: &Request| {
+            // Yoto keeps the edit but rewrites the title, so the readback never matches.
+            let mut stored: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+            stored["title"] = serde_json::json!("Retouché par Yoto");
+            *state.lock().unwrap() = stored;
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"card":{"cardId":"cloud-1"}}))
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+    let Reply::OpenedPlaylist(id) = service
+        .execute(Command::LoadRemote {
+            account: account.clone(),
+            card: card.clone(),
+        })
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    let mut proposed = service.playlist(id).unwrap();
+    let expected = proposed.revision;
+    proposed.title = "Envoyé par le parent".into();
+    let (_, job) = operation(
+        service
+            .execute(Command::UpdateYotoPlaylist {
+                account: account.clone(),
+                draft: Box::new(proposed),
+                expected,
+            })
+            .await
+            .unwrap(),
+    );
+    service.run_job(service.job(job).unwrap()).await;
+    assert!(matches!(
+        service.job(job).unwrap().state,
+        JobState::Reconciling
+    ));
+    assert!(matches!(
+        service.execute(Command::Reconcile(job)).await,
+        Err(Failure::Ambiguous)
+    ));
+    service
+        .execute(Command::KeepYotoVersion(job))
+        .await
+        .unwrap();
+    assert!(matches!(
+        service.job(job).unwrap().state,
+        JobState::Completed { .. }
+    ));
+    assert_eq!(service.snapshot().unwrap().bindings[0].card, card);
+    service
+        .execute(Command::RefreshPlaylists(account.clone()))
+        .await
+        .unwrap();
+    let Reply::OpenedPlaylist(id) = service
+        .execute(Command::LoadRemote { account, card })
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(service.playlist(id).unwrap().title, "Retouché par Yoto");
+    assert!(
+        service
+            .execute(Command::KeepYotoVersion(job))
+            .await
+            .is_err()
+    );
+}

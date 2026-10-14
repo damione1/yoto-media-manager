@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 09:20-0400\n"
+"POT-Creation-Date: 2026-10-14 09:28-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1524,6 +1524,20 @@ msgid "Vérifier auprès de Yoto"
 msgstr "Vérifier auprès de Yoto"
 
 #: src/ui/imports.rs
+msgid ""
+"Vous avez regardé dans l’application Yoto et la playlist vous convient ? "
+"Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour "
+"ici."
+msgstr ""
+"Vous avez regardé dans l’application Yoto et la playlist vous convient ? "
+"Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour "
+"ici."
+
+#: src/ui/imports.rs
+msgid "Garder la version de Yoto"
+msgstr "Garder la version de Yoto"
+
+#: src/ui/imports.rs
 msgid "La carte existe déjà ?"
 msgstr "La carte existe déjà ?"
 
@@ -1698,13 +1712,13 @@ msgstr ""
 
 #: src/ui/mod.rs
 msgid ""
-"Yoto ne montre pas encore cet envoi. Ouvrez la playlist dans « Playlists » "
-"pour voir son contenu actuel sur Yoto, puis réessayez la vérification dans "
-"quelques minutes."
+"Yoto ne montre pas exactement cet envoi. Si la playlist vous convient dans "
+"l’application Yoto, choisissez « Garder la version de Yoto » dans « Vérifier "
+"la publication »."
 msgstr ""
-"Yoto ne montre pas encore cet envoi. Ouvrez la playlist dans « Playlists » "
-"pour voir son contenu actuel sur Yoto, puis réessayez la vérification dans "
-"quelques minutes."
+"Yoto ne montre pas exactement cet envoi. Si la playlist vous convient dans "
+"l’application Yoto, choisissez « Garder la version de Yoto » dans « Vérifier "
+"la publication »."
 
 #: src/ui/mod.rs
 msgid "Playlist Yoto ouverte."
@@ -1880,6 +1894,14 @@ msgstr "Annulation…"
 #: src/ui/mod.rs
 msgid "Tâche annulée."
 msgstr "Tâche annulée."
+
+#: src/ui/mod.rs
+msgid "Lecture de la playlist sur Yoto…"
+msgstr "Lecture de la playlist sur Yoto…"
+
+#: src/ui/mod.rs
+msgid "Version de Yoto gardée : la playlist est à jour."
+msgstr "Version de Yoto gardée : la playlist est à jour."
 
 #: src/ui/mod.rs
 msgid "Vérification auprès de Yoto…"
@@ -3506,6 +3528,14 @@ msgstr "Deux chapitres portent la même clé Yoto."
 #: src/ui/wording.rs
 msgid "Deux pistes portent la même clé Yoto."
 msgstr "Deux pistes portent la même clé Yoto."
+
+#: src/ui/wording.rs
+msgid ""
+"Cet envoi ne dit pas quelle playlist Yoto garder. Ouvrez-la dans "
+"« Playlists » pour la recharger depuis Yoto."
+msgstr ""
+"Cet envoi ne dit pas quelle playlist Yoto garder. Ouvrez-la dans "
+"« Playlists » pour la recharger depuis Yoto."
 
 #: src/ui/wording.rs
 msgid "Une clé de chapitre ou de piste est trop longue pour Yoto."

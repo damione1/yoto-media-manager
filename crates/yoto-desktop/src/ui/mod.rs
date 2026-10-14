@@ -555,7 +555,7 @@ impl AppView {
                                 // of pointing back to where the parent already is.
                                 view.report_error(
                                     Failure::Validation(
-                                        tr!("Yoto ne montre pas encore cet envoi. Ouvrez la playlist dans « Playlists » pour voir son contenu actuel sur Yoto, puis réessayez la vérification dans quelques minutes.").into(),
+                                        tr!("Yoto ne montre pas exactement cet envoi. Si la playlist vous convient dans l’application Yoto, choisissez « Garder la version de Yoto » dans « Vérifier la publication ».").into(),
                                     ),
                                     cx,
                                 );
@@ -1578,6 +1578,10 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         Command::CollectGarbage => (tr!("Nettoyage…"), tr!("Fichiers inutilisés supprimés.")),
         Command::Retry(_) => (tr!("Relance de la tâche…"), tr!("Tâche relancée.")),
         Command::Cancel(_) => (tr!("Annulation…"), tr!("Tâche annulée.")),
+        Command::KeepYotoVersion(_) => (
+            tr!("Lecture de la playlist sur Yoto…"),
+            tr!("Version de Yoto gardée : la playlist est à jour."),
+        ),
         Command::Reconcile(_) => (
             tr!("Vérification auprès de Yoto…"),
             tr!("Yoto confirme l’envoi : la playlist est à jour."),
