@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/branding/app-icon.png" alt="YotoMediaManager icon" width="120">
+<img src="assets/branding/app-icon.svg" alt="YotoMediaManager icon" width="120">
 
 <h1>YotoMediaManager</h1>
 
