@@ -253,7 +253,8 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
             Height::Large,
             false,
             cx,
-        ));
+        ))
+        .child(library_menu(count > 0, cx));
     div()
         .size_full()
         .flex()
@@ -286,7 +287,6 @@ fn sort_label(sort: CatalogueSort) -> &'static str {
     }
 }
 fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
-    let more = cx.entity().downgrade();
     let current = view.sort;
     let sorts = [
         CatalogueSort::Title,
@@ -325,21 +325,32 @@ fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                 ),
         )
         .child(theme::segmented().children(sorts))
-        .child(
-            theme::round(
-                Button::new("library-more")
-                    .icon(IconName::Ellipsis)
-                    .accessibility_label("Plus d’options")
-                    .tooltip("Plus d’options"),
-                Look::Ghost,
-                44.,
-                false,
-                cx,
-            )
-            .dropdown_menu(move |menu, _, _| {
-                let select = more.clone();
-                let clean = more.clone();
-                menu.item(
+        .into_any_element()
+}
+
+/// « Plus d’options » of the whole library: select every audio, free unused space, and
+/// export or import the library. Always shown, so an empty library can be imported.
+fn library_menu(has_media: bool, cx: &mut Context<AppView>) -> impl IntoElement + use<> {
+    use wording::library_transfer as text;
+    let owner = cx.entity().downgrade();
+    theme::round(
+        Button::new("library-more")
+            .icon(IconName::Ellipsis)
+            .accessibility_label("Plus d’options")
+            .tooltip("Plus d’options"),
+        Look::Ghost,
+        44.,
+        false,
+        cx,
+    )
+    .dropdown_menu(move |mut menu, _, _| {
+        let select = owner.clone();
+        let clean = owner.clone();
+        let export = owner.clone();
+        let import = owner.clone();
+        if has_media {
+            menu = menu
+                .item(
                     PopupMenuItem::new("Tout sélectionner").on_click(move |_, _, cx| {
                         let _ = select.update(cx, |v, cx| {
                             v.selected_media_set = v
@@ -351,15 +362,29 @@ fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                         });
                     }),
                 )
-                .separator()
-                .item(
-                    PopupMenuItem::new("Libérer l’espace inutilisé").on_click(move |_, _, cx| {
-                        let _ = clean.update(cx, |v, cx| v.send(Command::CollectGarbage, cx));
-                    }),
-                )
+                .separator();
+        }
+        menu.item(
+            PopupMenuItem::new("Libérer l’espace inutilisé").on_click(move |_, _, cx| {
+                let _ = clean.update(cx, |v, cx| v.send(Command::CollectGarbage, cx));
             }),
         )
-        .into_any_element()
+        .separator()
+        .item(
+            PopupMenuItem::new(text::EXPORT_MENU).on_click(move |_, window, cx| {
+                let _ = export.update(cx, |v, cx| {
+                    v.open_transfer(transfer::Direction::Export, window, cx)
+                });
+            }),
+        )
+        .item(
+            PopupMenuItem::new(text::IMPORT_MENU).on_click(move |_, window, cx| {
+                let _ = import.update(cx, |v, cx| {
+                    v.open_transfer(transfer::Direction::Import, window, cx)
+                });
+            }),
+        )
+    })
 }
 
 /// The dark bar floating over the list: what is selected and what can be done with it.

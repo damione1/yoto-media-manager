@@ -197,6 +197,78 @@ pub mod youtube_tool {
     }
 }
 
+/// « Autre médiathèque » in « Compte » (advanced mode).
+pub mod other_library {
+    pub const TITLE: &str = "Autre médiathèque";
+    pub const NOTE: &str = "Ouvrez une autre médiathèque de cet ordinateur, par exemple une médiathèque importée. Elle s’ouvre dans une nouvelle fenêtre.";
+    pub const OPEN: &str = "Ouvrir une autre médiathèque";
+    pub const PICKER: &str = "Ouvrir une autre médiathèque Yoto";
+}
+
+/// « Exporter la médiathèque… » and « Importer une médiathèque… » in « Médiathèque ».
+pub mod library_transfer {
+    pub const EXPORT_MENU: &str = "Exporter la médiathèque…";
+    pub const IMPORT_MENU: &str = "Importer une médiathèque…";
+    pub const EXPORT_TITLE: &str = "Exporter la médiathèque";
+    pub const IMPORT_TITLE: &str = "Importer une médiathèque";
+    pub const EXPORT_INTRO: &str = "Enregistrez une copie protégée de toute votre médiathèque (audios, versions préparées et playlists), par exemple sur une clé USB, pour changer d’ordinateur ou en cas de pépin.";
+    pub const IMPORT_INTRO: &str = "Retrouvez une médiathèque exportée depuis cette application. Elle s’ouvre à côté de celle-ci, dans une nouvelle fenêtre : rien n’est remplacé.";
+    /// Step titles.
+    pub const EXPORT_STEP_FOLDER: &str = "1. Choisissez où enregistrer l’export";
+    pub const EXPORT_STEP_KEY: &str = "2. Notez la clé de récupération";
+    pub const IMPORT_STEP_KEY: &str = "1. Collez la clé de récupération";
+    pub const IMPORT_STEP_FOLDER: &str = "2. Choisissez l’export";
+    pub const CHOOSE_FOLDER: &str = "Choisir un dossier…";
+    pub const CHOOSE_OTHER_FOLDER: &str = "Choisir un autre dossier…";
+    pub const CHOOSE_EXPORT: &str = "Choisir l’export…";
+    pub const CHOOSE_OTHER_EXPORT: &str = "Choisir un autre export…";
+    pub const NO_FOLDER: &str = "Aucun dossier choisi.";
+    pub const FOLDER_PICKER: &str = "Où enregistrer l’export de la médiathèque ?";
+    pub const EXPORT_PICKER: &str = "Choisissez le dossier de l’export à importer";
+    /// Under the generated key.
+    pub const KEY_REMINDER: &str = "Cette clé protège l’export : sans elle, personne ne pourra l’ouvrir, pas même vous. Notez-la sur papier ou dans votre gestionnaire de mots de passe, et gardez-la à part de l’export.";
+    pub const KEY_PLACEHOLDER: &str = "Clé notée lors de l’export";
+    pub const COPY: &str = "Copier";
+    pub const COPIED: &str = "Copiée";
+    pub const EXPORT: &str = "Exporter";
+    pub const IMPORT: &str = "Importer";
+    pub const CLOSE: &str = "Fermer";
+    pub const EXPORTING: &str =
+        "Export en cours… Cela peut prendre quelques minutes pour une grande médiathèque.";
+    pub const IMPORTING: &str = "Import en cours : chaque fichier est vérifié…";
+    pub const OPEN_IMPORTED: &str = "Ouvrir la médiathèque importée";
+    pub const KEY_MISSING: &str = "Collez d’abord la clé de récupération notée lors de l’export.";
+    pub const KEY_INVALID: &str = "Cette clé de récupération est incomplète ou contient une faute de frappe. Recopiez-la exactement comme elle a été notée lors de l’export (8 groupes de 8 lettres et chiffres).";
+    pub const FOLDER_MISSING: &str = "Choisissez d’abord un dossier.";
+    pub const EXPORT_MISSING: &str = "Choisissez d’abord le dossier de l’export.";
+    pub const NOT_AN_EXPORT: &str = "Ce dossier ne contient pas d’export de médiathèque. Choisissez le dossier créé par « Exporter la médiathèque… ».";
+    pub const NO_LIBRARY_FOLDER: &str =
+        "L’application ne trouve pas le dossier de ses médiathèques sur cet ordinateur.";
+    /// Name of the folder an export creates, and of an imported library's folder.
+    pub fn export_folder_name(date: &str) -> String {
+        format!("Médiathèque Yoto {date}")
+    }
+    pub fn imported_folder_name(library: &str, date: &str) -> String {
+        format!("{library} importée {date}")
+    }
+    /// After a successful export or import.
+    pub fn exported(path: &str) -> String {
+        format!("Médiathèque exportée dans « {path} ». Gardez bien la clé de récupération.")
+    }
+    pub fn imported(path: &str) -> String {
+        format!(
+            "Médiathèque importée dans « {path} ». Ouvrez-la pour la retrouver ; reconnectez ensuite votre compte Yoto dans « Compte »."
+        )
+    }
+    /// After a failure, with the reason in plain French.
+    pub fn export_failed(reason: &str) -> String {
+        format!("L’export n’a pas abouti. {reason}")
+    }
+    pub fn import_failed(reason: &str) -> String {
+        format!("L’import n’a pas abouti. {reason}")
+    }
+}
+
 const PERMISSION_DENIED: &str = "Yoto n’autorise pas cette action pour ce compte. Reconnectez votre compte pour accorder l’accès.";
 const AMBIGUOUS: &str = "Yoto a peut-être reçu la modification. Vérifiez le résultat dans « Imports » avant de réessayer.";
 
@@ -345,16 +417,16 @@ fn known_message(message: &str) -> Option<&'static str> {
             "Un fichier de ce nom existe déjà à cet endroit. Choisissez un autre nom."
         }
         m::BACKUP_AUTH_FAILED => {
-            "La clé de récupération ne correspond pas à cette sauvegarde, ou la sauvegarde a été modifiée."
+            "Cette clé de récupération ne correspond pas à cet export, ou l’export a été modifié depuis. Vérifiez la clé notée lors de l’export."
         }
         m::BACKUP_UNSUPPORTED | m::BACKUP_PATH_INVALID => {
-            "Ce dossier n’est pas une sauvegarde valide. Choisissez le dossier de sauvegarde lui-même."
+            "Ce dossier n’est pas un export de médiathèque. Choisissez le dossier créé par « Exporter la médiathèque… »."
         }
         m::BACKUP_NEWER => {
-            "Cette sauvegarde vient d’une version plus récente de l’application. Mettez l’application à jour puis réessayez."
+            "Cet export vient d’une version plus récente de l’application. Mettez l’application à jour puis réessayez."
         }
         m::BACKUP_DATABASE_ABSENT | m::BACKUP_INTEGRITY | m::BACKUP_DATABASE_INVALID => {
-            "Cette sauvegarde est incomplète ou endommagée ; elle ne peut pas être restaurée."
+            "Cet export est incomplet ou endommagé : il ne peut pas être importé."
         }
         m::BACKUP_DESTINATION_EXISTS | m::RESTORE_DESTINATION_EXISTS => {
             "Un dossier du même nom existe déjà à cet endroit. Réessayez dans un instant ou choisissez un autre dossier."
@@ -404,7 +476,7 @@ fn known_message(message: &str) -> Option<&'static str> {
     })
 }
 
-const INVALID_RECOVERY_KEY: &str = "Cette clé de récupération n’est pas valide : elle doit contenir 64 caractères (chiffres et lettres de a à f). Vérifiez-la ou générez-en une nouvelle pour une nouvelle sauvegarde.";
+const INVALID_RECOVERY_KEY: &str = library_transfer::KEY_INVALID;
 
 /// Plain French for an updater failure, with what to do next.
 pub fn update_failure_text(error: &yoto_updater::UpdateError) -> String {
@@ -426,18 +498,37 @@ pub fn update_failure_text(error: &yoto_updater::UpdateError) -> String {
     }
 }
 
-/// Shown when a backup starts without a key and the app creates one.
-pub const NEW_RECOVERY_KEY: &str = "Une clé de récupération vient d’être créée. Copiez-la et gardez-la en lieu sûr : sans elle, la sauvegarde ne pourra pas être restaurée.";
+/// A recovery key as typed or pasted, ready for the service: groups, spaces and case
+/// are only there to help a parent copy it by hand.
+pub fn normalize_recovery_key(typed: &str) -> String {
+    typed
+        .chars()
+        .filter(|c| !c.is_whitespace() && !matches!(c, '-' | '–' | '—'))
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
+}
 
-/// A recovery key is 64 hexadecimal characters; the parent-facing reason when it is not.
+/// A recovery key, once normalized, is 64 characters of 0–9 and a–f; the parent-facing
+/// reason when it is not.
 pub fn check_recovery_key(key: &str) -> std::result::Result<(), &'static str> {
     if key.is_empty() {
-        Err("Collez la clé de récupération de cette sauvegarde (64 caractères).")
+        Err(library_transfer::KEY_MISSING)
     } else if key.len() != 64 || !key.chars().all(|c| c.is_ascii_hexdigit()) {
         Err(INVALID_RECOVERY_KEY)
     } else {
         Ok(())
     }
+}
+
+/// A recovery key shown in eight groups, so it can be written down, read back and
+/// wrapped on two lines.
+pub fn grouped_recovery_key(key: &str) -> String {
+    key.to_ascii_uppercase()
+        .as_bytes()
+        .chunks(8)
+        .map(|group| String::from_utf8_lossy(group).into_owned())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Outcome of deleting several media at once: some may be kept because they are in use.
@@ -547,6 +638,26 @@ mod tests {
         assert!(check_recovery_key("abc").is_err());
         assert!(check_recovery_key(&"g".repeat(64)).is_err());
         assert!(check_recovery_key(&"aF09".repeat(16)).is_ok());
+    }
+    #[core::prelude::v1::test]
+    fn a_recovery_key_reads_back_as_it_was_shown() {
+        let key = "0123456789abcdef".repeat(4);
+        let shown = grouped_recovery_key(&key);
+        assert_eq!(shown.split(' ').count(), 8);
+        assert!(shown.starts_with("01234567 89ABCDEF "));
+        assert_eq!(normalize_recovery_key(&shown), key);
+        assert_eq!(
+            normalize_recovery_key(&format!("  {} \n", shown.replace(' ', "-"))),
+            key
+        );
+        assert!(check_recovery_key(&normalize_recovery_key(&shown)).is_ok());
+        for message in [
+            library_transfer::KEY_MISSING,
+            library_transfer::KEY_INVALID,
+            library_transfer::KEY_REMINDER,
+        ] {
+            assert!(!message.to_lowercase().contains("hexad"), "{message}");
+        }
     }
     #[core::prelude::v1::test]
     fn durations_are_readable() {

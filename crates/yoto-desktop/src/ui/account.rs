@@ -1,8 +1,5 @@
 use super::*;
-use gpui_kit::component::{
-    button::{ButtonCustomVariant, ButtonRounded},
-    menu::{DropdownMenu, PopupMenuItem},
-};
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use theme::{Height, Look};
 
 pub fn render(view: &mut AppView, cx: &mut Context<AppView>) -> AnyElement {
@@ -43,7 +40,6 @@ pub fn render(view: &mut AppView, cx: &mut Context<AppView>) -> AnyElement {
                         .flex()
                         .flex_col()
                         .gap(px(14.))
-                        .child(backup(view, cx))
                         .child(advanced_mode(view, cx)),
                 ),
         )
@@ -443,182 +439,6 @@ fn active_card(view: &AppView, account: &Account, cx: &mut Context<AppView>) -> 
     card.into_any_element()
 }
 
-/// The « Sauvegarde » card: create or restore a backup, its recovery key, and the
-/// collapsed « Options avancées » to open another library.
-fn backup(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
-    let quiet = |id: &'static str, label: &'static str| {
-        Button::new(id)
-            .label(label)
-            .custom(
-                ButtonCustomVariant::new(cx)
-                    .color(theme::c(theme::SURFACE))
-                    .foreground(theme::c(theme::INK))
-                    .hover(theme::c(theme::SAND))
-                    .active(theme::c(theme::SAND)),
-            )
-            .bg(theme::c(theme::SURFACE))
-            .rounded(ButtonRounded::Size(px(999.)))
-            .h(px(38.))
-            .px(px(12.))
-            .text_size(px(13.))
-            .font_weight(FontWeight::BOLD)
-    };
-    let mut card = theme::card()
-        .p(px(22.))
-        .gap(px(14.))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .child(theme::icon_tile(IconName::Shield, &theme::LILAC, 40., 12.))
-                .child(theme::heading("Sauvegarde", 20.)),
-        )
-        .child(
-            div()
-                .text_size(px(14.))
-                .line_height(relative(1.5))
-                .text_color(theme::c(theme::INK_SOFT))
-                .child("Gardez une copie chiffrée de votre médiathèque (originaux, versions audio et playlists), pour changer d’ordinateur ou en cas de pépin."),
-        )
-        .child(
-            theme::pill(
-                Button::new("backup-catalogue")
-                    .label("Créer une sauvegarde")
-                    .on_click(cx.listener(|v, _, window, cx| v.recovery(false, window, cx))),
-                Look::Soft(&theme::LILAC),
-                Height::Hero,
-                false,
-                cx,
-            )
-            .w_full(),
-        )
-        .child(
-            theme::pill(
-                Button::new("restore-catalogue")
-                    .label("Restaurer une sauvegarde")
-                    .on_click(cx.listener(|v, _, window, cx| v.recovery(true, window, cx))),
-                Look::Outline,
-                Height::Large,
-                false,
-                cx,
-            )
-            .w_full(),
-        );
-    if let Some(path) = &view.restored_profile {
-        let open = path.clone();
-        card = card.child(
-            theme::inset()
-                .bg(theme::c(theme::MINT.soft))
-                .child(
-                    div()
-                        .font_weight(FontWeight::EXTRA_BOLD)
-                        .child("Médiathèque restaurée"),
-                )
-                .child(theme::note(path.display().to_string()))
-                .child(theme::pill(
-                    Button::new("open-restored")
-                        .label("Ouvrir la médiathèque restaurée")
-                        .on_click(cx.listener(move |v, _, _, cx| v.open_profile(open.clone(), cx))),
-                    Look::Solid(&theme::MINT),
-                    Height::Medium,
-                    false,
-                    cx,
-                )),
-        );
-    }
-    card = card.child(
-        theme::inset()
-            .child(
-                div()
-                    .font_weight(FontWeight::EXTRA_BOLD)
-                    .child("Clé de récupération"),
-            )
-            .child(theme::note(
-                "À garder en lieu sûr, par exemple dans votre gestionnaire de mots de passe : elle est nécessaire pour restaurer la sauvegarde.",
-            ))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(theme::small_field(Input::new(&view.recovery_key))),
-                    )
-                    .child(
-                        quiet(
-                            "reveal-recovery-key",
-                            if view.recovery_visible {
-                                "Masquer"
-                            } else {
-                                "Afficher"
-                            },
-                        )
-                        .on_click(cx.listener(|v, _, window, cx| {
-                            v.recovery_visible = !v.recovery_visible;
-                            let masked = !v.recovery_visible;
-                            v.recovery_key
-                                .update(cx, |s, cx| s.set_masked(masked, window, cx));
-                            cx.notify();
-                        })),
-                    )
-                    .child(quiet("copy-recovery-key", "Copier").on_click(cx.listener(
-                        |v, _, _, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                v.recovery_key.read(cx).value().to_string(),
-                            ))
-                        },
-                    ))),
-            )
-            .child(
-                theme::pill(
-                    Button::new("generate-recovery-key")
-                        .label("Générer une clé")
-                        .on_click(cx.listener(|v, _, window, cx| {
-                            v.generate_recovery_key(window, cx)
-                        })),
-                    Look::Link(&theme::LILAC),
-                    Height::Tiny,
-                    false,
-                    cx,
-                )
-                .px(px(4.)),
-            ),
-    );
-    card = card.child(
-        theme::disclosure(
-            "account-advanced",
-            "Options avancées",
-            "Autre médiathèque",
-            view.account_backup_open,
-            cx,
-        )
-        .on_click(cx.listener(|v, _, _, cx| {
-            v.account_backup_open = !v.account_backup_open;
-            cx.notify();
-        })),
-    );
-    if view.account_backup_open {
-        card = card
-            .child(theme::note(
-                "Ouvrez une autre médiathèque de cet ordinateur, par exemple une médiathèque restaurée. Elle s’ouvre dans une nouvelle fenêtre.",
-            ))
-            .child(theme::pill(
-                Button::new("choose-profile")
-                    .label("Ouvrir une autre médiathèque")
-                    .on_click(cx.listener(|v, _, _, cx| v.choose_profile(cx))),
-                Look::Outline,
-                Height::Medium,
-                false,
-                cx,
-            ));
-    }
-    card.into_any_element()
-}
-
 /// The « Mode avancé » switch: technical settings stay out of sight until a parent asks.
 fn advanced_mode(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
     use gpui_kit::component::switch::Switch;
@@ -639,13 +459,35 @@ fn advanced_mode(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                 ),
         )
         .child(theme::note(
-            "Affiche les réglages techniques : lecture interactive, événements des pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, raccourcis et commandes techniques des lecteurs. Inutile au quotidien.",
+            "Affiche les réglages techniques : lecture interactive, événements des pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, raccourcis et commandes techniques des lecteurs ; ouverture d’une autre médiathèque. Inutile au quotidien.",
         ));
     if view.advanced {
-        card.child(youtube_tool(view, cx)).into_any_element()
+        card.child(youtube_tool(view, cx))
+            .child(other_library(cx))
+            .into_any_element()
     } else {
         card.into_any_element()
     }
+}
+
+/// « Autre médiathèque »: open another library of this computer, for example one
+/// imported earlier, in a new window.
+fn other_library(cx: &mut Context<AppView>) -> AnyElement {
+    use wording::other_library as text;
+    theme::inset()
+        .gap(px(8.))
+        .child(div().font_weight(FontWeight::EXTRA_BOLD).child(text::TITLE))
+        .child(theme::note(text::NOTE))
+        .child(theme::pill(
+            Button::new("choose-profile")
+                .label(text::OPEN)
+                .on_click(cx.listener(|v, _, _, cx| v.choose_profile(cx))),
+            Look::Outline,
+            Height::Medium,
+            false,
+            cx,
+        ))
+        .into_any_element()
 }
 
 /// The YouTube tool imports use, with a button to update it without waiting.

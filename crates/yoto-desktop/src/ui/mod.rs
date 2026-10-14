@@ -9,6 +9,7 @@ mod pixelart;
 mod players;
 mod reconciliation;
 mod theme;
+mod transfer;
 mod trim;
 mod update;
 mod wording;
@@ -40,11 +41,9 @@ pub struct AppView {
     pub selected_media_set: std::collections::BTreeSet<MediaId>,
     pub sort: CatalogueSort,
     search_generation: u64,
-    pub recovery_key: Entity<InputState>,
-    recovery_visible: bool,
     pub account_sync_details_open: bool,
-    pub account_backup_open: bool,
-    pub restored_profile: Option<std::path::PathBuf>,
+    /// The last export or import dialog, kept while it runs so its result is not lost.
+    transfer: Option<Entity<transfer::LibraryTransfer>>,
     pub library_rows: Vec<usize>,
     playlist_media_choices: Arc<editor::MediaChoices>,
     playlist_icon_choices: Arc<pixelart::IconChoices>,
@@ -194,15 +193,8 @@ impl AppView {
             selected_media_set: Default::default(),
             sort: CatalogueSort::Title,
             search_generation: 0,
-            recovery_visible: false,
             account_sync_details_open: false,
-            account_backup_open: false,
-            restored_profile: None,
-            recovery_key: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .masked(true)
-                    .placeholder("Clé de récupération : 64 caractères hexadécimaux")
-            }),
+            transfer: None,
             library_rows,
             playlist_media_choices,
             playlist_icon_choices,
@@ -624,17 +616,7 @@ impl AppView {
                                 };
                             }
                             Reply::Data(value) => {
-                                if let Some(profile) = value
-                                    .get("restored_profile")
-                                    .and_then(serde_json::Value::as_str)
-                                {
-                                    view.restored_profile = Some(profile.into());
-                                    view.status = format!("Profil restauré : {profile}");
-                                } else if let Some(backup) =
-                                    value.get("backup").and_then(serde_json::Value::as_str)
-                                {
-                                    view.status = format!("Sauvegarde créée : {backup}");
-                                } else if let (Some(deleted), Some(kept)) = (
+                                if let (Some(deleted), Some(kept)) = (
                                     value.get("deleted").and_then(serde_json::Value::as_u64),
                                     value.get("kept").and_then(serde_json::Value::as_u64),
                                 ) {
@@ -684,7 +666,7 @@ impl AppView {
     pub fn choose_profile(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |weak, cx| {
             if let Some(folder) = rfd::AsyncFileDialog::new()
-                .set_title("Ouvrir une autre médiathèque Yoto")
+                .set_title(wording::other_library::PICKER)
                 .pick_folder()
                 .await
             {
@@ -1109,75 +1091,6 @@ impl Render for AppView {
             )
     }
 }
-impl AppView {
-    /// Puts a fresh random recovery key in the field and shows it, so it can be copied.
-    pub fn generate_recovery_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        use rand::RngCore;
-        let mut bytes = [0; 32];
-        rand::thread_rng().fill_bytes(&mut bytes);
-        let text = bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
-        self.recovery_visible = true;
-        self.recovery_key.update(cx, |s, cx| {
-            s.set_value(text, window, cx);
-            s.set_masked(false, window, cx);
-        });
-        cx.notify();
-    }
-    /// Backup or restore. The key is checked before any folder is chosen; a backup without a
-    /// key gets a new one, shown so the parent can keep it.
-    fn recovery(&mut self, restore: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let mut key = self.recovery_key.read(cx).value().trim().to_string();
-        if key.is_empty() && !restore {
-            self.generate_recovery_key(window, cx);
-            key = self.recovery_key.read(cx).value().to_string();
-            self.warn(wording::NEW_RECOVERY_KEY.into(), cx);
-        }
-        if let Err(message) = wording::check_recovery_key(&key) {
-            self.report_error(Failure::Validation(message.into()), cx);
-            return;
-        }
-        cx.spawn(async move |weak, cx| {
-            let source = if restore {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Dossier de sauvegarde chiffrée")
-                    .pick_folder()
-                    .await
-                    .map(|f| f.path().to_owned())
-            } else {
-                None
-            };
-            if restore && source.is_none() {
-                return;
-            }
-            let parent = rfd::AsyncFileDialog::new()
-                .set_title("Dossier parent (un nouveau dossier Yoto sera créé)")
-                .pick_folder()
-                .await;
-            if let Some(parent) = parent {
-                let destination = parent.path().join(format!(
-                    "Yoto-{}",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs()
-                ));
-                let command = match source {
-                    Some(source) => Command::Restore {
-                        source,
-                        destination,
-                        recovery_key: key,
-                    },
-                    None => Command::Backup {
-                        destination,
-                        recovery_key: key,
-                    },
-                };
-                let _ = weak.update(cx, |v, cx| v.send(command, cx));
-            }
-        })
-        .detach();
-    }
-}
 
 /// Each section's pastel family and icon in the sidebar.
 fn route_style(route: Route) -> (&'static theme::Family, gpui_kit::assets::IconName) {
@@ -1492,8 +1405,8 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::AttachPublicationReceipt { .. } => {
             ("Vérification auprès de Yoto…", "Vérification lancée.")
         }
-        Command::Backup { .. } => ("Sauvegarde en cours…", "Sauvegarde terminée."),
-        Command::Restore { .. } => ("Restauration en cours…", "Restauration terminée."),
+        Command::Backup { .. } => ("Export de la médiathèque…", "Médiathèque exportée."),
+        Command::Restore { .. } => ("Import de la médiathèque…", "Médiathèque importée."),
         Command::Waveform(_)
         | Command::StopPreview
         | Command::PreviewStatus
