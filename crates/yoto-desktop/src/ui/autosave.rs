@@ -16,6 +16,11 @@ pub(super) const DISCRETE_DEBOUNCE: Duration = Duration::from_millis(2000);
 /// Longest a change waits while edits keep coming, so a long burst still reaches Yoto.
 pub(super) const MAX_DELAY: Duration = Duration::from_secs(10);
 
+/// Longest the app waits, when quitting, for pending edits to reach Yoto.
+pub(in crate::ui) const QUIT_WAIT: Duration = Duration::from_secs(20);
+/// How often the app checks, while quitting, whether they did.
+pub(in crate::ui) const QUIT_POLL: Duration = Duration::from_millis(100);
+
 /// What kind of edit was made, which sets how long to wait for the next one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Change {

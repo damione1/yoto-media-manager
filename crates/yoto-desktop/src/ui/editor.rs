@@ -107,6 +107,15 @@ fn pending_status(state: &JobState) -> String {
         }
     }
 }
+/// Where an editor stands when the parent quits the app.
+pub(super) enum QuitState {
+    /// Nothing waits to be written.
+    Settled,
+    /// A write is starting, or local changes wait for the one in flight.
+    Waiting,
+    /// Changes could not be written; the reason, in plain French.
+    Unsaved(String),
+}
 pub struct PlaylistEditor {
     pub draft: Playlist,
     parent: WeakEntity<AppView>,
@@ -600,6 +609,28 @@ impl PlaylistEditor {
     pub(super) fn flush_before_leaving(&mut self, cx: &mut Context<Self>) {
         self.report_failures = true;
         self.flush(cx);
+    }
+    /// Where this playlist stands while the app waits to quit.
+    pub(super) fn quit_state(&self) -> QuitState {
+        let pending = self.autosave.has_pending() || self.queued_media.is_some();
+        if pending && self.held() {
+            return QuitState::Unsaved(if self.status.is_empty() {
+                text::NEEDS_CHECK.into()
+            } else {
+                self.status.clone()
+            });
+        }
+        if pending || matches!(self.operation, Some(PlaylistOperation::Submitting { .. })) {
+            return QuitState::Waiting;
+        }
+        match &self.unsaved {
+            Some(reason) => QuitState::Unsaved(reason.clone()),
+            None => QuitState::Settled,
+        }
+    }
+    /// The playlist's title on Yoto, to name it in messages.
+    pub(super) fn title(&self) -> &str {
+        &self.base.title
     }
     /// Writes wait while something needs the parent first.
     fn held(&self) -> bool {

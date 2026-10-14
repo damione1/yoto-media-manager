@@ -80,6 +80,8 @@ pub struct AppView {
     pub advanced: bool,
     /// The YouTube tool imports use, read when « Mode avancé » is turned on.
     pub youtube_tool: Option<yoto_infra::youtube_tool::YoutubeToolStatus>,
+    /// Quitting waits for playlist edits to reach Yoto.
+    quitting: bool,
 }
 impl AppView {
     pub fn navigate(&mut self, route: Route, cx: &mut Context<Self>) {
@@ -231,6 +233,7 @@ impl AppView {
             selected_group: None,
             advanced: false,
             youtube_tool: None,
+            quitting: false,
         };
         view.refresh_playlists(cx);
         view
@@ -831,6 +834,92 @@ impl AppView {
         for editor in self.editors.values() {
             editor.update(cx, |e, cx| e.flush_before_leaving(cx));
         }
+    }
+    /// The parent asked to quit. Pending playlist edits are written first; the app then
+    /// quits, or asks what to do when some could not be written. Returns whether it may
+    /// quit at once.
+    pub fn request_quit(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.quitting {
+            return false;
+        }
+        self.flush_playlists(cx);
+        let (waiting, unsaved) = self.unwritten_playlists(cx);
+        if waiting.is_empty() && unsaved.is_empty() {
+            return true;
+        }
+        self.quitting = true;
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    use gpui_kit::component::{WindowExt, notification::Notification};
+                    window
+                        .push_notification(Notification::info(wording::autosave::QUIT_SAVING), cx);
+                });
+            });
+        }
+        cx.spawn(async move |weak, cx| {
+            let started = std::time::Instant::now();
+            loop {
+                cx.background_executor().timer(autosave::QUIT_POLL).await;
+                let Ok((waiting, mut unsaved)) = weak.update(cx, |v, cx| v.unwritten_playlists(cx))
+                else {
+                    return;
+                };
+                if !waiting.is_empty() && started.elapsed() < autosave::QUIT_WAIT {
+                    continue;
+                }
+                if waiting.is_empty() && unsaved.is_empty() {
+                    cx.update(|cx| cx.quit());
+                    return;
+                }
+                unsaved.extend(
+                    waiting
+                        .into_iter()
+                        .map(|title| (title, wording::autosave::QUIT_TIMED_OUT.to_owned())),
+                );
+                let _ = weak.update(cx, |v, cx| {
+                    v.quitting = false;
+                    v.confirm_quit(unsaved, cx);
+                });
+                return;
+            }
+        })
+        .detach();
+        false
+    }
+    /// Playlists still writing (by title), and those whose edits could not be written.
+    fn unwritten_playlists(&self, cx: &App) -> (Vec<String>, Vec<(String, String)>) {
+        let (mut waiting, mut unsaved) = (vec![], vec![]);
+        for editor in self.editors.values() {
+            let editor = editor.read(cx);
+            match editor.quit_state() {
+                editor::QuitState::Settled => {}
+                editor::QuitState::Waiting => waiting.push(editor.title().to_owned()),
+                editor::QuitState::Unsaved(reason) => {
+                    unsaved.push((editor.title().to_owned(), reason))
+                }
+            }
+        }
+        (waiting, unsaved)
+    }
+    /// Some edits could not be written: let the parent stay, or quit and lose them.
+    fn confirm_quit(&self, unsaved: Vec<(String, String)>, cx: &mut Context<Self>) {
+        let Some(window) = cx.windows().first().copied() else {
+            cx.quit();
+            return;
+        };
+        cx.defer(move |cx| {
+            let _ = cx.update_window(window, |_, window, cx| {
+                confirm_destructive(
+                    window,
+                    cx,
+                    wording::autosave::QUIT_TITLE,
+                    wording::autosave::quit_description(&unsaved),
+                    wording::autosave::QUIT_ANYWAY,
+                    |_, cx| cx.quit(),
+                );
+            });
+        });
     }
     /// Turn « Mode avancé » on or off everywhere it applies.
     pub fn set_advanced(&mut self, advanced: bool, cx: &mut Context<Self>) {

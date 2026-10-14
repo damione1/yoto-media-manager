@@ -61,7 +61,6 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
         .run(move |cx| {
             gpui_kit::init(cx);
             ui::install_theme(cx);
-            cx.on_action(|_: &Quit, cx| cx.quit());
             cx.bind_keys([KeyBinding::new(
                 if cfg!(target_os = "macos") {
                     "cmd-q"
@@ -78,7 +77,7 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
             })
             .detach();
             let bounds = Bounds::centered(None, size(px(1280.), px(820.)), cx);
-            gpui_kit::open_window(
+            let (window, view) = gpui_kit::open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     window_min_size: Some(size(px(980.), px(640.))),
@@ -96,6 +95,18 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
                 },
             )
             .expect("Open native window");
+            // Quitting and closing the window first write pending playlist edits to Yoto.
+            let quitting = view.clone();
+            cx.on_action(move |_: &Quit, cx| {
+                if quitting.update(cx, |view, cx| view.request_quit(cx)) {
+                    cx.quit();
+                }
+            });
+            let _ = window.update(cx, |_, window, cx| {
+                window.on_window_should_close(cx, move |_, cx| {
+                    view.update(cx, |view, cx| view.request_quit(cx))
+                });
+            });
             cx.activate(true);
         });
     shutdown.shutdown();

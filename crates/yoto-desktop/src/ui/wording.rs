@@ -115,11 +115,31 @@ pub mod autosave {
     pub const WRITING_AND_CHECKING: &str = "Envoi et vérification sur Yoto…";
     /// Under the playlist options.
     pub const AUTOMATIC: &str = "Les modifications sont enregistrées automatiquement sur Yoto, dès que vous faites une pause ou quittez un champ.";
+    /// Why changes wait when a playlist needs the parent first.
+    pub const NEEDS_CHECK: &str =
+        "Cette playlist doit d’abord être vérifiée : ouvrez-la ou consultez « Imports ».";
     /// A write that failed, naming the playlist (the parent may be elsewhere in the app).
     pub fn not_saved(title: &str, reason: &str) -> String {
         format!(
             "Les modifications de « {title} » n’ont pas pu être enregistrées sur Yoto. {reason}"
         )
+    }
+    /// Shown while the app writes the last changes before quitting.
+    pub const QUIT_SAVING: &str =
+        "Enregistrement des dernières modifications sur Yoto avant de quitter…";
+    /// The question asked when some changes could not be written before quitting.
+    pub const QUIT_TITLE: &str = "Des modifications ne sont pas enregistrées sur Yoto";
+    pub const QUIT_ANYWAY: &str = "Quitter quand même";
+    /// When Yoto has not confirmed a write in time.
+    pub const QUIT_TIMED_OUT: &str = "Yoto n’a pas encore confirmé l’enregistrement.";
+    /// The body of that question: one line per playlist, then what quitting means.
+    pub fn quit_description(playlists: &[(String, String)]) -> String {
+        let lines = playlists
+            .iter()
+            .map(|(title, reason)| format!("« {title} » : {reason}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("{lines}\n\nSi vous quittez maintenant, ces modifications seront perdues.")
     }
 }
 
