@@ -27,6 +27,8 @@ pub fn now() -> u64 {
 }
 
 pub mod bridge;
+/// Still named `Yoto` after the app became YotoMediaManager, like the keyring services
+/// (`dev.yoto.desktop.*`), so an existing library and sign-in survive the rename.
 pub fn default_profile() -> yoto_domain::Result<std::path::PathBuf> {
     if let Some(path) = std::env::var_os("YOTO_PROFILE") {
         return Ok(path.into());

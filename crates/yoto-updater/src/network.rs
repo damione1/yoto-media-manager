@@ -19,7 +19,10 @@ async fn bounded(response: reqwest::Response, maximum: u64) -> Result<Vec<u8>, U
     }
     Ok(bytes)
 }
-pub(super) async fn check(client: &reqwest::Client) -> Result<Option<Release>, UpdateError> {
+pub(super) async fn check(
+    client: &reqwest::Client,
+    current: &AppVersion,
+) -> Result<Option<Release>, UpdateError> {
     let response = client
         .get(MANIFEST_URL)
         .timeout(std::time::Duration::from_secs(30))
@@ -32,11 +35,7 @@ pub(super) async fn check(client: &reqwest::Client) -> Result<Option<Release>, U
     let bytes = bounded(response, 128_000).await?;
     let manifest =
         serde_json::from_slice(&bytes).map_err(|e| UpdateError::Manifest(e.to_string()))?;
-    select_release(
-        manifest,
-        &Version::parse(CURRENT_VERSION).map_err(|e| UpdateError::Manifest(e.to_string()))?,
-        Platform::current()?,
-    )
+    select_release(manifest, current, Platform::current()?)
 }
 pub(super) async fn download(
     owner: &Updater,
@@ -88,10 +87,7 @@ pub(super) async fn download(
         // of an older authentic archive under a forged newer manifest.
         verify_identity(
             &release.artifact.signature,
-            &format!(
-                "YotoMediaManager {}",
-                release.platform.archive_name(&release.version)
-            ),
+            &format!("YotoMediaManager {}", release.archive_name()),
         )?;
         install::prepare(&bytes, release.platform, release.version.clone())
     })

@@ -8,9 +8,9 @@ sidebar_position: 2
 
 ## Install the app
 
-On macOS, open the installation disk and drag **Yoto** into **Applications**. On Windows, run the installer and follow its steps. Then open the app from Applications or the Start menu.
+On macOS, open the installation disk and drag **YotoMediaManager** into **Applications**. On Windows, run the installer and follow its steps. Then open the app from Applications or the Start menu.
 
-Development builds may be named **Yoto Dev**. A signed development build may still be awaiting notarization. If macOS prevents it from opening, check where the file came from and see [troubleshooting](troubleshooting.md).
+Development builds may be named **YotoMediaManager Dev**. A signed development build may still be awaiting notarization. If macOS prevents it from opening, check where the file came from and see [troubleshooting](troubleshooting.md).
 
 ## Add your first audio file
 

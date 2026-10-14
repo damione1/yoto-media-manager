@@ -7,9 +7,9 @@ import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
-import tomllib
 import unittest
 import zipfile
 from unittest import mock
@@ -21,17 +21,34 @@ spec.loader.exec_module(release)
 
 
 class ReleaseVersionTests(unittest.TestCase):
-    def test_only_matching_stable_version_tags_are_accepted(self):
-        version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
-        for tag in ["v" + version, "master", "v999.0.0", "v01.0.0", "v1.2.3-beta.1", "v1.2.3+build"]:
+    def test_version_is_the_stable_release_tag(self):
+        accepted = {"v1.2.3": "1.2.3", "v0.0.1": "0.0.1", "v10.20.30": "10.20.30"}
+        rejected = ["master", "1.2.3", "v1.2", "v01.0.0", "v1.02.0", "v1.2.3-beta.1", "v1.2.3+build", "vnightly", "", "v1.2.3 "]
+        for tag in [*accepted, *rejected]:
             with self.subTest(tag=tag):
                 result = subprocess.run(
                     ["python3", str(ROOT / "scripts/release_version.py")],
                     env={**os.environ, "GITHUB_REF_NAME": tag}, capture_output=True, text=True,
                 )
-                self.assertEqual(result.returncode == 0, tag == "v" + version)
-                if result.returncode == 0:
-                    self.assertEqual(result.stdout, "version=" + version + "\n")
+                self.assertEqual(result.returncode == 0, tag in accepted)
+                if tag in accepted:
+                    self.assertEqual(result.stdout, "version=" + accepted[tag] + "\n")
+
+    def test_build_version_is_validated_and_absent_means_nightly(self):
+        distribution = sys.modules["distribution_utils"]
+        with mock.patch.dict(os.environ, {"YOTO_APP_VERSION": ""}):
+            self.assertIsNone(distribution.app_version())
+            with self.assertRaisesRegex(SystemExit, "YOTO_APP_VERSION"):
+                release.version()
+        with mock.patch.dict(os.environ):
+            os.environ.pop("YOTO_APP_VERSION", None)
+            self.assertIsNone(distribution.app_version())
+        for value in ["v1.2.3", "nightly", "1.2", "01.2.3", "1.2.3-rc.1"]:
+            with self.subTest(value=value), mock.patch.dict(os.environ, {"YOTO_APP_VERSION": value}):
+                with self.assertRaises(SystemExit):
+                    distribution.app_version()
+        with mock.patch.dict(os.environ, {"YOTO_APP_VERSION": "1.2.3"}):
+            self.assertEqual(release.version(), "1.2.3")
 
 
 class UpdaterReleaseTests(unittest.TestCase):
@@ -40,7 +57,9 @@ class UpdaterReleaseTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = pathlib.Path(self.temporary.name)
         self.version = "1.2.3"
-        (self.root / "Cargo.toml").write_text('[workspace.package]\nversion = "1.2.3"\n')
+        self.environment = mock.patch.dict(os.environ, {"YOTO_APP_VERSION": self.version})
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
         (self.root / "distribution").mkdir()
         (self.root / "distribution/THIRD-PARTY-NOTICES.md").write_text("Test notices\n")
         self.patch = mock.patch.object(release, "ROOT", self.root)
@@ -48,7 +67,7 @@ class UpdaterReleaseTests(unittest.TestCase):
         self.addCleanup(self.patch.stop)
         for target, (platform, extension) in release.PLATFORMS.items():
             if extension == "tar.gz":
-                app = self.root / "dist" / target / "Yoto.app"
+                app = self.root / "dist" / target / "YotoMediaManager.app"
                 (app / "Contents/MacOS").mkdir(parents=True)
                 (app / "Contents/MacOS/yoto-desktop").write_bytes(b"test desktop")
                 (app / "Contents/Resources").mkdir()
@@ -92,18 +111,23 @@ class UpdaterReleaseTests(unittest.TestCase):
         self.assertEqual(manifest["version"], self.version)
         self.assertEqual(set(manifest["platforms"]), {pair[0] for pair in release.PLATFORMS.values()})
         for platform, extension in release.PLATFORMS.values():
-            archive = folder / f"Yoto-{self.version}-{platform}.{extension}"
+            archive = folder / f"YotoMediaManager-{self.version}-{platform}.{extension}"
             self.assertEqual(manifest["platforms"][platform]["size"], archive.stat().st_size)
+            self.assertEqual(
+                manifest["platforms"][platform]["url"],
+                f"https://github.com/damione1/yoto-media-manager/releases/download/v{self.version}/{archive.name}",
+            )
             if extension == "tar.gz":
                 with tarfile.open(archive) as reader:
-                    link = reader.getmember("Yoto.app/Contents/Resources/current")
+                    link = reader.getmember("YotoMediaManager.app/Contents/Resources/current")
                     self.assertTrue(link.issym())
                     self.assertEqual(link.linkname, "../MacOS/yoto-desktop")
             else:
                 with zipfile.ZipFile(archive) as reader:
                     self.assertEqual(set(reader.namelist()), {
-                        "Yoto/yoto-desktop.exe", "Yoto/yoto-mcp.exe", "Yoto/tools/ffmpeg.exe",
-                        "Yoto/tools/nested/manifest.json", "Yoto/THIRD-PARTY-NOTICES.md",
+                        "YotoMediaManager/yoto-desktop.exe", "YotoMediaManager/yoto-mcp.exe",
+                        "YotoMediaManager/tools/ffmpeg.exe", "YotoMediaManager/tools/nested/manifest.json",
+                        "YotoMediaManager/THIRD-PARTY-NOTICES.md",
                     })
         self.assertFalse(list(self.root.rglob("private.key")))
 
@@ -139,14 +163,14 @@ class UpdaterReleaseTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"YOTO_UPDATER_PRIVATE_KEY": key}), mock.patch.object(release.subprocess, "run", side_effect=quiet_run):
             folder = self.build_all()
             release.assemble(folder)
-            archive = folder / "Yoto-1.2.3-windows-x86_64.zip"
+            archive = folder / "YotoMediaManager-1.2.3-windows-x86_64.zip"
             original = archive.read_bytes()
             archive.write_bytes(bytes([original[0] ^ 1]) + original[1:])
             with self.assertRaises(subprocess.CalledProcessError):
                 release.assemble(folder)
             archive.write_bytes(original)
             signature = archive.with_name(archive.name + ".minisig")
-            quiet_run(["minisign", "-S", "-s", str(private), "-m", str(archive), "-x", str(signature), "-t", "YotoMediaManager Yoto-1.0.0-windows-x86_64.zip"], check=True)
+            quiet_run(["minisign", "-S", "-s", str(private), "-m", str(archive), "-x", str(signature), "-t", "YotoMediaManager YotoMediaManager-1.0.0-windows-x86_64.zip"], check=True)
             metadata_path = folder / "windows-x86_64.json"
             metadata = json.loads(metadata_path.read_text())
             metadata["signature"] = base64.b64encode(signature.read_bytes()).decode()

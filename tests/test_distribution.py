@@ -12,7 +12,7 @@ class DistributionTests(unittest.TestCase):
             with self.assertRaises(ValueError):distribution.manifest(root,'aarch64-apple-darwin')
     def test_dmg_staging_twice_is_fresh_after_interrupted_run(self):
         with tempfile.TemporaryDirectory() as directory:
-            root=pathlib.Path(directory);app=root/'Yoto.app';app.mkdir();(app/'current').write_text('current')
+            root=pathlib.Path(directory);app=root/'YotoMediaManager.app';app.mkdir();(app/'current').write_text('current')
             first=distribution.stage_dmg(app,root);old=pathlib.Path(first.name);(old/app.name/'obsolete').write_text('old')
             second=distribution.stage_dmg(app,root);new=pathlib.Path(second.name);self.assertNotEqual(old,new);self.assertFalse((new/app.name/'obsolete').exists());self.assertTrue((new/'Applications').is_symlink());self.assertEqual((new/'Applications').readlink(),pathlib.Path('/Applications'))
             first.cleanup();second.cleanup()

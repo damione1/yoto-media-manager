@@ -9469,7 +9469,7 @@ dependencies = [
 
 [[package]]
 name = "yoto-contracts"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "schemars 1.2.2",
  "serde",
@@ -9478,7 +9478,7 @@ dependencies = [
 
 [[package]]
 name = "yoto-desktop"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
@@ -9498,7 +9498,7 @@ dependencies = [
 
 [[package]]
 name = "yoto-domain"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "schemars 1.2.2",
  "serde",
@@ -9510,7 +9510,7 @@ dependencies = [
 
 [[package]]
 name = "yoto-infra"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
@@ -9548,7 +9548,7 @@ dependencies = [
 
 [[package]]
 name = "yoto-mcp"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "rmcp",
  "schemars 1.2.2",
@@ -9561,7 +9561,7 @@ dependencies = [
 
 [[package]]
 name = "yoto-updater"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
  "flate2",

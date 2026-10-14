@@ -1,6 +1,6 @@
 use super::*;
 use gpui_kit::component::{WindowExt, spinner::Spinner};
-use yoto_updater::{CURRENT_VERSION, UpdateAction, UpdateState};
+use yoto_updater::{AppVersion, CURRENT_VERSION, UpdateAction, UpdateState};
 pub(super) struct UpdatePanel {
     state: Arc<UpdateState>,
     notice: Option<Failure>,
@@ -62,7 +62,8 @@ impl UpdatePanel {
                 }
             }
         });
-        if !cfg!(debug_assertions) {
+        // A nightly is never checked on its own: it is not a published release to keep current.
+        if !cfg!(debug_assertions) && !AppVersion::current().is_nightly() {
             let service = service.clone();
             runtime.spawn(async move {
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -184,13 +185,21 @@ impl Render for UpdatePanel {
                         ))),
                 ),
         );
+        let nightly = AppVersion::current().is_nightly();
+        if nightly {
+            body = body.child(theme::note(tr!(
+                "Version de développement (nightly) : les mises à jour ne sont ni recherchées ni installées automatiquement. Pour passer à une version publiée, téléchargez-la depuis GitHub Releases."
+            )));
+        }
         let mut action = None;
         match self.state.as_ref() {
             UpdateState::Idle => {
-                body = body.child(theme::note(tr!(
-                    "Recevez les nouvelles versions de {product} directement dans l’application.",
-                    product = PRODUCT_NAME
-                )));
+                if !nightly {
+                    body = body.child(theme::note(tr!(
+                        "Recevez les nouvelles versions de {product} directement dans l’application.",
+                        product = PRODUCT_NAME
+                    )));
+                }
                 action = Some(theme::pill(
                     Button::new("check-update")
                         .label(tr!("Rechercher une mise à jour"))
@@ -234,17 +243,20 @@ impl Render for UpdatePanel {
                         version = release.version
                     )))
                     .child(release_notes(&release.notes));
-                action = Some(theme::pill(
-                    Button::new("download-update")
-                        .label(tr!("Télécharger la mise à jour"))
-                        .on_click(
-                            cx.listener(|view, _, _, _| view.request(UpdateAction::Download)),
-                        ),
-                    Look::Primary,
-                    Height::Medium,
-                    false,
-                    cx,
-                ));
+                // A nightly is not replaced in place: the note above says where to get it.
+                action = (!nightly).then(|| {
+                    theme::pill(
+                        Button::new("download-update")
+                            .label(tr!("Télécharger la mise à jour"))
+                            .on_click(
+                                cx.listener(|view, _, _, _| view.request(UpdateAction::Download)),
+                            ),
+                        Look::Primary,
+                        Height::Medium,
+                        false,
+                        cx,
+                    )
+                });
             }
             UpdateState::Downloading {
                 received, total, ..

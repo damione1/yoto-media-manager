@@ -2232,6 +2232,16 @@ msgid "Version installée : {version}"
 msgstr "Installed version: {version}"
 
 #: src/ui/update.rs
+msgid ""
+"Version de développement (nightly) : les mises à jour ne sont ni recherchées "
+"ni installées automatiquement. Pour passer à une version publiée, "
+"téléchargez-la depuis GitHub Releases."
+msgstr ""
+"Development build (nightly): updates are neither checked for nor installed "
+"automatically. To switch to a published version, download it from GitHub "
+"Releases."
+
+#: src/ui/update.rs
 #, rust-format
 msgid ""
 "Recevez les nouvelles versions de {product} directement dans l’application."
