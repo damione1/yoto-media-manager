@@ -907,7 +907,15 @@ impl Service {
             .insert(account.clone(), Arc::new(AccountSession::new()));
         Ok(())
     }
-    async fn connected_account(&self, account: Account) -> Result<()> {
+    async fn connected_account(&self, mut account: Account) -> Result<()> {
+        // Reconnecting without a name from Yoto keeps the one read before.
+        if account.label == crate::auth::fallback_label(&account.id)
+            && let Some(known) = self
+                .db
+                .get::<Account>(Table::Account, account.id.as_str())?
+        {
+            account.label = known.label;
+        }
         self.db.put(Table::Account, account.id.as_str(), &account)?;
         self.activate_account_session(&account.id).await?;
         self.select_account(account.id)?;
