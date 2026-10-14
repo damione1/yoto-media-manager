@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:07-0400\n"
+"POT-Creation-Date: 2026-10-14 00:08-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -12,7 +12,7 @@ msgstr ""
 
 #: src/i18n.rs src/ui/imports.rs src/ui/pixelart.rs
 #: src/ui/playlist_media_picker.rs src/ui/playlist_move_picker.rs
-#: src/ui/wording.rs
+#: src/ui/trim.rs src/ui/wording.rs
 msgid "Annuler"
 msgstr "Cancel"
 
@@ -267,7 +267,8 @@ msgstr "New group"
 msgid "Fermer l’éditeur de groupe"
 msgstr "Close the group editor"
 
-#: src/ui/group.rs src/ui/imports.rs src/ui/update.rs src/ui/wording.rs
+#: src/ui/group.rs src/ui/imports.rs src/ui/trim.rs src/ui/update.rs
+#: src/ui/wording.rs
 msgid "Fermer"
 msgstr "Close"
 
@@ -482,7 +483,7 @@ msgstr "Ready in the library"
 msgid "Média retiré de votre médiathèque"
 msgstr "Media removed from your library"
 
-#: src/ui/imports.rs src/ui/library.rs
+#: src/ui/imports.rs src/ui/library.rs src/ui/trim.rs
 msgid "Écouter"
 msgstr "Listen"
 
@@ -594,7 +595,7 @@ msgstr "Select {title}"
 msgid "Découpé"
 msgstr "Trimmed"
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/trim.rs
 msgid "Original"
 msgstr "Original"
 
@@ -638,11 +639,11 @@ msgid_plural "{count} audios · sur cet ordinateur"
 msgstr[0] "{count} audio · on this computer"
 msgstr[1] "{count} audios · on this computer"
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/trim.rs
 msgid "Titre"
 msgstr "Title"
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/trim.rs
 msgid "Auteur"
 msgstr "Author"
 
@@ -659,7 +660,7 @@ msgstr "Newest"
 msgid "Trier par : {order}"
 msgstr "Sort by: {order}"
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/trim.rs
 msgid "Plus d’options"
 msgstr "More options"
 
@@ -683,7 +684,7 @@ msgstr[1] "{count} audios selected"
 msgid "Désélectionner"
 msgstr "Deselect"
 
-#: src/ui/library.rs src/ui/players.rs
+#: src/ui/library.rs src/ui/players.rs src/ui/trim.rs
 msgid "Supprimer"
 msgstr "Delete"
 
@@ -1156,6 +1157,169 @@ msgid ""
 "références sont conservés."
 msgstr ""
 "Choose the chapter to put this track in. Its title and references are kept."
+
+#: src/ui/trim.rs
+msgid "Étiquettes séparées par des virgules"
+msgstr "Tags separated by commas"
+
+#: src/ui/trim.rs
+msgid "La fin doit se trouver après le début."
+msgstr "The end must come after the start."
+
+#: src/ui/trim.rs
+msgid ""
+"Choisissez un début et une fin valides, en minutes et secondes (par exemple "
+"1:05)."
+msgstr ""
+"Choose a valid start and end, in minutes and seconds (for example 1:05)."
+
+#: src/ui/trim.rs
+msgid "Début invalide"
+msgstr "Invalid start"
+
+#: src/ui/trim.rs
+msgid "Fin invalide"
+msgstr "Invalid end"
+
+#: src/ui/trim.rs
+msgid "Découpe enregistrée. Vous pouvez l’ajouter à une playlist."
+msgstr "Trim saved. You can add it to a playlist."
+
+#: src/ui/trim.rs
+msgid "Préparation annulée."
+msgstr "Preparation cancelled."
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Préparation : {state}…"
+msgstr "Preparing: {state}…"
+
+#: src/ui/trim.rs
+msgid "Préparation de votre découpe…"
+msgstr "Preparing your trim…"
+
+#: src/ui/trim.rs
+msgid "Informations enregistrées."
+msgstr "Details saved."
+
+#: src/ui/trim.rs
+msgid "Choisissez un début et une fin valides avant d’appliquer."
+msgstr "Choose a valid start and end before applying."
+
+#: src/ui/trim.rs
+msgid "Modifier les informations"
+msgstr "Edit details"
+
+#: src/ui/trim.rs
+msgid "Étiquettes"
+msgstr "Tags"
+
+#: src/ui/trim.rs
+msgid "Enregistrer"
+msgstr "Save"
+
+#: src/ui/trim.rs
+msgid "Analyse de la forme d’onde…"
+msgstr "Analysing the waveform…"
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Découper « {title} »"
+msgstr "Trim “{title}”"
+
+#: src/ui/trim.rs
+msgid "Déplacez les poignées pour garder la partie qui vous plaît."
+msgstr "Move the handles to keep the part you like."
+
+#: src/ui/trim.rs
+msgid "Début"
+msgstr "Start"
+
+#: src/ui/trim.rs
+msgid "Fin"
+msgstr "End"
+
+#: src/ui/trim.rs
+msgid "Durée gardée"
+msgstr "Kept length"
+
+#: src/ui/trim.rs
+msgid "Préparation de l’écoute…"
+msgstr "Getting ready to play…"
+
+#: src/ui/trim.rs
+msgid "Arrêter l’écoute"
+msgstr "Stop listening"
+
+#: src/ui/trim.rs
+msgid "Écouter la sélection"
+msgstr "Listen to the selection"
+
+#: src/ui/trim.rs
+msgid "Égaliser le volume"
+msgstr "Level the volume"
+
+#: src/ui/trim.rs
+msgid "Utile quand une chanson est beaucoup plus forte que les autres."
+msgstr "Useful when one song is much louder than the others."
+
+#: src/ui/trim.rs
+msgid ""
+"Votre original est conservé. Appliquer crée une version pour vos playlists."
+msgstr "Your original is kept. Applying creates a version for your playlists."
+
+#: src/ui/trim.rs
+msgid "Préparation…"
+msgstr "Preparing…"
+
+#: src/ui/trim.rs
+msgid "Appliquer"
+msgstr "Apply"
+
+#: src/ui/trim.rs
+msgid "Ce média n’est plus disponible."
+msgstr "This media is no longer available."
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Supprimer « {title} » ?"
+msgstr "Delete “{title}”?"
+
+#: src/ui/trim.rs
+msgid ""
+"L’audio et ses versions préparées seront effacés de cet ordinateur. Cette "
+"action est irréversible. Un média utilisé dans une playlist ne peut pas être "
+"supprimé."
+msgstr ""
+"The audio and its prepared versions will be erased from this computer. This "
+"cannot be undone. A media item used in a playlist cannot be deleted."
+
+#: src/ui/trim.rs
+msgid "Version découpée"
+msgstr "Trimmed version"
+
+#: src/ui/trim.rs
+msgid "Original conservé"
+msgstr "Original kept"
+
+#: src/ui/trim.rs
+msgid "Exporter l’original"
+msgstr "Export the original"
+
+#: src/ui/trim.rs
+msgid "Supprimer ce média local"
+msgstr "Delete this local media"
+
+#: src/ui/trim.rs
+msgid "Découper l’audio"
+msgstr "Trim the audio"
+
+#. TRANSLATORS: a time with tenths of a second, such as 1:05,4; keep the
+#. language's decimal separator.
+#: src/ui/trim.rs
+#, rust-format
+msgid "{clock},{tenth}"
+msgstr "{clock}.{tenth}"
 
 #: src/ui/update.rs
 msgid "Mises à jour"

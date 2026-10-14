@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:07-0400\n"
+"POT-Creation-Date: 2026-10-14 00:08-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -12,7 +12,7 @@ msgstr ""
 
 #: src/i18n.rs src/ui/imports.rs src/ui/pixelart.rs
 #: src/ui/playlist_media_picker.rs src/ui/playlist_move_picker.rs
-#: src/ui/wording.rs
+#: src/ui/trim.rs src/ui/wording.rs
 msgid "Annuler"
 msgstr "Annuler"
 
@@ -272,7 +272,8 @@ msgstr "Nouveau groupe"
 msgid "Fermer l’éditeur de groupe"
 msgstr "Fermer l’éditeur de groupe"
 
-#: src/ui/group.rs src/ui/imports.rs src/ui/update.rs src/ui/wording.rs
+#: src/ui/group.rs src/ui/imports.rs src/ui/trim.rs src/ui/update.rs
+#: src/ui/wording.rs
 msgid "Fermer"
 msgstr "Fermer"
 
@@ -491,7 +492,7 @@ msgstr "Prêt dans la médiathèque"
 msgid "Média retiré de votre médiathèque"
 msgstr "Média retiré de votre médiathèque"
 
-#: src/ui/imports.rs src/ui/library.rs
+#: src/ui/imports.rs src/ui/library.rs src/ui/trim.rs
 msgid "Écouter"
 msgstr "Écouter"
 
@@ -604,7 +605,7 @@ msgstr "Sélectionner {title}"
 msgid "Découpé"
 msgstr "Découpé"
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/trim.rs
 msgid "Original"
 msgstr "Original"
 
@@ -648,11 +649,11 @@ msgid_plural "{count} audios · sur cet ordinateur"
 msgstr[0] "{count} audio · sur cet ordinateur"
 msgstr[1] "{count} audios · sur cet ordinateur"
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/trim.rs
 msgid "Titre"
 msgstr "Titre"
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/trim.rs
 msgid "Auteur"
 msgstr "Auteur"
 
@@ -669,7 +670,7 @@ msgstr "Plus récents"
 msgid "Trier par : {order}"
 msgstr "Trier par : {order}"
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/trim.rs
 msgid "Plus d’options"
 msgstr "Plus d’options"
 
@@ -693,7 +694,7 @@ msgstr[1] "{count} audios sélectionnés"
 msgid "Désélectionner"
 msgstr "Désélectionner"
 
-#: src/ui/library.rs src/ui/players.rs
+#: src/ui/library.rs src/ui/players.rs src/ui/trim.rs
 msgid "Supprimer"
 msgstr "Supprimer"
 
@@ -1175,6 +1176,172 @@ msgid ""
 msgstr ""
 "Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses "
 "références sont conservés."
+
+#: src/ui/trim.rs
+msgid "Étiquettes séparées par des virgules"
+msgstr "Étiquettes séparées par des virgules"
+
+#: src/ui/trim.rs
+msgid "La fin doit se trouver après le début."
+msgstr "La fin doit se trouver après le début."
+
+#: src/ui/trim.rs
+msgid ""
+"Choisissez un début et une fin valides, en minutes et secondes (par exemple "
+"1:05)."
+msgstr ""
+"Choisissez un début et une fin valides, en minutes et secondes (par exemple "
+"1:05)."
+
+#: src/ui/trim.rs
+msgid "Début invalide"
+msgstr "Début invalide"
+
+#: src/ui/trim.rs
+msgid "Fin invalide"
+msgstr "Fin invalide"
+
+#: src/ui/trim.rs
+msgid "Découpe enregistrée. Vous pouvez l’ajouter à une playlist."
+msgstr "Découpe enregistrée. Vous pouvez l’ajouter à une playlist."
+
+#: src/ui/trim.rs
+msgid "Préparation annulée."
+msgstr "Préparation annulée."
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Préparation : {state}…"
+msgstr "Préparation : {state}…"
+
+#: src/ui/trim.rs
+msgid "Préparation de votre découpe…"
+msgstr "Préparation de votre découpe…"
+
+#: src/ui/trim.rs
+msgid "Informations enregistrées."
+msgstr "Informations enregistrées."
+
+#: src/ui/trim.rs
+msgid "Choisissez un début et une fin valides avant d’appliquer."
+msgstr "Choisissez un début et une fin valides avant d’appliquer."
+
+#: src/ui/trim.rs
+msgid "Modifier les informations"
+msgstr "Modifier les informations"
+
+#: src/ui/trim.rs
+msgid "Étiquettes"
+msgstr "Étiquettes"
+
+#: src/ui/trim.rs
+msgid "Enregistrer"
+msgstr "Enregistrer"
+
+#: src/ui/trim.rs
+msgid "Analyse de la forme d’onde…"
+msgstr "Analyse de la forme d’onde…"
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Découper « {title} »"
+msgstr "Découper « {title} »"
+
+#: src/ui/trim.rs
+msgid "Déplacez les poignées pour garder la partie qui vous plaît."
+msgstr "Déplacez les poignées pour garder la partie qui vous plaît."
+
+#: src/ui/trim.rs
+msgid "Début"
+msgstr "Début"
+
+#: src/ui/trim.rs
+msgid "Fin"
+msgstr "Fin"
+
+#: src/ui/trim.rs
+msgid "Durée gardée"
+msgstr "Durée gardée"
+
+#: src/ui/trim.rs
+msgid "Préparation de l’écoute…"
+msgstr "Préparation de l’écoute…"
+
+#: src/ui/trim.rs
+msgid "Arrêter l’écoute"
+msgstr "Arrêter l’écoute"
+
+#: src/ui/trim.rs
+msgid "Écouter la sélection"
+msgstr "Écouter la sélection"
+
+#: src/ui/trim.rs
+msgid "Égaliser le volume"
+msgstr "Égaliser le volume"
+
+#: src/ui/trim.rs
+msgid "Utile quand une chanson est beaucoup plus forte que les autres."
+msgstr "Utile quand une chanson est beaucoup plus forte que les autres."
+
+#: src/ui/trim.rs
+msgid ""
+"Votre original est conservé. Appliquer crée une version pour vos playlists."
+msgstr ""
+"Votre original est conservé. Appliquer crée une version pour vos playlists."
+
+#: src/ui/trim.rs
+msgid "Préparation…"
+msgstr "Préparation…"
+
+#: src/ui/trim.rs
+msgid "Appliquer"
+msgstr "Appliquer"
+
+#: src/ui/trim.rs
+msgid "Ce média n’est plus disponible."
+msgstr "Ce média n’est plus disponible."
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Supprimer « {title} » ?"
+msgstr "Supprimer « {title} » ?"
+
+#: src/ui/trim.rs
+msgid ""
+"L’audio et ses versions préparées seront effacés de cet ordinateur. Cette "
+"action est irréversible. Un média utilisé dans une playlist ne peut pas être "
+"supprimé."
+msgstr ""
+"L’audio et ses versions préparées seront effacés de cet ordinateur. Cette "
+"action est irréversible. Un média utilisé dans une playlist ne peut pas être "
+"supprimé."
+
+#: src/ui/trim.rs
+msgid "Version découpée"
+msgstr "Version découpée"
+
+#: src/ui/trim.rs
+msgid "Original conservé"
+msgstr "Original conservé"
+
+#: src/ui/trim.rs
+msgid "Exporter l’original"
+msgstr "Exporter l’original"
+
+#: src/ui/trim.rs
+msgid "Supprimer ce média local"
+msgstr "Supprimer ce média local"
+
+#: src/ui/trim.rs
+msgid "Découper l’audio"
+msgstr "Découper l’audio"
+
+#. TRANSLATORS: a time with tenths of a second, such as 1:05,4; keep the
+#. language's decimal separator.
+#: src/ui/trim.rs
+#, rust-format
+msgid "{clock},{tenth}"
+msgstr "{clock},{tenth}"
 
 #: src/ui/update.rs
 msgid "Mises à jour"

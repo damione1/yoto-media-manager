@@ -958,6 +958,9 @@ impl AppView {
         for editor in self.group_editors.values() {
             editor.update(cx, |e, cx| e.relabel(window, cx));
         }
+        for panel in self.trims.values() {
+            panel.update(cx, |p, cx| p.relabel(window, cx));
+        }
     }
     /// Keep the interface settings for the next launch. Failing to write them only costs
     /// the choice at the next launch, so it is reported without interrupting.

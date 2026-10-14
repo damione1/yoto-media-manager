@@ -81,12 +81,12 @@ impl TrimPanel {
         let title = cx.new(|cx| InputState::new(window, cx).default_value(media.title.clone()));
         let author = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Auteur")
+                .placeholder(tr!("Auteur"))
                 .default_value(media.author.clone())
         });
         let tags = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Étiquettes séparées par des virgules")
+                .placeholder(tr!("Étiquettes séparées par des virgules"))
                 .default_value(media.tags.join(", "))
         });
         let start = cx.new(|cx| InputState::new(window, cx).default_value(trim_text(0.)));
@@ -117,7 +117,7 @@ impl TrimPanel {
             match bounded_slider_range(value.start(), value.end(), v.media.info.duration) {
                 Ok(trim) => v.set_selection(trim, SelectionOrigin::Handles, window, cx),
                 Err(_) => {
-                    v.status = "La fin doit se trouver après le début.".into();
+                    v.status = tr!("La fin doit se trouver après le début.").into();
                     cx.notify();
                 }
             }
@@ -136,7 +136,7 @@ impl TrimPanel {
                             }
                             Err(_) => {
                                 v.status =
-                                    "Choisissez un début et une fin valides, en minutes et secondes (par exemple 1:05).".into();
+                                    tr!("Choisissez un début et une fin valides, en minutes et secondes (par exemple 1:05).").into();
                                 cx.notify();
                             }
                         }
@@ -251,19 +251,19 @@ impl TrimPanel {
     /// The selection typed in the two fields. A field still showing the current bound keeps
     /// its exact value, so displaying whole seconds never moves a handle by itself.
     fn range(&self, cx: &App) -> yoto_domain::Result<TrimRange> {
-        let read = |input: &Entity<InputState>, current: MediaTime, label: &str| {
+        let read = |input: &Entity<InputState>, current: MediaTime, invalid: &str| {
             let text = input.read(cx).value().trim().to_owned();
             if text == trim_text(current.seconds()) {
                 Ok(current)
             } else {
                 parse_time(&text)
-                    .ok_or_else(|| Failure::Validation(format!("{label} invalide")))
+                    .ok_or_else(|| Failure::Validation(invalid.to_owned()))
                     .and_then(MediaTime::from_seconds)
             }
         };
         TrimRange::new(
-            read(&self.start, self.selection.start(), "Début")?,
-            read(&self.end, self.selection.end(), "Fin")?,
+            read(&self.start, self.selection.start(), tr!("Début invalide"))?,
+            read(&self.end, self.selection.end(), tr!("Fin invalide"))?,
             self.media.info.duration,
         )
     }
@@ -339,7 +339,8 @@ impl TrimPanel {
                 draft.preparation = Preparation::Ready(id);
                 self.prepared = Some(id);
                 self.selected_version = Some(recipe.trim);
-                self.status = "Découpe enregistrée. Vous pouvez l’ajouter à une playlist.".into();
+                self.status =
+                    tr!("Découpe enregistrée. Vous pouvez l’ajouter à une playlist.").into();
             } else if let Some(job) = snapshot.jobs.iter().find(|j| match j.request {
                 JobRequest::Encode { recipe } => recipe == id,
                 JobRequest::Import { .. } | JobRequest::Publish { .. } => false,
@@ -351,7 +352,7 @@ impl TrimPanel {
                     }
                     JobState::Cancelled => {
                         draft.preparation = Preparation::Failed;
-                        self.status = "Préparation annulée.".into();
+                        self.status = tr!("Préparation annulée.").into();
                     }
                     JobState::Queued
                     | JobState::Running { .. }
@@ -360,8 +361,10 @@ impl TrimPanel {
                     | JobState::Conflict { .. }
                     | JobState::Reconciling
                     | JobState::Completed { .. } => {
-                        self.status =
-                            format!("Préparation : {}…", wording::labels::job_state(&job.state))
+                        self.status = tr!(
+                            "Préparation : {state}…",
+                            state = wording::labels::job_state(&job.state)
+                        )
                     }
                 }
             }
@@ -413,7 +416,7 @@ impl TrimPanel {
                         if let Some(draft) = &mut view.editing {
                             draft.preparation = Preparation::Encoding(id);
                         }
-                        view.status = "Préparation de votre découpe…".into();
+                        view.status = tr!("Préparation de votre découpe…").into();
                     }
                     Ok(Ok(
                         Reply::AppUpdate(_)
@@ -433,7 +436,7 @@ impl TrimPanel {
                             view.media.title = metadata.title;
                             view.media.author = metadata.author;
                             view.media.tags = metadata.tags;
-                            view.status = "Informations enregistrées.".into();
+                            view.status = tr!("Informations enregistrées.").into();
                             // Saving is the end of this dialog: close it, as « Appliquer » does.
                             if view.editing.is_none()
                                 && let Some(handle) = view.editor_window.take()
@@ -472,6 +475,14 @@ impl TrimPanel {
     }
     /// Called when the open media changes: a panel that is not shown stops asking the
     /// player for its position, and forgets a playback it no longer follows.
+    /// Input placeholders, again in the interface language after it changed.
+    pub fn relabel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.author
+            .update(cx, |s, cx| s.set_placeholder(tr!("Auteur"), window, cx));
+        self.tags.update(cx, |s, cx| {
+            s.set_placeholder(tr!("Étiquettes séparées par des virgules"), window, cx)
+        });
+    }
     pub fn set_active(&mut self, active: bool, cx: &mut Context<Self>) {
         if self.active != active {
             self.active = active;
@@ -545,7 +556,7 @@ impl TrimPanel {
                 if let Some(draft) = &mut self.editing {
                     draft.preparation = Preparation::Preparing;
                 }
-                self.status = "Préparation de votre découpe…".into();
+                self.status = tr!("Préparation de votre découpe…").into();
                 self.stop(cx);
                 self.send(
                     Command::Prepare {
@@ -558,7 +569,8 @@ impl TrimPanel {
                 cx.notify();
             }
             Err(_) => {
-                self.status = "Choisissez un début et une fin valides avant d’appliquer.".into();
+                self.status =
+                    tr!("Choisissez un début et une fin valides avant d’appliquer.").into();
                 cx.notify();
             }
         }
@@ -601,7 +613,7 @@ impl TrimPanel {
             let cancel = panel.clone();
             let dialog = match kind {
                 AudioEditor::Trim => dialog.close_button(false).w(px(820.)),
-                AudioEditor::Metadata => dialog.title("Modifier les informations").w(px(560.)),
+                AudioEditor::Metadata => dialog.title(tr!("Modifier les informations")).w(px(560.)),
             };
             dialog
                 .child(editor.clone())
@@ -662,9 +674,9 @@ impl TrimPanel {
             .flex()
             .flex_col()
             .gap(px(14.))
-            .child(field("Titre", &self.title))
-            .child(field("Auteur", &self.author))
-            .child(field("Étiquettes", &self.tags))
+            .child(field(tr!("Titre"), &self.title))
+            .child(field(tr!("Auteur"), &self.author))
+            .child(field(tr!("Étiquettes"), &self.tags))
             .children((!self.status.is_empty()).then(|| theme::note(self.status.clone())))
             .child(
                 div()
@@ -672,7 +684,7 @@ impl TrimPanel {
                     .gap(px(8.))
                     .justify_end()
                     .child(DialogClose::new().child(theme::pill(
-                        Button::new("cancel-metadata").label("Annuler"),
+                        Button::new("cancel-metadata").label(tr!("Annuler")),
                         Look::Outline,
                         Height::Medium,
                         false,
@@ -680,7 +692,7 @@ impl TrimPanel {
                     )))
                     .child(theme::pill(
                         Button::new("save-media")
-                            .label("Enregistrer")
+                            .label(tr!("Enregistrer"))
                             .on_click(cx.listener(|v, _, _, cx| {
                                 let metadata = MediaMetadata {
                                     title: v.title.read(cx).value().to_string(),
@@ -763,7 +775,7 @@ impl TrimPanel {
                     .font_weight(FontWeight::BOLD)
                     .text_color(theme::c(theme::MUTED))
                     .child(Spinner::new().color(theme::c(theme::SKY.accent)))
-                    .child("Analyse de la forme d’onde…"),
+                    .child(tr!("Analyse de la forme d’onde…")),
             );
         }
         let handle = |left: f32| {
@@ -850,7 +862,7 @@ impl TrimPanel {
         let close = DialogClose::new().child(theme::round(
             Button::new("close-trim")
                 .icon(IconName::X)
-                .accessibility_label("Fermer"),
+                .accessibility_label(tr!("Fermer")),
             Look::Soft(&theme::LIGHT_SAND),
             40.,
             busy,
@@ -871,14 +883,14 @@ impl TrimPanel {
                             .flex_1()
                             .min_w_0()
                             .child(theme::heading(
-                                format!("Découper « {} »", self.media.title),
+                                tr!("Découper « {title} »", title = self.media.title),
                                 26.,
                             ))
                             .child(
                                 div()
                                     .text_size(px(15.))
                                     .text_color(theme::c(theme::MUTED))
-                                    .child("Déplacez les poignées pour garder la partie qui vous plaît."),
+                                    .child(tr!("Déplacez les poignées pour garder la partie qui vous plaît.")),
                             ),
                     )
                     .child(close),
@@ -908,7 +920,7 @@ impl TrimPanel {
                             .flex()
                             .flex_col()
                             .gap(px(4.))
-                            .child(label("Début"))
+                            .child(label(tr!("Début")))
                             .child(time_field(&self.start)),
                     )
                     .child(
@@ -916,7 +928,7 @@ impl TrimPanel {
                             .flex()
                             .flex_col()
                             .gap(px(4.))
-                            .child(label("Fin"))
+                            .child(label(tr!("Fin")))
                             .child(time_field(&self.end)),
                     )
                     .child(
@@ -924,7 +936,7 @@ impl TrimPanel {
                             .flex()
                             .flex_col()
                             .gap(px(4.))
-                            .child(label("Durée gardée"))
+                            .child(label(tr!("Durée gardée")))
                             .child(
                                 theme::heading(duration_text(selection.duration().seconds()), 20.)
                                     .h(px(44.))
@@ -942,11 +954,11 @@ impl TrimPanel {
                                 IconName::Play
                             })
                             .label(if self.preview_pending.is_some() {
-                                "Préparation de l’écoute…"
+                                tr!("Préparation de l’écoute…")
                             } else if self.playing {
-                                "Arrêter l’écoute"
+                                tr!("Arrêter l’écoute")
                             } else {
-                                "Écouter la sélection"
+                                tr!("Écouter la sélection")
                             })
                             .on_click(cx.listener(|v, _, _, cx| {
                                 if v.playing {
@@ -982,19 +994,19 @@ impl TrimPanel {
                             .child(
                                 div()
                                     .font_weight(FontWeight::EXTRA_BOLD)
-                                    .child("Égaliser le volume"),
+                                    .child(tr!("Égaliser le volume")),
                             )
                             .child(
                                 div()
                                     .text_size(px(13.))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(theme::c(theme::MUTED))
-                                    .child("Utile quand une chanson est beaucoup plus forte que les autres."),
+                                    .child(tr!("Utile quand une chanson est beaucoup plus forte que les autres.")),
                             ),
                     )
                     .child(
                         Switch::new("normalize")
-                            .accessibility_label("Égaliser le volume")
+                            .accessibility_label(tr!("Égaliser le volume"))
                             .checked(self.normalization == Normalization::Loudness)
                             .disabled(busy)
                             .on_click(cx.listener(|v, checked, _, cx| {
@@ -1029,13 +1041,13 @@ impl TrimPanel {
                             .font_weight(FontWeight::BOLD)
                             .text_color(theme::c(theme::INK_SOFT))
                             .child(if self.status.is_empty() {
-                                "Votre original est conservé. Appliquer crée une version pour vos playlists.".to_owned()
+                                tr!("Votre original est conservé. Appliquer crée une version pour vos playlists.").to_owned()
                             } else {
                                 self.status.clone()
                             }),
                     )
                     .child(DialogClose::new().child(theme::pill(
-                        Button::new("cancel-trim").label(if ready { "Fermer" } else { "Annuler" }),
+                        Button::new("cancel-trim").label(if ready { tr!("Fermer") } else { tr!("Annuler") }),
                         Look::Outline,
                         Height::Large,
                         busy,
@@ -1043,7 +1055,7 @@ impl TrimPanel {
                     )))
                     .child(theme::pill(
                         Button::new("apply-handles")
-                            .label(if busy { "Préparation…" } else { "Appliquer" })
+                            .label(if busy { tr!("Préparation…") } else { tr!("Appliquer") })
                             .loading(busy)
                             .on_click(cx.listener(|v, _, _, cx| v.prepare(cx))),
                         Look::Primary,
@@ -1069,7 +1081,7 @@ impl Render for AudioEditorView {
             })
             .unwrap_or_else(|_| {
                 div()
-                    .child("Ce média n’est plus disponible.")
+                    .child(tr!("Ce média n’est plus disponible."))
                     .into_any_element()
             })
     }
@@ -1097,9 +1109,11 @@ impl TrimPanel {
         confirm_destructive(
             window,
             cx,
-            format!("Supprimer « {title} » ?"),
-            "L’audio et ses versions préparées seront effacés de cet ordinateur. Cette action est irréversible. Un média utilisé dans une playlist ne peut pas être supprimé.",
-            "Supprimer",
+            tr!("Supprimer « {title} » ?", title = title),
+            tr!(
+                "L’audio et ses versions préparées seront effacés de cet ordinateur. Cette action est irréversible. Un média utilisé dans une playlist ne peut pas être supprimé."
+            ),
+            tr!("Supprimer"),
             move |_, cx| {
                 let _ = remove.update(cx, |v, cx| {
                     v.send(
@@ -1123,14 +1137,18 @@ impl Render for TrimPanel {
         let elapsed = (self.cursor_seconds - range.start().seconds()).max(0.);
         let mut tags = div().flex().flex_wrap().gap(px(6.));
         tags = if self.prepared.is_some() {
-            tags.child(theme::tag("Version découpée", &theme::SKY))
+            tags.child(theme::tag(tr!("Version découpée"), &theme::SKY))
                 .child(theme::tag_colors(
-                    "Original conservé",
+                    tr!("Original conservé"),
                     theme::SAND,
                     theme::BROWN,
                 ))
         } else {
-            tags.child(theme::tag_colors("Original", theme::SAND, theme::BROWN))
+            tags.child(theme::tag_colors(
+                tr!("Original"),
+                theme::SAND,
+                theme::BROWN,
+            ))
         };
         let player = theme::card().rounded(px(20.)).p(px(16.)).child(
             div()
@@ -1145,9 +1163,9 @@ impl Render for TrimPanel {
                             IconName::Play
                         })
                         .accessibility_label(if self.playing {
-                            "Arrêter l’écoute"
+                            tr!("Arrêter l’écoute")
                         } else {
-                            "Écouter"
+                            tr!("Écouter")
                         })
                         .loading(self.preview_pending.is_some())
                         .on_click(cx.listener(|v, _, _, cx| v.toggle_play(cx))),
@@ -1183,7 +1201,7 @@ impl Render for TrimPanel {
                 .gap(px(2.))
                 .child(theme::pill(
                     Button::new("export-original")
-                        .label("Exporter l’original")
+                        .label(tr!("Exporter l’original"))
                         .on_click(cx.listener(|v, _, _, cx| v.export_original(cx))),
                     Look::Ghost,
                     Height::Small,
@@ -1192,7 +1210,7 @@ impl Render for TrimPanel {
                 ))
                 .child(theme::pill(
                     Button::new("delete-media")
-                        .label("Supprimer ce média local")
+                        .label(tr!("Supprimer ce média local"))
                         .on_click(cx.listener(|v, _, window, cx| v.confirm_delete(window, cx))),
                     Look::Link(&theme::ROSE),
                     Height::Small,
@@ -1256,7 +1274,7 @@ impl Render for TrimPanel {
             .child(theme::pill(
                 Button::new("edit-audio")
                     .icon(IconName::Scissors)
-                    .label("Découper l’audio")
+                    .label(tr!("Découper l’audio"))
                     .w_full()
                     .on_click(
                         cx.listener(|v, _, window, cx| {
@@ -1270,7 +1288,7 @@ impl Render for TrimPanel {
             ))
             .child(theme::pill(
                 Button::new("edit-metadata")
-                    .label("Modifier les informations")
+                    .label(tr!("Modifier les informations"))
                     .w_full()
                     .on_click(cx.listener(|v, _, window, cx| {
                         v.open_editor(AudioEditor::Metadata, window, cx)
@@ -1288,7 +1306,7 @@ impl Render for TrimPanel {
                     .flex_col()
                     .child(theme::pill(
                         Button::new("audio-more")
-                            .label("Plus d’options")
+                            .label(tr!("Plus d’options"))
                             .icon(if self.more_open {
                                 IconName::ChevronUp
                             } else {
@@ -1351,7 +1369,9 @@ fn trim_text(seconds: f64) -> String {
     if tenth == 0 {
         clock
     } else {
-        format!("{clock},{tenth}")
+        // TRANSLATORS: a time with tenths of a second, such as 1:05,4; keep the
+        // language's decimal separator.
+        tr!("{clock},{tenth}", clock = clock, tenth = tenth)
     }
 }
 /// Parse « 75 », « 1:15 », « 1:15,5 », « 1:15.5 » or « 1:01:15 » into seconds.
@@ -1425,6 +1445,10 @@ mod tests {
     #[core::prelude::v1::test]
     fn trim_bounds_read_as_minutes_and_seconds() {
         assert_eq!(trim_text(131.181), "2:11,2");
+        crate::i18n::tests::with_language(crate::i18n::Language::English, || {
+            assert_eq!(trim_text(131.181), "2:11.2");
+            assert_eq!(parse_time(&trim_text(131.181)), Some(131.2));
+        });
         assert_eq!(trim_text(59.9996), "1:00");
         assert_eq!(trim_text(0.), "0:00");
         assert_eq!(trim_text(3725.), "1:02:05");
