@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:14-0400\n"
+"POT-Creation-Date: 2026-10-14 00:47-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -888,6 +888,14 @@ msgstr "Playlist supprimée sur Yoto."
 msgid "Image"
 msgstr "Image"
 
+#: src/ui/editor.rs src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
+msgid "Réessayer"
+msgstr "Réessayer"
+
+#: src/ui/editor.rs
+msgid "Voir les détails"
+msgstr "Voir les détails"
+
 #: src/ui/editor.rs
 msgid "Vide"
 msgstr "Vide"
@@ -1385,10 +1393,6 @@ msgstr "En attente…"
 #, rust-format
 msgid "{phase} · « {title} »"
 msgstr "{phase} · « {title} »"
-
-#: src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
-msgid "Réessayer"
-msgstr "Réessayer"
 
 #: src/ui/imports.rs
 msgid "Se connecter"
@@ -2359,6 +2363,16 @@ msgstr "Opération annulée."
 
 #: src/ui/wording.rs
 #, rust-format
+msgid "Yoto a refusé la demande (code {status}). Réponse de Yoto : {said}"
+msgstr "Yoto a refusé la demande (code {status}). Réponse de Yoto : {said}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Yoto a refusé la demande (code {status})."
+msgstr "Yoto a refusé la demande (code {status})."
+
+#: src/ui/wording.rs
+#, rust-format
 msgid ""
 "Yoto n’a pas pu convertir la piste « {track} ». Préparez de nouveau l’audio, "
 "puis réessayez."
@@ -2580,6 +2594,10 @@ msgstr ""
 #: src/ui/wording.rs
 msgid "Non enregistré"
 msgstr "Non enregistré"
+
+#: src/ui/wording.rs
+msgid "Envoi échoué"
+msgstr "Envoi échoué"
 
 #: src/ui/wording.rs
 msgid "À vérifier"

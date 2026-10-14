@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:14-0400\n"
+"POT-Creation-Date: 2026-10-14 00:47-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -849,6 +849,14 @@ msgstr ""
 msgid "Image"
 msgstr ""
 
+#: src/ui/editor.rs src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
+msgid "Réessayer"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Voir les détails"
+msgstr ""
+
 #: src/ui/editor.rs
 msgid "Vide"
 msgstr ""
@@ -1330,10 +1338,6 @@ msgstr ""
 #: src/ui/imports.rs
 #, rust-format
 msgid "{phase} · « {title} »"
-msgstr ""
-
-#: src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
-msgid "Réessayer"
 msgstr ""
 
 #: src/ui/imports.rs
@@ -2254,6 +2258,16 @@ msgstr ""
 
 #: src/ui/wording.rs
 #, rust-format
+msgid "Yoto a refusé la demande (code {status}). Réponse de Yoto : {said}"
+msgstr ""
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Yoto a refusé la demande (code {status})."
+msgstr ""
+
+#: src/ui/wording.rs
+#, rust-format
 msgid ""
 "Yoto n’a pas pu convertir la piste « {track} ». Préparez de nouveau l’audio, "
 "puis réessayez."
@@ -2462,6 +2476,10 @@ msgstr ""
 
 #: src/ui/wording.rs
 msgid "Non enregistré"
+msgstr ""
+
+#: src/ui/wording.rs
+msgid "Envoi échoué"
 msgstr ""
 
 #: src/ui/wording.rs

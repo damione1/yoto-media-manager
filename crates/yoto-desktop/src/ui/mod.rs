@@ -813,10 +813,37 @@ impl AppView {
                 )
             });
             let advanced = self.advanced;
-            editor.update(cx, |e, _| e.advanced = advanced);
+            let snapshot = &self.snapshot;
+            editor.update(cx, |e, _| {
+                e.advanced = advanced;
+                e.restore_failure(snapshot);
+            });
             self.editors.insert(id, editor);
+            if let Some(account) = self.icons_missing(p) {
+                self.send(Command::RefreshIcons(account), cx);
+            }
         }
         cx.notify();
+    }
+    /// The account whose Yoto icon list must be read again to draw this playlist: one of
+    /// its icons is not in the list the app holds, and no reading of it is under way.
+    fn icons_missing(&self, playlist: &Playlist) -> Option<AccountId> {
+        let active = self.snapshot.active_account.as_ref()?;
+        let missing = playlist
+            .chapters
+            .iter()
+            .flat_map(|c| std::iter::once(&c.icon).chain(c.tracks.iter().map(|t| &t.icon)))
+            .any(|icon| match icon {
+                Some(IconReference::Yoto { account, media }) => {
+                    account == active && self.playlist_icon_choices.url(media).is_none()
+                }
+                Some(IconReference::Local { .. }) | None => false,
+            });
+        let reading = matches!(
+            self.snapshot.remote_sync.get(&RemoteCollection::Icons),
+            Some(RemoteSyncState::Syncing)
+        );
+        (missing && !reading).then(|| active.clone())
     }
     /// Write the playlists' pending changes now: the parent is leaving them. A write that
     /// fails is reported in a toast naming the playlist.

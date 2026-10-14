@@ -352,7 +352,6 @@ async fn an_empty_remote_myo_remains_editable_when_reloaded() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn tracks_upload_in_parallel_and_each_keeps_its_own_audio() {
-    use base64::Engine;
     let server = MockServer::start().await;
     let root = tempfile::tempdir().unwrap();
     let (service, account) = fixture(root.path().join("catalogue"), server.uri());
@@ -437,7 +436,7 @@ async fn tracks_upload_in_parallel_and_each_keeps_its_own_audio() {
                 .find(|(k, _)| k == "sha256")
                 .unwrap()
                 .1
-                .replace(['-', '_'], "x");
+                .into_owned();
             ResponseTemplate::new(200).set_body_json(serde_json::json!({"upload":{
                 "uploadId": upload_for(&sha),
                 "uploadUrl": format!("{storage}/signed/{}", upload_for(&sha))}}))
@@ -520,10 +519,7 @@ async fn tracks_upload_in_parallel_and_each_keeps_its_own_audio() {
             let asset = service
                 .asset(service.recipe(*r).unwrap().result.unwrap())
                 .unwrap();
-            let sha = base64::engine::general_purpose::URL_SAFE_NO_PAD
-                .encode(hex::decode(asset.sha256.as_str()).unwrap())
-                .replace(['-', '_'], "x");
-            format!("yoto:#audio-{}", upload_for(&sha))
+            format!("yoto:#audio-{}", upload_for(asset.sha256.as_str()))
         })
         .collect();
     assert_eq!(urls, expected);

@@ -133,6 +133,43 @@ fn opus_preview_uses_exact_transient_pcm_and_validates_cancel_and_duration() {
     drop(lease);
     assert!(!path.exists());
 }
+#[test]
+fn whole_webm_opus_preview_accepts_the_shorter_decoded_tail() {
+    // WebM announces a millisecond-rounded duration that counts Opus pre-skip and padding,
+    // so the decoded audio ends a few milliseconds early, as with YouTube downloads.
+    let root = tempfile::tempdir().unwrap();
+    let tools = tools();
+    let input = root.path().join("fixture.webm");
+    let mut generate = crate::media::command(&tools.ffmpeg);
+    generate
+        .args([
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=6.01",
+            "-ac",
+            "2",
+            "-c:a",
+            "libopus",
+            "-y",
+        ])
+        .arg(&input);
+    assert!(
+        crate::process::output(generate, 100_000, std::time::Duration::from_secs(30))
+            .unwrap()
+            .status
+            .success()
+    );
+    let source = tools.probe(&input).unwrap();
+    let whole = TrimRange::new(MediaTime::ZERO, source.duration, source.duration).unwrap();
+    let store = AssetStore::new(root.path().join("catalogue"), [80; 32]).unwrap();
+    let lease = store.lease("wav").unwrap();
+    let decoded = tools.preview(&input, lease.path(), whole).unwrap();
+    assert!(decoded.duration <= source.duration);
+    assert!(source.duration.seconds() - decoded.duration.seconds() < 0.1);
+}
 #[tokio::test]
 async fn device_contract_requires_online_and_preserves_unmanaged_settings() {
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
@@ -415,6 +452,27 @@ fn rich_card_preserves_extensions_and_removes_icons() {
     assert_eq!(channels, AudioChannels::Stereo);
 }
 #[tokio::test]
+async fn upload_reservation_sends_the_digest_as_lowercase_hexadecimal() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    let digest = "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08";
+    Mock::given(method("GET"))
+        .and(path("/media/transcode/audio/uploadUrl"))
+        .and(query_param("sha256", digest.to_lowercase()))
+        .and(query_param("filename", "Chanson"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"upload":{"uploadId":"upload1","uploadUrl":"https://storage.test/put"}}),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let reservation = api.reserve("API-TOKEN", digest, "Chanson").await.unwrap();
+    assert_eq!(reservation.url.as_deref(), Some("https://storage.test/put"));
+    assert!(api.reserve("API-TOKEN", "abcd", "Chanson").await.is_err());
+}
+#[tokio::test]
 async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
     let server = MockServer::start().await;
@@ -423,7 +481,7 @@ async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
     Mock::given(method("GET"))
         .and(path("/media/transcode/audio/uploadUrl"))
         .and(header("authorization", "Bearer API-TOKEN"))
-        .and(query_param("sha256", base64url_zero()))
+        .and(query_param("sha256", "0".repeat(64)))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(
                 serde_json::json!({"upload":{"uploadId":"upload1","uploadUrl":null}}),
@@ -539,10 +597,19 @@ fn yoto_limit_refusals_become_plain_messages() {
             "Playlist total size is larger than 500 MB",
             Some(messages::YOTO_PLAYLIST_TOO_LARGE),
         ),
+        // Naming a limit without its value, or mentioning sizes, maxima and numbers in an
+        // unrelated way, does not say which limit was broken.
+        ("Track exceeds the maximum duration and file size", None),
         (
-            "Track exceeds the maximum duration and file size",
-            Some(messages::TRACK_EXCEEDS_LIMITS),
+            r#"{"error":{"code":"bad-request","message":"\"sha256\" must be a valid hash"}}"#,
+            None,
         ),
+        ("Invalid file: size limit check failed for upload 100", None),
+        ("Request body exceeds the limit of 1100 MB", None),
+        ("Rate limit: max 100 requests per minute", None),
+        ("filename length must be at most 100 characters", None),
+        ("Track title exceeds maximum length", None),
+        ("Card exceeds 100 tracks and 500 MB", None),
         ("Invalid cardId", None),
         ("title is required", None),
         ("", None),
@@ -572,6 +639,72 @@ async fn a_refused_card_names_the_limit_it_broke() {
         .await
         .unwrap_err();
     assert!(matches!(failure, Failure::Validation(m) if m == messages::YOTO_PLAYLIST_TOO_LONG));
+}
+#[tokio::test]
+async fn an_unexplained_refusal_keeps_what_yoto_said() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("GET"))
+        .and(path("/media/transcode/audio/uploadUrl"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error":{"code":"bad-request","message":"Invalid upload: max file size check failed, see https://storage.test/x?X-Amz-Signature=secret"}
+        })))
+        .mount(&server)
+        .await;
+    let failure = api
+        .reserve("API-TOKEN", &"ab".repeat(32), "Chanson")
+        .await
+        .unwrap_err();
+    let Failure::Validation(message) = failure else {
+        panic!("{failure:?}")
+    };
+    assert_eq!(
+        messages::parse_yoto_rejected(&message),
+        Some((
+            400,
+            Some("Invalid upload: max file size check failed, see https://storage.test/x?…")
+        ))
+    );
+    assert!(!message.contains("secret"));
+}
+#[test]
+fn refusal_excerpts_are_bounded_and_plain() {
+    use crate::api::response_excerpt as excerpt;
+    assert_eq!(excerpt(""), None);
+    assert_eq!(excerpt("  plain\n text "), Some("plain text".into()));
+    assert_eq!(
+        excerpt(r#"{"message":"Bad title"}"#),
+        Some("Bad title".into())
+    );
+    let long = excerpt(&"x ".repeat(400)).unwrap();
+    assert_eq!(long.chars().count(), 300);
+    assert!(long.ends_with('…'));
+    assert_eq!(
+        messages::parse_yoto_rejected(&messages::yoto_rejected(422, None)),
+        Some((422, None))
+    );
+}
+#[test]
+fn players_are_shown_under_their_given_name() {
+    use crate::api::device_name;
+    let device = |value: serde_json::Value| -> yoto_api_generated::models::DeviceInfo {
+        serde_json::from_value(value).unwrap()
+    };
+    let base = |name: &str| serde_json::json!({"deviceId":"t2iumaiU2bEmyQJ4JSXZQZPh","name":name,"online":true,"description":"late.smoke"});
+    assert_eq!(
+        device_name(&device(base("Chambre  de Léa"))),
+        "Chambre de Léa"
+    );
+    assert_eq!(device_name(&device(base(""))), "t2iumaiU2bEmyQJ4JSXZQZPh");
+    assert_eq!(
+        device_name(&device(base("t2iumaiU2bEmyQJ4JSXZQZPh"))),
+        "t2iumaiU2bEmyQJ4JSXZQZPh"
+    );
+    let mut named = base("t2iumaiU2bEmyQJ4JSXZQZPh");
+    named["displayName"] = serde_json::json!("Salon");
+    assert_eq!(device_name(&device(named)), "Salon");
 }
 #[test]
 fn retry_after_accepts_seconds_and_dates_within_bounds() {
@@ -618,10 +751,6 @@ fn upload_time_grows_with_the_file_within_bounds() {
     assert_eq!(upload_timeout(40_000_000), Duration::from_secs(800));
     assert_eq!(upload_timeout(100_000_000), Duration::from_secs(2000));
     assert_eq!(upload_timeout(u64::MAX), Duration::from_secs(45 * 60));
-}
-fn base64url_zero() -> String {
-    use base64::Engine;
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([0; 32])
 }
 #[test]
 fn mcp_redacts_capabilities() {

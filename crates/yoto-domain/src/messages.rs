@@ -101,6 +101,28 @@ pub const BROWSER_FAILED: &str = "Could not open the browser";
 pub const AUTHORIZATION_DECLINED: &str = "Authorization was declined";
 pub const YOTO_DENIED: &str = "Yoto denied this operation";
 pub const YOTO_NOT_FOUND: &str = "Yoto rejected the request (404)";
+/// Start of a refusal Yoto did not explain in terms the app recognises; the HTTP status and,
+/// after [`YOTO_SAID`], what Yoto answered follow it.
+pub const YOTO_REJECTED: &str = "Yoto rejected the request";
+pub const YOTO_SAID: &str = " Yoto said: ";
+/// A refusal Yoto did not explain in terms the app recognises, keeping what it answered.
+pub fn yoto_rejected(status: u16, said: Option<&str>) -> String {
+    match said {
+        Some(said) => format!("{YOTO_REJECTED} ({status}).{YOTO_SAID}{said}"),
+        None => format!("{YOTO_REJECTED} ({status})."),
+    }
+}
+/// The HTTP status and Yoto's answer from a message made by [`yoto_rejected`].
+pub fn parse_yoto_rejected(message: &str) -> Option<(u16, Option<&str>)> {
+    let rest = message.strip_prefix(YOTO_REJECTED)?.strip_prefix(" (")?;
+    let (status, rest) = rest.split_once(')')?;
+    let status = status.parse().ok()?;
+    let rest = rest.strip_prefix('.')?;
+    match rest {
+        "" => Some((status, None)),
+        rest => Some((status, Some(rest.strip_prefix(YOTO_SAID)?))),
+    }
+}
 pub const SELECT_PLAYER: &str = "Select a player";
 pub const PLAYER_NAME_EMPTY: &str = "Enter a player name";
 pub const GROUP_NAME_LENGTH: &str = "Group name must contain 1–100 characters";
