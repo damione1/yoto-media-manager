@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:03-0400\n"
+"POT-Creation-Date: 2026-10-14 00:04-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,7 +18,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: src/i18n.rs src/ui/playlist_move_picker.rs src/ui/wording.rs
+#: src/i18n.rs src/ui/pixelart.rs src/ui/playlist_media_picker.rs
+#: src/ui/playlist_move_picker.rs src/ui/wording.rs
 msgid "Annuler"
 msgstr ""
 
@@ -222,6 +223,106 @@ msgstr ""
 msgid "Identifiant de la carte"
 msgstr ""
 
+#: src/ui/pixelart.rs
+msgid "Choisissez une image…"
+msgstr ""
+
+#: src/ui/pixelart.rs
+msgid "Image"
+msgstr ""
+
+#: src/ui/pixelart.rs
+msgid "Préparation de l’image…"
+msgstr ""
+
+#: src/ui/pixelart.rs
+msgid "Mes icônes"
+msgstr ""
+
+#: src/ui/pixelart.rs
+msgid "Chargement des icônes…"
+msgstr ""
+
+#: src/ui/pixelart.rs
+#, rust-format
+msgid "Chargement impossible : {failure}"
+msgstr ""
+
+#: src/ui/pixelart.rs src/ui/update.rs
+msgid "Réessayer"
+msgstr ""
+
+#: src/ui/pixelart.rs
+msgid "Aucune icône dans cette collection. Vous pouvez importer une image."
+msgstr ""
+
+#: src/ui/pixelart.rs
+msgid ""
+"Choisissez une icône Yoto ou ajoutez votre image : elle sera adaptée en 16 × "
+"16 pour l’écran du lecteur."
+msgstr ""
+
+#: src/ui/pixelart.rs
+msgid "Importer une image"
+msgstr ""
+
+#: src/ui/pixelart.rs
+msgid "Utiliser cette icône"
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+#, rust-format
+msgid "Original · {duration}"
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+#, rust-format
+msgid "Découpe {start} → {end} ({duration})"
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+#, rust-format
+msgid "Découpe {start} → {end} ({duration}) · volume égalisé"
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+msgid "Cette playlist n’est plus ouverte."
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+msgid "Choisir une version"
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+msgid ""
+"Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer."
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+msgid "Importer de l’audio"
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+msgid "Envoi en cours…"
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+#, rust-format
+msgid "Ajouter ({selected})"
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+msgid "Choisissez le média qui remplacera cette piste."
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+msgid "Sélectionnez vos médias et la version à envoyer."
+msgstr ""
+
+#: src/ui/playlist_media_picker.rs
+msgid "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
+msgstr ""
+
 #: src/ui/playlist_move_picker.rs
 msgid "Déplacer"
 msgstr ""
@@ -306,10 +407,6 @@ msgstr ""
 
 #: src/ui/update.rs
 msgid "Redémarrage de l’application…"
-msgstr ""
-
-#: src/ui/update.rs
-msgid "Réessayer"
 msgstr ""
 
 #: src/ui/update.rs src/ui/wording.rs

@@ -117,11 +117,11 @@ impl IconPicker {
         let service = owner.read(cx).service.clone();
         let runtime = owner.read(cx).runtime.clone();
         self.uploading = true;
-        self.status = "Choisissez une image…".into();
+        self.status = tr!("Choisissez une image…").into();
         cx.notify();
         self.tasks.push(cx.spawn(async move |weak, cx| {
             let Some(file) = rfd::AsyncFileDialog::new()
-                .add_filter("Image", &["png", "jpg", "jpeg", "gif"])
+                .add_filter(tr!("Image"), &["png", "jpg", "jpeg", "gif"])
                 .pick_file()
                 .await
             else {
@@ -133,7 +133,7 @@ impl IconPicker {
                 return;
             };
             let _ = weak.update(cx, |v, cx| {
-                v.status = "Préparation de l’image…".into();
+                v.status = tr!("Préparation de l’image…").into();
                 cx.notify();
             });
             let cleanup_service = service.clone();
@@ -278,7 +278,7 @@ impl Render for IconPicker {
         };
         let collections = [
             (IconCollection::Public, "Yoto"),
-            (IconCollection::User, "Mes icônes"),
+            (IconCollection::User, tr!("Mes icônes")),
         ]
         .map(|(collection, label)| {
             theme::segment(
@@ -306,7 +306,7 @@ impl Render for IconPicker {
                     .flex()
                     .gap_2()
                     .child(Spinner::new().small())
-                    .child("Chargement des icônes…"),
+                    .child(tr!("Chargement des icônes…")),
             );
         }
         if let Some(failure) = &failure {
@@ -315,10 +315,10 @@ impl Render for IconPicker {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(format!("Chargement impossible : {failure}"))
+                    .child(tr!("Chargement impossible : {failure}", failure = failure))
                     .child(
                         Button::new("retry-icons")
-                            .label("Réessayer")
+                            .label(tr!("Réessayer"))
                             .disabled(disabled)
                             .outline()
                             .on_click(cx.listener(|v, _, _, cx| {
@@ -336,15 +336,13 @@ impl Render for IconPicker {
             );
         }
         if !loading && failure.is_none() && self.choices.rows(self.collection).is_empty() {
-            body = body.child(
-                div()
-                    .text_sm()
-                    .child("Aucune icône dans cette collection. Vous pouvez importer une image."),
-            );
+            body = body.child(div().text_sm().child(tr!(
+                "Aucune icône dans cette collection. Vous pouvez importer une image."
+            )));
         }
         body = body
             .child(theme::note(
-                "Choisissez une icône Yoto ou ajoutez votre image : elle sera adaptée en 16 × 16 pour l’écran du lecteur.",
+                tr!("Choisissez une icône Yoto ou ajoutez votre image : elle sera adaptée en 16 × 16 pour l’écran du lecteur."),
             ))
             .child(
                 div()
@@ -354,7 +352,7 @@ impl Render for IconPicker {
                     .child(
                         theme::pill(
                             Button::new("import-icon-image")
-                                .label("Importer une image")
+                                .label(tr!("Importer une image"))
                                 .on_click(cx.listener(|v, _, _, cx| v.import_image(cx))),
                             Look::Outline,
                             Height::Medium,
@@ -366,7 +364,7 @@ impl Render for IconPicker {
                     )
                     .child(div().flex_1())
                     .child(DialogClose::new().child(theme::pill(
-                        Button::new("cancel-icon").label("Annuler"),
+                        Button::new("cancel-icon").label(tr!("Annuler")),
                         Look::Ghost,
                         Height::Medium,
                         busy || self.uploading,
@@ -374,7 +372,7 @@ impl Render for IconPicker {
                     )))
                     .child(theme::pill(
                         Button::new("apply-icon")
-                            .label("Utiliser cette icône")
+                            .label(tr!("Utiliser cette icône"))
                             .on_click(cx.listener(|v, _, _, cx| {
                                 if let Some(media) = &v.selected {
                                     let icon = IconReference::Yoto {

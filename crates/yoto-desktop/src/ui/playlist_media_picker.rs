@@ -7,7 +7,35 @@ use gpui_kit::component::{
 use std::collections::{BTreeMap, BTreeSet};
 struct VersionChoice {
     id: RecipeId,
-    label: String,
+    /// The whole audio, or a trimmed part of it.
+    original: bool,
+    trim: TrimRange,
+    normalization: Normalization,
+}
+impl VersionChoice {
+    /// Worded when shown, so it follows the interface language.
+    fn label(&self) -> String {
+        let duration = duration_text(self.trim.duration().seconds());
+        if self.original {
+            return tr!("Original · {duration}", duration = duration);
+        }
+        let start = wording::position_text(self.trim.start().seconds());
+        let end = wording::position_text(self.trim.end().seconds());
+        match self.normalization {
+            Normalization::Preserve => tr!(
+                "Découpe {start} → {end} ({duration})",
+                start = start,
+                end = end,
+                duration = duration
+            ),
+            Normalization::Loudness => tr!(
+                "Découpe {start} → {end} ({duration}) · volume égalisé",
+                start = start,
+                end = end,
+                duration = duration
+            ),
+        }
+    }
 }
 struct MediaChoice {
     id: MediaId,
@@ -57,23 +85,9 @@ fn choices(snapshot: &Snapshot) -> Vec<MediaChoice> {
                 .into_iter()
                 .map(|recipe| VersionChoice {
                     id: recipe.id,
-                    label: if recipe.id == original {
-                        format!(
-                            "Original · {}",
-                            duration_text(recipe.trim.duration().seconds())
-                        )
-                    } else {
-                        format!(
-                            "Découpe {} → {} ({}){}",
-                            wording::position_text(recipe.trim.start().seconds()),
-                            wording::position_text(recipe.trim.end().seconds()),
-                            duration_text(recipe.trim.duration().seconds()),
-                            match recipe.normalization {
-                                Normalization::Preserve => "",
-                                Normalization::Loudness => " · volume égalisé",
-                            }
-                        )
-                    },
+                    original: recipe.id == original,
+                    trim: recipe.trim,
+                    normalization: recipe.normalization,
                 })
                 .collect::<Vec<_>>();
             if versions.is_empty() {
@@ -129,7 +143,7 @@ impl Render for MediaPicker {
                 false,
                 true,
                 false,
-                "Cette playlist n’est plus ouverte.".into(),
+                tr!("Cette playlist n’est plus ouverte.").into(),
             ));
         let picker = cx.entity().downgrade();
         let rows = gpui_kit::uniform_list(
@@ -151,13 +165,13 @@ impl Render for MediaPicker {
                                 .versions
                                 .iter()
                                 .find(|version| version.id == chosen)
-                                .map(|v| v.label.clone())
-                                .unwrap_or_else(|| "Choisir une version".into());
+                                .map(VersionChoice::label)
+                                .unwrap_or_else(|| tr!("Choisir une version").into());
                             let weak = picker.clone();
                             let versions = row
                                 .versions
                                 .iter()
-                                .map(|v| (v.id, v.label.clone()))
+                                .map(|v| (v.id, v.label()))
                                 .collect::<Vec<_>>();
                             div()
                                 .h(px(96.))
@@ -236,9 +250,9 @@ impl Render for MediaPicker {
         let list = if self.rows.rows.is_empty() {
             div()
                 .p_6()
-                .child(theme::note(
-                    "Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer.",
-                ))
+                .child(theme::note(tr!(
+                    "Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer."
+                )))
                 .into_any_element()
         } else {
             rows.into_any_element()
@@ -249,7 +263,7 @@ impl Render for MediaPicker {
             .items_center()
             .child(theme::pill(
                 Button::new("picker-import-media")
-                    .label("Importer de l’audio")
+                    .label(tr!("Importer de l’audio"))
                     .on_click(cx.listener(|v, _, window, cx| v.go_to_imports(window, cx))),
                 theme::Look::Outline,
                 theme::Height::Medium,
@@ -258,7 +272,7 @@ impl Render for MediaPicker {
             ))
             .child(div().flex_1())
             .child(DialogClose::new().child(theme::pill(
-                Button::new("picker-cancel").label("Annuler"),
+                Button::new("picker-cancel").label(tr!("Annuler")),
                 theme::Look::Ghost,
                 theme::Height::Medium,
                 busy,
@@ -267,9 +281,9 @@ impl Render for MediaPicker {
             .child(theme::pill(
                 Button::new("picker-add-selected")
                     .label(if busy {
-                        "Envoi en cours…".into()
+                        tr!("Envoi en cours…").into()
                     } else {
-                        format!("Ajouter ({selected})")
+                        tr!("Ajouter ({selected})", selected = selected)
                     })
                     .on_click(cx.listener(|v, _, _, cx| v.add_selected(cx))),
                 theme::Look::Primary,
@@ -282,14 +296,14 @@ impl Render for MediaPicker {
             .flex_col()
             .gap_4()
             .child(theme::note(if replacing {
-                "Choisissez le média qui remplacera cette piste."
+                tr!("Choisissez le média qui remplacera cette piste.")
             } else {
-                "Sélectionnez vos médias et la version à envoyer."
+                tr!("Sélectionnez vos médias et la version à envoyer.")
             }))
             .child(list)
-            .child(theme::note(
-                "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist.",
-            ))
+            .child(theme::note(tr!(
+                "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
+            )))
             .child(actions)
             .children(busy.then(|| {
                 div()
