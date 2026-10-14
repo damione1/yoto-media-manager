@@ -23,7 +23,7 @@ fn authentic_signature_and_tampering() {
 }
 fn manifest(version: &str, platform: Platform) -> Manifest {
     let version = Version::parse(version).unwrap();
-    Manifest { version: version.clone(), notes: "Release".into(), platforms: [(platform, Artifact { url: format!("https://github.com/damione1/yoto-media-manager/releases/download/v{version}/{}", platform.archive_name(&version)), signature: signature(), size: 100 })].into() }
+    Manifest { version: version.clone(), notes: "Release".into(), platforms: [(platform, Artifact { url: format!("https://github.com/damione1/yoto-media-manager/releases/download/v{version}/{}", platform.archive_names(&version)[0]), signature: signature(), size: 100 })].into() }
 }
 #[test]
 fn no_downgrade_and_platform_is_exact() {
@@ -78,11 +78,10 @@ fn external_urls_and_excessive_size_rejected() {
 fn signed_identity_cannot_be_relabelled_as_a_new_release_or_platform() {
     assert!(verify_identity(&signature(), "YotoMediaManager test fixture").is_ok());
     for platform in [Platform::MacArm, Platform::MacIntel, Platform::Windows] {
-        let expected = format!(
-            "YotoMediaManager {}",
-            platform.archive_name(&Version::parse("99.0.0").unwrap())
-        );
-        assert!(verify_identity(&signature(), &expected).is_err());
+        for name in platform.archive_names(&Version::parse("99.0.0").unwrap()) {
+            let expected = format!("YotoMediaManager {name}");
+            assert!(verify_identity(&signature(), &expected).is_err());
+        }
     }
     // Altering the trusted comment to the expected release invalidates its global signature.
     let text = include_str!("../../../tests/fixtures/updater/signature-check.txt.minisig").replace(
@@ -176,4 +175,49 @@ async fn nightly_refuses_to_download_and_replace_itself() {
         UpdateState::Failed(error) if matches!(error.as_ref(), UpdateError::Install(_))
     ));
     assert!(updater.prepared().is_err());
+}
+#[test]
+fn current_and_legacy_archive_names_are_accepted_and_bound_to_the_signature() {
+    let current = AppVersion::Release(Version::parse("0.1.0").unwrap());
+    let cases = [
+        (
+            Platform::MacArm,
+            "YotoMediaManager-0.2.0-darwin-aarch64.tar.gz",
+        ),
+        (Platform::MacArm, "Yoto-0.2.0-darwin-aarch64.tar.gz"),
+        (
+            Platform::MacIntel,
+            "YotoMediaManager-0.2.0-darwin-x86_64.tar.gz",
+        ),
+        (
+            Platform::Windows,
+            "YotoMediaManager-0.2.0-windows-x86_64.zip",
+        ),
+        (Platform::Windows, "Yoto-0.2.0-windows-x86_64.zip"),
+    ];
+    for (platform, name) in cases {
+        let mut value = manifest("0.2.0", platform);
+        value.platforms.get_mut(&platform).unwrap().url = format!(
+            "https://github.com/damione1/yoto-media-manager/releases/download/v0.2.0/{name}"
+        );
+        let release = select_release(value, &current, platform).unwrap().unwrap();
+        // download() requires the trusted comment to name this exact file.
+        assert_eq!(release.archive_name(), name);
+    }
+    for name in [
+        "Other-0.2.0-windows-x86_64.zip",
+        "YotoMediaManager-0.1.0-windows-x86_64.zip",
+        "YotoMediaManager-0.2.0-darwin-aarch64.tar.gz",
+        "yotomediamanager-0.2.0-windows-x86_64.zip",
+        "x/YotoMediaManager-0.2.0-windows-x86_64.zip",
+    ] {
+        let mut value = manifest("0.2.0", Platform::Windows);
+        value.platforms.get_mut(&Platform::Windows).unwrap().url = format!(
+            "https://github.com/damione1/yoto-media-manager/releases/download/v0.2.0/{name}"
+        );
+        assert!(
+            select_release(value, &current, Platform::Windows).is_err(),
+            "{name}"
+        );
+    }
 }

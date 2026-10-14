@@ -14,6 +14,9 @@ pub struct PreparedUpdate {
 #[serde(deny_unknown_fields)]
 struct InstallPlan {
     parent_pid: u32,
+    /// The running installation, moved to `backup` once the payload is ready.
+    source: PathBuf,
+    /// Where the payload goes: `source`, or its renamed sibling when migrating `Yoto.app`.
     destination: PathBuf,
     payload: PathBuf,
     backup: PathBuf,
@@ -58,6 +61,40 @@ fn error(e: impl std::fmt::Display) -> UpdateError {
 fn archive_error(e: impl std::fmt::Display) -> UpdateError {
     UpdateError::Archive(e.to_string())
 }
+/// Folder names an update archive may use for the application, current name first.
+fn archive_roots(platform: Platform) -> [String; 2] {
+    match platform {
+        Platform::MacArm | Platform::MacIntel => {
+            [APP_NAME, LEGACY_APP_NAME].map(|name| format!("{name}.app"))
+        }
+        Platform::Windows => [APP_NAME, LEGACY_APP_NAME].map(str::to_owned),
+    }
+}
+/// Where an update installs the application currently at `source`.
+///
+/// A macOS `Yoto.app` becomes `YotoMediaManager.app` in the same folder, unless that name
+/// is already taken by another copy, which is never overwritten. Every other bundle name
+/// (a development build, a copy renamed by hand) is kept. On Windows the folder is kept:
+/// the installer's uninstall entry, uninstaller and shortcuts point at it, and the
+/// installer itself moves `Programs\Yoto` to `Programs\YotoMediaManager`.
+fn target_installation(source: &Path, platform: Platform) -> PathBuf {
+    let legacy = format!("{LEGACY_APP_NAME}.app");
+    match platform {
+        Platform::MacArm | Platform::MacIntel
+            if source
+                .file_name()
+                .is_some_and(|name| name == legacy.as_str()) =>
+        {
+            let renamed = source.with_file_name(format!("{APP_NAME}.app"));
+            if fs::symlink_metadata(&renamed).is_err() {
+                renamed
+            } else {
+                source.to_path_buf()
+            }
+        }
+        Platform::MacArm | Platform::MacIntel | Platform::Windows => source.to_path_buf(),
+    }
+}
 fn installation(platform: Platform) -> Result<PathBuf, UpdateError> {
     let exe = fs::canonicalize(std::env::current_exe().map_err(error)?).map_err(error)?;
     match platform {
@@ -83,25 +120,24 @@ pub(super) fn prepare(
     platform: Platform,
     version: Version,
 ) -> Result<PreparedUpdate, UpdateError> {
-    let destination = installation(platform)?;
-    let parent = destination
+    let source = installation(platform)?;
+    let destination = target_installation(&source, platform);
+    let parent = source
         .parent()
         .ok_or_else(|| error("Installation parent unavailable"))?;
     let scratch = tempfile::Builder::new()
         .prefix(".yoto-update-")
         .tempdir_in(parent)
         .map_err(error)?;
-    let payload = scratch.path().join(match platform {
-        Platform::MacArm | Platform::MacIntel => "Yoto.app",
-        Platform::Windows => "Yoto",
-    });
-    match platform {
-        Platform::MacArm | Platform::MacIntel => extract_tar(bytes, scratch.path())?,
-        Platform::Windows => extract_zip(bytes, scratch.path())?,
-    }
+    let roots = archive_roots(platform);
+    let root = match platform {
+        Platform::MacArm | Platform::MacIntel => extract_tar(bytes, scratch.path(), &roots)?,
+        Platform::Windows => extract_zip(bytes, scratch.path(), &roots)?,
+    };
+    let payload = scratch.path().join(root);
     validate_payload(&payload, platform)?;
     if platform == Platform::Windows {
-        preserve_uninstaller(&destination, &payload)?;
+        preserve_uninstaller(&source, &payload)?;
     }
     #[cfg(target_os = "macos")]
     if matches!(platform, Platform::MacArm | Platform::MacIntel) {
@@ -113,7 +149,7 @@ pub(super) fn prepare(
         if !status.success() {
             return Err(error("Apple code signature verification failed"));
         }
-        if team(&destination)? != team(&payload)? {
+        if team(&source)? != team(&payload)? {
             return Err(error("Apple signing identity changed"));
         }
     }
@@ -130,6 +166,7 @@ pub(super) fn prepare(
     ));
     let plan = InstallPlan {
         parent_pid: std::process::id(),
+        source,
         destination,
         payload,
         backup,
@@ -163,6 +200,28 @@ fn validate_payload(payload: &Path, platform: Platform) -> Result<(), UpdateErro
         return Err(archive_error("Missing application executable"));
     }
     Ok(())
+}
+/// The archive's single top-level folder: the first entry picks one of `roots`, every
+/// later entry must share it.
+fn archive_root<'a>(
+    path: &Path,
+    roots: &'a [String],
+    chosen: &mut Option<&'a str>,
+) -> Result<&'a str, UpdateError> {
+    let root = match *chosen {
+        Some(root) => root,
+        None => {
+            let first = path.components().next();
+            let root = roots
+                .iter()
+                .find(|root| first == Some(Component::Normal(std::ffi::OsStr::new(root.as_str()))))
+                .ok_or_else(|| archive_error("Archive contains an invalid path"))?;
+            *chosen = Some(root.as_str());
+            root.as_str()
+        }
+    };
+    safe_path(path, root)?;
+    Ok(root)
 }
 fn safe_path(path: &Path, expected_root: &str) -> Result<(), UpdateError> {
     if path
@@ -200,7 +259,12 @@ fn safe_link(path: &Path, target: &Path, expected_root: &str) -> Result<(), Upda
     }
     Ok(())
 }
-fn extract_tar(bytes: &[u8], destination: &Path) -> Result<(), UpdateError> {
+fn extract_tar<'a>(
+    bytes: &[u8],
+    destination: &Path,
+    roots: &'a [String],
+) -> Result<&'a str, UpdateError> {
+    let mut chosen = None;
     let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(bytes)));
     let mut total = 0u64;
     let mut links = Vec::new();
@@ -211,7 +275,7 @@ fn extract_tar(bytes: &[u8], destination: &Path) -> Result<(), UpdateError> {
         }
         let mut entry = entry.map_err(archive_error)?;
         let path = entry.path().map_err(archive_error)?.into_owned();
-        safe_path(&path, "Yoto.app")?;
+        let root = archive_root(&path, roots, &mut chosen)?;
         if !seen.insert(path.clone()) {
             return Err(archive_error("Duplicate archive path"));
         }
@@ -228,7 +292,7 @@ fn extract_tar(bytes: &[u8], destination: &Path) -> Result<(), UpdateError> {
                 .map_err(archive_error)?
                 .ok_or_else(|| archive_error("Missing symlink target"))?
                 .into_owned();
-            safe_link(&path, &target, "Yoto.app")?;
+            safe_link(&path, &target, root)?;
             links.push((path, target));
         } else if kind.is_file() || kind.is_dir() {
             // No links exist while files are extracted, so unpack cannot traverse a symlink.
@@ -249,9 +313,14 @@ fn extract_tar(bytes: &[u8], destination: &Path) -> Result<(), UpdateError> {
     if !links.is_empty() {
         return Err(archive_error("Unsupported symlinks"));
     }
-    Ok(())
+    chosen.ok_or_else(|| archive_error("Empty archive"))
 }
-fn extract_zip(bytes: &[u8], destination: &Path) -> Result<(), UpdateError> {
+fn extract_zip<'a>(
+    bytes: &[u8],
+    destination: &Path,
+    roots: &'a [String],
+) -> Result<&'a str, UpdateError> {
+    let mut chosen = None;
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).map_err(archive_error)?;
     if archive.len() > 250_000 {
         return Err(archive_error("Too many archive entries"));
@@ -266,11 +335,11 @@ fn extract_zip(bytes: &[u8], destination: &Path) -> Result<(), UpdateError> {
                 "Backslashes are not allowed in update archives",
             ));
         }
-        safe_path(Path::new(raw_name), "Yoto")?;
+        archive_root(Path::new(raw_name), roots, &mut chosen)?;
         let path = file
             .enclosed_name()
             .ok_or_else(|| archive_error("Escaping archive path"))?;
-        safe_path(&path, "Yoto")?;
+        archive_root(&path, roots, &mut chosen)?;
         for component in path.components() {
             if let Component::Normal(name) = component {
                 let name = name.to_string_lossy();
@@ -321,7 +390,7 @@ fn extract_zip(bytes: &[u8], destination: &Path) -> Result<(), UpdateError> {
             writer.sync_all().map_err(archive_error)?;
         }
     }
-    Ok(())
+    chosen.ok_or_else(|| archive_error("Empty archive"))
 }
 /// Called before GPUI/profile initialization, only by the staged helper executable.
 /// Returns true when the helper command was handled.
@@ -363,24 +432,17 @@ pub fn apply_pending_update() -> Result<bool, UpdateError> {
     let parent = scratch
         .parent()
         .ok_or_else(|| error("Invalid staging parent"))?;
-    if plan.destination.parent() != Some(parent)
-        || plan.backup.parent() != Some(parent)
-        || plan.payload.parent() != Some(scratch.as_path())
-        || plan.backup.exists()
-        || plan.destination == plan.backup
-        || plan.destination == scratch
-    {
+    if !valid_paths(&plan, &scratch, parent) {
         return Err(error("Invalid replacement paths"));
     }
     validate_payload(&plan.payload, plan.platform)?;
     wait_for_exit(plan.parent_pid)?;
     if let Err(failure) = replace(&plan) {
         // The GUI has exited: restore/reopen the previous app even on a first rename failure.
-        let recovery = if plan.destination.exists() {
-            &plan.destination
-        } else {
-            &plan.backup
-        };
+        let recovery = [&plan.source, &plan.destination, &plan.backup]
+            .into_iter()
+            .find(|path| path.exists())
+            .unwrap_or(&plan.backup);
         if let Err(relaunch) = launch_application(recovery, plan.platform) {
             return Err(error(format!(
                 "{failure}; reopening the previous app failed: {relaunch}"
@@ -395,15 +457,36 @@ pub fn apply_pending_update() -> Result<bool, UpdateError> {
     if let Ok(bytes) = serde_json::to_vec(&receipt)
         && fs::write(scratch.join("completed.json"), bytes).is_ok()
     {
-        cleanup_previous_updates(&scratch, &plan.destination);
+        // Earlier updates of a renamed `Yoto.app` recorded the old name.
+        cleanup_previous_updates(&scratch, &[&plan.destination, &plan.source]);
     }
     // Keep one previous installation as a recoverable backup, not the user's catalogue.
     Ok(true)
 }
+/// Checked by the helper before touching anything: every path sits beside the
+/// installation, and a rename only ever turns `Yoto.app` into a free
+/// `YotoMediaManager.app`.
+fn valid_paths(plan: &InstallPlan, scratch: &Path, parent: &Path) -> bool {
+    let same_folder = plan.source.parent() == Some(parent)
+        && plan.destination.parent() == Some(parent)
+        && plan.backup.parent() == Some(parent)
+        && plan.payload.parent() == Some(scratch);
+    let distinct = !plan.backup.exists()
+        && plan.source != plan.backup
+        && plan.destination != plan.backup
+        && plan.source != scratch
+        && plan.destination != scratch;
+    let rename = plan.source == plan.destination
+        || (matches!(plan.platform, Platform::MacArm | Platform::MacIntel)
+            && plan.destination == target_installation(&plan.source, plan.platform));
+    same_folder && distinct && rename
+}
 fn replace(plan: &InstallPlan) -> Result<(), UpdateError> {
-    fs::rename(&plan.destination, &plan.backup).map_err(error)?;
+    // The new application is fully extracted and verified before the old one moves; the
+    // old one stays as the hidden backup, removed by the next completed update.
+    fs::rename(&plan.source, &plan.backup).map_err(error)?;
     if let Err(failure) = fs::rename(&plan.payload, &plan.destination) {
-        fs::rename(&plan.backup, &plan.destination)
+        fs::rename(&plan.backup, &plan.source)
             .map_err(|rollback| error(format!("{failure}; rollback: {rollback}")))?;
         return Err(error(failure));
     }
@@ -418,10 +501,11 @@ fn replace(plan: &InstallPlan) -> Result<(), UpdateError> {
     if result.is_err() {
         rollback(plan)?;
         #[cfg(windows)]
-        if plan.platform == Platform::Windows && plan.destination.join("unins000.exe").is_file() {
-            if let AppVersion::Release(previous) = AppVersion::current() {
-                let _ = update_uninstall_version(&previous);
-            }
+        if plan.platform == Platform::Windows
+            && plan.source.join("unins000.exe").is_file()
+            && let AppVersion::Release(previous) = AppVersion::current()
+        {
+            let _ = update_uninstall_version(&previous);
         }
         return Err(error(
             "Relaunch failed; the previous application was restored",
@@ -454,7 +538,7 @@ struct CompletedInstall {
     destination: PathBuf,
     backup: PathBuf,
 }
-fn cleanup_previous_updates(current: &Path, destination: &Path) {
+fn cleanup_previous_updates(current: &Path, installations: &[&Path]) {
     let Some(parent) = current.parent() else {
         return;
     };
@@ -483,7 +567,7 @@ fn cleanup_previous_updates(current: &Path, destination: &Path) {
         let Ok(previous) = serde_json::from_slice::<CompletedInstall>(&bytes) else {
             continue;
         };
-        if previous.destination != destination
+        if !installations.contains(&previous.destination.as_path())
             || previous.backup.parent() != Some(parent)
             || previous
                 .backup
@@ -502,7 +586,7 @@ fn cleanup_previous_updates(current: &Path, destination: &Path) {
 }
 fn rollback(plan: &InstallPlan) -> Result<(), UpdateError> {
     fs::rename(&plan.destination, plan.payload.with_extension("failed")).map_err(error)?;
-    fs::rename(&plan.backup, &plan.destination).map_err(error)
+    fs::rename(&plan.backup, &plan.source).map_err(error)
 }
 fn preserve_uninstaller(source: &Path, destination: &Path) -> Result<(), UpdateError> {
     let mut total = 0u64;
@@ -671,7 +755,11 @@ mod safety_tests {
                 }
             }
             let directory = tempfile::tempdir().unwrap();
-            assert!(extract_zip(&bytes, directory.path()).is_err(), "{name}");
+            let roots = archive_roots(Platform::Windows);
+            assert!(
+                extract_zip(&bytes, directory.path(), &roots).is_err(),
+                "{name}"
+            );
             assert!(!directory.path().parent().unwrap().join("outside").exists());
         }
     }
@@ -689,7 +777,8 @@ mod safety_tests {
         let mut writer = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         writer.write_all(&raw).unwrap();
         let directory = tempfile::tempdir().unwrap();
-        assert!(extract_tar(&writer.finish().unwrap(), directory.path()).is_err());
+        let roots = archive_roots(Platform::MacArm);
+        assert!(extract_tar(&writer.finish().unwrap(), directory.path(), &roots).is_err());
         let mut header = tar::Header::new_gnu();
         header.set_path("Yoto.app/huge").unwrap();
         header.set_entry_type(tar::EntryType::Regular);
@@ -698,7 +787,7 @@ mod safety_tests {
         header.set_cksum();
         let mut writer = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         writer.write_all(header.as_bytes()).unwrap();
-        assert!(extract_tar(&writer.finish().unwrap(), directory.path()).is_err());
+        assert!(extract_tar(&writer.finish().unwrap(), directory.path(), &roots).is_err());
         assert!(!directory.path().join("Yoto.app/huge").exists());
     }
     #[test]
@@ -736,6 +825,7 @@ mod safety_tests {
         fs::write(destination.join("original"), "preserved").unwrap();
         let plan = InstallPlan {
             parent_pid: 1,
+            source: destination.clone(),
             destination: destination.clone(),
             payload,
             backup: backup.clone(),
@@ -762,6 +852,7 @@ mod recovery_tests {
         fs::write(destination.join("original"), "preserved").unwrap();
         let plan = InstallPlan {
             parent_pid: 1,
+            source: destination.clone(),
             destination: destination.clone(),
             payload: root.path().join("missing"),
             backup: backup.clone(),
@@ -809,12 +900,246 @@ mod recovery_tests {
             .unwrap(),
         )
         .unwrap();
-        cleanup_previous_updates(&current, &destination);
+        cleanup_previous_updates(&current, &[&destination]);
         assert!(!old.exists());
         assert!(!old_backup.exists());
         assert!(current.exists());
         assert!(latest_backup.exists());
         assert!(other.exists());
         assert!(other_backup.exists());
+    }
+}
+#[cfg(test)]
+mod migration_tests {
+    use super::*;
+    use std::io::Write;
+    fn tar_with_root(root: &str) -> Vec<u8> {
+        let mut archive = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_mode(0o755);
+        header.set_size(7);
+        archive
+            .append_data(
+                &mut header,
+                format!("{root}/Contents/MacOS/yoto-desktop"),
+                &b"desktop"[..],
+            )
+            .unwrap();
+        let mut link = tar::Header::new_gnu();
+        link.set_entry_type(tar::EntryType::Symlink);
+        link.set_mode(0o777);
+        link.set_size(0);
+        archive
+            .append_link(
+                &mut link,
+                format!("{root}/Contents/Resources/current"),
+                "../MacOS/yoto-desktop",
+            )
+            .unwrap();
+        let mut writer = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        writer.write_all(&archive.into_inner().unwrap()).unwrap();
+        writer.finish().unwrap()
+    }
+    fn zip_with(names: &[&str]) -> Vec<u8> {
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for name in names {
+            archive
+                .start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(b"binary").unwrap();
+        }
+        archive.finish().unwrap().into_inner()
+    }
+    #[test]
+    fn archives_with_the_current_or_legacy_root_are_accepted() {
+        for root in ["YotoMediaManager.app", "Yoto.app"] {
+            let directory = tempfile::tempdir().unwrap();
+            let roots = archive_roots(Platform::MacArm);
+            let chosen = extract_tar(&tar_with_root(root), directory.path(), &roots).unwrap();
+            assert_eq!(chosen, root);
+            validate_payload(&directory.path().join(chosen), Platform::MacArm).unwrap();
+        }
+        for root in ["YotoMediaManager", "Yoto"] {
+            let directory = tempfile::tempdir().unwrap();
+            let roots = archive_roots(Platform::Windows);
+            let bytes = zip_with(&[&format!("{root}/yoto-desktop.exe")]);
+            let chosen = extract_zip(&bytes, directory.path(), &roots).unwrap();
+            assert_eq!(chosen, root);
+            validate_payload(&directory.path().join(chosen), Platform::Windows).unwrap();
+        }
+    }
+    #[test]
+    fn archives_with_another_or_mixed_root_are_rejected() {
+        let roots = archive_roots(Platform::MacArm);
+        for root in ["Other.app", "YotoMediaManager Dev.app", "YotoMediaManager"] {
+            let directory = tempfile::tempdir().unwrap();
+            assert!(extract_tar(&tar_with_root(root), directory.path(), &roots).is_err());
+        }
+        let roots = archive_roots(Platform::Windows);
+        for names in [
+            &["YotoMediaManager/yoto-desktop.exe", "Yoto/tools/ffmpeg.exe"][..],
+            &["Yoto/yoto-desktop.exe", "YotoMediaManager/tools/ffmpeg.exe"][..],
+            &["Other/yoto-desktop.exe"][..],
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            assert!(extract_zip(&zip_with(names), directory.path(), &roots).is_err());
+        }
+        // A safe root does not excuse an escaping symlink under it.
+        let mut archive = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_entry_type(tar::EntryType::Symlink);
+        header.set_size(0);
+        archive
+            .append_link(&mut header, "YotoMediaManager.app/escape", "../../outside")
+            .unwrap();
+        let mut writer = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        writer.write_all(&archive.into_inner().unwrap()).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let roots = archive_roots(Platform::MacArm);
+        assert!(extract_tar(&writer.finish().unwrap(), directory.path(), &roots).is_err());
+    }
+    #[test]
+    fn legacy_mac_bundle_is_renamed_only_when_the_new_name_is_free() {
+        let root = tempfile::tempdir().unwrap();
+        let legacy = root.path().join("Yoto.app");
+        let renamed = root.path().join("YotoMediaManager.app");
+        for platform in [Platform::MacArm, Platform::MacIntel] {
+            assert_eq!(target_installation(&legacy, platform), renamed);
+            assert_eq!(target_installation(&renamed, platform), renamed);
+            for kept in ["YotoMediaManager Dev.app", "Yoto Dev.app", "Custom.app"] {
+                let path = root.path().join(kept);
+                assert_eq!(target_installation(&path, platform), path);
+            }
+        }
+        fs::create_dir(&renamed).unwrap();
+        assert_eq!(target_installation(&legacy, Platform::MacArm), legacy);
+        // Windows keeps its folder: the installer owns the move and its uninstall entry.
+        let folder = root.path().join("Yoto");
+        assert_eq!(target_installation(&folder, Platform::Windows), folder);
+    }
+    fn plan(root: &Path, source: &str, destination: &str, platform: Platform) -> InstallPlan {
+        InstallPlan {
+            parent_pid: 1,
+            source: root.join(source),
+            destination: root.join(destination),
+            payload: root.join(".yoto-update-test").join("YotoMediaManager.app"),
+            backup: root.join(".yoto-backup-test.app"),
+            platform,
+            version: Version::parse("0.2.0").unwrap(),
+        }
+    }
+    #[test]
+    fn helper_accepts_only_the_legacy_to_current_rename() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let scratch = root.join(".yoto-update-test");
+        fs::create_dir(&scratch).unwrap();
+        fs::create_dir(root.join("Yoto.app")).unwrap();
+        let migration = plan(root, "Yoto.app", "YotoMediaManager.app", Platform::MacArm);
+        assert!(valid_paths(&migration, &scratch, root));
+        assert!(valid_paths(
+            &plan(root, "Yoto.app", "Yoto.app", Platform::MacArm),
+            &scratch,
+            root
+        ));
+        for invalid in [
+            plan(root, "Yoto.app", "Other.app", Platform::MacArm),
+            plan(root, "Custom.app", "YotoMediaManager.app", Platform::MacArm),
+            plan(root, "Yoto", "YotoMediaManager", Platform::Windows),
+            plan(root, "Yoto.app", "YotoMediaManager.app", Platform::Windows),
+        ] {
+            assert!(!valid_paths(&invalid, &scratch, root));
+        }
+        let mut outside = plan(root, "Yoto.app", "YotoMediaManager.app", Platform::MacArm);
+        outside.destination = root.join("nested/YotoMediaManager.app");
+        assert!(!valid_paths(&outside, &scratch, root));
+        // Another copy already holds the new name: nothing may overwrite it.
+        fs::create_dir(root.join("YotoMediaManager.app")).unwrap();
+        assert!(!valid_paths(&migration, &scratch, root));
+    }
+    #[cfg(unix)]
+    fn installation_with(directory: &Path, marker: &str, launches: bool) {
+        use std::os::unix::fs::PermissionsExt;
+        fs::create_dir_all(directory).unwrap();
+        fs::write(directory.join("marker"), marker).unwrap();
+        let launcher = directory.join("yoto-desktop.exe");
+        if launches {
+            fs::write(&launcher, "#!/bin/sh\nexit 0\n").unwrap();
+            fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755)).unwrap();
+        } else {
+            fs::write(&launcher, "not executable").unwrap();
+        }
+    }
+    // `replace` is the same for both platforms; the Windows launcher (a spawned executable)
+    // lets the test stand in a script instead of asking Finder to open a bundle.
+    #[cfg(unix)]
+    #[test]
+    fn renamed_install_puts_the_new_app_in_place_and_backs_up_the_old_one() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let plan = plan(root, "Yoto.app", "YotoMediaManager.app", Platform::Windows);
+        installation_with(&plan.source, "old", true);
+        installation_with(&plan.payload, "new", true);
+        replace(&plan).unwrap();
+        assert!(!plan.source.exists());
+        assert_eq!(
+            fs::read_to_string(plan.destination.join("marker")).unwrap(),
+            "new"
+        );
+        assert_eq!(
+            fs::read_to_string(plan.backup.join("marker")).unwrap(),
+            "old"
+        );
+        // A later update finds the receipt that names the old bundle and removes its backup.
+        let scratch = root.join(".yoto-update-earlier");
+        fs::create_dir(&scratch).unwrap();
+        fs::write(
+            scratch.join("completed.json"),
+            serde_json::to_vec(&CompletedInstall {
+                destination: plan.source.clone(),
+                backup: plan.backup.clone(),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        cleanup_previous_updates(
+            &root.join(".yoto-update-test"),
+            &[&plan.destination, &root.join("Yoto.app")],
+        );
+        assert!(!plan.backup.exists());
+        assert!(!scratch.exists());
+        assert!(plan.destination.exists());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn failed_relaunch_after_rename_restores_the_old_name() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let plan = plan(root, "Yoto.app", "YotoMediaManager.app", Platform::Windows);
+        installation_with(&plan.source, "old", true);
+        installation_with(&plan.payload, "new", false);
+        assert!(replace(&plan).is_err());
+        assert_eq!(
+            fs::read_to_string(plan.source.join("marker")).unwrap(),
+            "old"
+        );
+        assert!(!plan.destination.exists());
+        assert!(!plan.backup.exists());
+    }
+    #[test]
+    fn failed_payload_move_after_rename_restores_the_old_name() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let plan = plan(root, "Yoto.app", "YotoMediaManager.app", Platform::Windows);
+        fs::create_dir(&plan.source).unwrap();
+        fs::write(plan.source.join("marker"), "old").unwrap();
+        assert!(replace(&plan).is_err());
+        assert_eq!(
+            fs::read_to_string(plan.source.join("marker")).unwrap(),
+            "old"
+        );
+        assert!(!plan.destination.exists());
+        assert!(!plan.backup.exists());
     }
 }

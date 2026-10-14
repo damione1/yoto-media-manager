@@ -46,6 +46,13 @@ impl AppVersion {
 const PUBLIC_KEY: &str = include_str!("../../../distribution/updater.pub");
 const MANIFEST_URL: &str =
     "https://github.com/damione1/yoto-media-manager/releases/latest/download/latest.json";
+const RELEASE_DOWNLOADS: &str = "https://github.com/damione1/yoto-media-manager/releases/download";
+/// The application's file name: `YotoMediaManager.app` on macOS, the
+/// `YotoMediaManager` folder on Windows, and the prefix of update archives.
+const APP_NAME: &str = "YotoMediaManager";
+/// The name releases used before the rename. Archives and installations still carrying
+/// it are accepted during the transition; a macOS `Yoto.app` is renamed when updated.
+const LEGACY_APP_NAME: &str = "Yoto";
 const MAX_ARCHIVE: u64 = 1_500_000_000;
 const MAX_EXPANDED: u64 = 4_000_000_000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -66,13 +73,14 @@ impl Platform {
             _ => Err(UpdateError::UnsupportedPlatform),
         }
     }
-    fn archive_name(self, version: &Version) -> String {
+    /// Update archive file names a release may publish, current name first.
+    fn archive_names(self, version: &Version) -> [String; 2] {
         let (platform, extension) = match self {
             Self::MacArm => ("darwin-aarch64", "tar.gz"),
             Self::MacIntel => ("darwin-x86_64", "tar.gz"),
             Self::Windows => ("windows-x86_64", "zip"),
         };
-        format!("Yoto-{version}-{platform}.{extension}")
+        [APP_NAME, LEGACY_APP_NAME].map(|name| format!("{name}-{version}-{platform}.{extension}"))
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,6 +103,16 @@ pub struct Release {
     pub notes: String,
     pub platform: Platform,
     artifact: Artifact,
+}
+impl Release {
+    /// The archive file name, one of `Platform::archive_names` since `select_release`
+    /// accepted its URL. The signature's trusted comment must name this same file.
+    fn archive_name(&self) -> &str {
+        self.artifact
+            .url
+            .rsplit_once('/')
+            .map_or("", |(_, name)| name)
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UpdateState {
@@ -311,12 +329,13 @@ fn select_release(
     if artifact.size == 0 || artifact.size > MAX_ARCHIVE {
         return Err(UpdateError::Manifest("Invalid archive size".into()));
     }
-    let expected = format!(
-        "https://github.com/damione1/yoto-media-manager/releases/download/v{}/{}",
-        manifest.version,
-        platform.archive_name(&manifest.version)
-    );
-    if artifact.url != expected {
+    let folder = format!("{RELEASE_DOWNLOADS}/v{}/", manifest.version);
+    let accepted = platform.archive_names(&manifest.version);
+    if !artifact
+        .url
+        .strip_prefix(&folder)
+        .is_some_and(|name| accepted.iter().any(|candidate| candidate == name))
+    {
         return Err(UpdateError::Manifest(
             "Unexpected release download URL".into(),
         ));

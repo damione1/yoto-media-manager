@@ -87,10 +87,7 @@ pub(super) async fn download(
         // of an older authentic archive under a forged newer manifest.
         verify_identity(
             &release.artifact.signature,
-            &format!(
-                "YotoMediaManager {}",
-                release.platform.archive_name(&release.version)
-            ),
+            &format!("YotoMediaManager {}", release.archive_name()),
         )?;
         install::prepare(&bytes, release.platform, release.version.clone())
     })
