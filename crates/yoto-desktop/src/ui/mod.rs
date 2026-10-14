@@ -1253,16 +1253,6 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::SetCover { .. } => ("Traitement en cours…", "Terminé."),
     })
 }
-fn account_summary(snapshot: &Snapshot) -> String {
-    match snapshot
-        .active_account
-        .as_ref()
-        .and_then(|id| snapshot.accounts.iter().find(|a| &a.id == id))
-    {
-        Some(account) => format!("Connecté à Yoto · {}", account.label),
-        None => "Aucun compte Yoto actif. Connectez ou sélectionnez un compte.".into(),
-    }
-}
 fn remote_syncing(snapshot: &Snapshot) -> bool {
     snapshot
         .remote_sync

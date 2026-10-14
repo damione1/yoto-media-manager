@@ -118,6 +118,14 @@ pub const LIGHT_SAND: Family = Family {
     icon: BROWN,
     step: BORDER,
 };
+/// Neutral family for idle or offline things.
+pub const STONE: Family = Family {
+    soft: 0xF3ECE3,
+    accent: 0xC9B8A3,
+    ink: MUTED_WARM,
+    icon: MUTED_WARM,
+    step: BOX_BORDER,
+};
 /// Families a thumbnail color is drawn from.
 const THUMBNAILS: [&Family; 5] = [&PEACH, &MINT, &SKY, &BUTTER, &LILAC];
 
@@ -520,6 +528,8 @@ pub enum Look {
     Ghost,
     /// Text only, in a family ink (« Tout sélectionner »).
     Link(&'static Family),
+    /// Dark selected chip.
+    Dark,
     /// On the dark selection bar.
     OnDark,
     /// Translucent on the dark selection bar, rose text.
@@ -622,6 +632,15 @@ fn paint(look: Look) -> Paint {
             fg: c(family.icon),
             hover: c(family.soft),
             active: shade(family.soft, 0.03),
+            border: false,
+            step: None,
+            weight: FontWeight::EXTRA_BOLD,
+        },
+        Look::Dark => Paint {
+            bg: c(INK),
+            fg: c(SURFACE),
+            hover: c(INK_SOFT),
+            active: c(INK),
             border: false,
             step: None,
             weight: FontWeight::EXTRA_BOLD,

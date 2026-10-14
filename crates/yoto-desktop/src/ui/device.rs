@@ -1,10 +1,26 @@
 use super::*;
+use gpui_kit::component::{
+    button::{ButtonCustomVariant, ButtonRounded},
+    checkbox::Checkbox,
+    menu::{DropdownMenu, PopupMenuItem},
+    slider::{Slider, SliderEvent, SliderState},
+};
+use theme::{Height, Look};
+/// Night-light colors offered as swatches: label, RGB.
+const LIGHTS: [(&str, [u8; 3]); 6] = [
+    ("Orange doux", [0xFF, 0xB0, 0x66]),
+    ("Rose", [0xFF, 0x9E, 0xB5]),
+    ("Violet", [0xB4, 0x9C, 0xFF]),
+    ("Bleu", [0x7F, 0xB2, 0xFF]),
+    ("Vert", [0x7E, 0xD9, 0xA6]),
+    ("Éteinte", [0, 0, 0]),
+];
+/// Sleep timer choices: label, seconds (0 cancels the timer).
+const TIMERS: [(&str, u32); 4] = [("Non", 0), ("15 min", 900), ("30 min", 1800), ("1 h", 3600)];
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Field {
     Name,
-    Volume,
     Light,
-    Sleep,
     Day,
     Night,
     DayLimit,
@@ -30,9 +46,7 @@ enum Field {
 impl Field {
     const ALL: &'static [Self] = &[
         Self::Name,
-        Self::Volume,
         Self::Light,
-        Self::Sleep,
         Self::Day,
         Self::Night,
         Self::DayLimit,
@@ -70,9 +84,7 @@ impl Field {
             Self::DayRadio => "Yoto Radio jour",
             Self::NightRadio => "Yoto Radio nuit",
             Self::Name => "Nom du lecteur",
-            Self::Volume => "Volume (0–100)",
             Self::Light => "Lumière #RRGGBB",
-            Self::Sleep => "Minuterie (secondes)",
             Self::Day => "Début du jour HH:MM",
             Self::Night => "Début de la nuit HH:MM",
             Self::DayLimit => "Volume maximal jour",
@@ -106,9 +118,7 @@ impl Field {
             Self::NightLight => Some("nightAmbientColour"),
             Self::Dim => Some("displayDimTimeout"),
             Self::Shutdown => Some("shutdownTimeout"),
-            Self::Name | Self::Volume | Self::Sleep | Self::DayShortcut | Self::NightShortcut => {
-                None
-            }
+            Self::Name | Self::DayShortcut | Self::NightShortcut => None,
         }
     }
 }
@@ -123,8 +133,19 @@ pub struct DevicePanel {
     limited: bool,
     loaded: bool,
     shortcut_base: Option<(String, String)>,
+    name: String,
+    volume: Entity<SliderState>,
+    card: Option<CardId>,
+    light: Option<usize>,
+    timer: Option<u32>,
+    night: bool,
+    paused: bool,
+    volume_set: bool,
+    more_open: bool,
+    loading: bool,
     tasks: Vec<Task<()>>,
     status: String,
+    _subscriptions: Vec<Subscription>,
 }
 impl DevicePanel {
     pub fn new(
@@ -152,9 +173,43 @@ impl DevicePanel {
                 )
             })
             .collect();
+        let volume = cx.new(|_| {
+            SliderState::new()
+                .min(0.)
+                .max(100.)
+                .step(1.)
+                .default_value(50.)
+        });
+        let subscription = cx.subscribe(&volume, |v, _, event, cx| match event {
+            SliderEvent::Release(value) => {
+                let level = value.start().round().clamp(0., 100.) as u8;
+                match Volume::new(level) {
+                    Ok(value) => v.player(PlayerCommand::Volume { value }, cx),
+                    Err(e) => {
+                        v.status = failure_text(&e);
+                        cx.notify();
+                    }
+                }
+            }
+            SliderEvent::Change(_) => {
+                v.volume_set = true;
+                cx.notify();
+            }
+        });
         Self {
             account,
+            name: device.name.clone(),
             device: device.id,
+            volume,
+            card: None,
+            light: None,
+            timer: None,
+            night: false,
+            paused: false,
+            volume_set: false,
+            more_open: false,
+            loading: false,
+            _subscriptions: vec![subscription],
             service,
             runtime,
             inputs,
@@ -164,7 +219,7 @@ impl DevicePanel {
             loaded: false,
             shortcut_base: None,
             tasks: vec![],
-            status: "Chargez les réglages pour les modifier.".into(),
+            status: String::new(),
         }
     }
     fn value(&self, f: Field, cx: &App) -> String {
@@ -179,6 +234,7 @@ impl DevicePanel {
                 .spawn(async move { service.execute(command).await })
                 .await;
             let _ = weak.update(cx, |v, cx| {
+                v.loading = false;
                 match r {
                     Ok(Ok(Reply::Data(data))) => {
                         if let Some(config) = data.pointer("/device/config") {
@@ -253,7 +309,7 @@ impl DevicePanel {
                                 .unwrap_or(false);
                         }
                         v.status = if v.loaded {
-                            "Réglages chargés. Modifiez-les ci-dessous puis enregistrez.".into()
+                            "Réglages du lecteur à jour.".into()
                         } else {
                             "État du lecteur reçu.".into()
                         };
@@ -293,7 +349,20 @@ impl DevicePanel {
         }));
         cx.notify();
     }
+    /// Read the player's settings from Yoto.
+    pub fn load(&mut self, cx: &mut Context<Self>) {
+        self.loading = true;
+        self.send(
+            Command::DeviceConfig {
+                account: self.account.clone(),
+                device: self.device.clone(),
+            },
+            cx,
+        );
+        self.status = "Lecture des réglages du lecteur…".into();
+    }
     pub fn start(&mut self, card: CardId, cx: &mut Context<Self>) {
+        self.paused = false;
         self.player(
             PlayerCommand::Start {
                 card,
@@ -313,38 +382,6 @@ impl DevicePanel {
             },
             cx,
         );
-    }
-    fn volume(&mut self, cx: &mut Context<Self>) {
-        match self
-            .value(Field::Volume, cx)
-            .parse::<u8>()
-            .map_err(|_| Failure::Validation("Volume attendu de 0 à 100".into()))
-            .and_then(Volume::new)
-        {
-            Ok(value) => self.player(PlayerCommand::Volume { value }, cx),
-            Err(e) => {
-                self.status = failure_text(&e);
-                cx.notify();
-            }
-        }
-    }
-    fn light(&mut self, cx: &mut Context<Self>) {
-        match color(&self.value(Field::Light, cx)) {
-            Ok([r, g, b]) => self.player(PlayerCommand::Ambient { r, g, b }, cx),
-            Err(e) => {
-                self.status = failure_text(&e);
-                cx.notify();
-            }
-        }
-    }
-    fn sleep(&mut self, cx: &mut Context<Self>) {
-        match self.value(Field::Sleep, cx).parse::<u32>() {
-            Ok(seconds) => self.player(PlayerCommand::SleepTimer { seconds }, cx),
-            Err(_) => {
-                self.status = "Entrez un nombre entier de secondes.".into();
-                cx.notify();
-            }
-        }
     }
     fn save(&mut self, cx: &mut Context<Self>) {
         let patch = DeviceConfiguration {
@@ -431,19 +468,6 @@ impl DevicePanel {
         }
     }
 }
-fn color(s: &str) -> yoto_domain::Result<[u8; 3]> {
-    let s = s
-        .strip_prefix('#')
-        .ok_or_else(|| Failure::Validation("Couleur attendue #RRGGBB".into()))?;
-    if s.len() != 6 || !s.is_ascii() {
-        return Err(Failure::Validation("Couleur attendue #RRGGBB".into()));
-    }
-    let parse = |r| {
-        u8::from_str_radix(&s[r], 16)
-            .map_err(|_| Failure::Validation("Couleur attendue #RRGGBB".into()))
-    };
-    Ok([parse(0..2)?, parse(2..4)?, parse(4..6)?])
-}
 fn shortcuts(s: &str) -> yoto_domain::Result<Vec<Shortcut>> {
     s.lines()
         .filter(|s| !s.trim().is_empty())
@@ -462,135 +486,451 @@ fn shortcuts(s: &str) -> yoto_domain::Result<Vec<Shortcut>> {
         })
         .collect()
 }
-impl Render for DevicePanel {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        use gpui_kit::component::checkbox::Checkbox;
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .p_4()
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_lg()
+/// Small caption above a value or a field, as in the design.
+fn caption(text: impl Into<SharedString>) -> Div {
+    div()
+        .text_size(px(12.))
+        .font_weight(FontWeight::EXTRA_BOLD)
+        .text_color(theme::c(theme::MUTED))
+        .child(text.into())
+}
+/// Section label inside the play card (« Volume », « Veilleuse », « Minuterie »).
+fn label(text: impl Into<SharedString>) -> Div {
+    div().font_weight(FontWeight::EXTRA_BOLD).child(text.into())
+}
+/// Ring drawn around the chosen night-light swatch: white gap, then ink.
+fn swatch_ring() -> Vec<BoxShadow> {
+    [(theme::SURFACE, 3.), (theme::INK, 5.)]
+        .into_iter()
+        .map(|(color, spread)| BoxShadow {
+            color: theme::c(color),
+            offset: point(px(0.), px(0.)),
+            blur_radius: px(0.),
+            spread_radius: px(spread),
+            inset: false,
+        })
+        .collect()
+}
+impl DevicePanel {
+    fn stored(&self, field: Field) -> &Entity<InputState> {
+        &self.inputs[&field]
+    }
+    /// The « Lecture sur … » card: playlist, play/pause/stop, volume, night light, timer.
+    pub fn play_card(
+        &mut self,
+        remote: &[yoto_infra::api::RemoteCard],
+        online: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let owner = cx.entity().downgrade();
+        let chosen = self
+            .card
+            .as_ref()
+            .and_then(|id| remote.iter().find(|card| &card.card == id));
+        let chooser = if remote.is_empty() {
+            theme::inset().child(theme::note(
+                "Aucune playlist sur votre compte Yoto pour l’instant. Envoyez-en une depuis « Playlists », puis actualisez.",
+            ))
+        } else {
+            let cards: Vec<(CardId, String)> = remote
+                .iter()
+                .map(|card| (card.card.clone(), card.title.clone()))
+                .collect();
+            let selected = self.card.clone();
+            let (thumb, title, subtitle) = match chosen {
+                Some(card) => (
+                    theme::thumbnail(card.card.as_str(), 52., 14.),
+                    card.title.clone(),
+                    "Playlist de votre compte Yoto",
+                ),
+                None => (
+                    theme::icon_tile(IconName::ListMusic, &theme::LILAC, 52., 14.),
+                    "Choisir une playlist".to_owned(),
+                    "Elle sera lancée sur ce lecteur.",
+                ),
+            };
+            div().child(
+                Button::new("device-playlist")
+                    .custom(
+                        ButtonCustomVariant::new(cx)
+                            .color(theme::c(theme::CREAM))
+                            .foreground(theme::c(theme::INK))
+                            .hover(theme::c(theme::SAND))
+                            .active(theme::c(theme::SAND)),
+                    )
+                    .accessibility_label(format!("Playlist à lancer : {title}"))
+                    .bg(theme::c(theme::CREAM))
+                    .rounded(ButtonRounded::Size(px(16.)))
+                    .w_full()
+                    .h(px(72.))
+                    .px(px(10.))
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .items_center()
+                            .gap(px(12.))
+                            .child(thumb)
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::EXTRA_BOLD)
+                                            .truncate()
+                                            .child(title),
+                                    )
+                                    .child(theme::meta(subtitle)),
+                            )
+                            .child(
+                                gpui_kit::component::Icon::new(IconName::ChevronDown)
+                                    .size(px(18.))
+                                    .text_color(theme::c(theme::MUTED_WARM)),
+                            ),
+                    )
+                    .dropdown_menu(move |mut menu, _, _| {
+                        menu = menu.scrollable(true).max_h(px(360.)).min_w(px(280.));
+                        for (id, title) in &cards {
+                            let owner = owner.clone();
+                            let pick = id.clone();
+                            menu = menu.item(
+                                PopupMenuItem::new(title.clone())
+                                    .checked(selected.as_ref() == Some(id))
+                                    .on_click(move |_, _, cx| {
+                                        let _ = owner.update(cx, |p, cx| {
+                                            p.card = Some(pick.clone());
+                                            cx.notify();
+                                        });
+                                    }),
+                            );
+                        }
+                        menu
+                    }),
+            )
+        };
+        let playable = self.card.clone();
+        let paused = self.paused;
+        let level = self.volume.read(cx).value().start().round() as u8;
+        let mut card = theme::card()
+            .gap(px(14.))
+            .child(theme::heading(
+                format!("Lecture sur « {} »", self.name),
+                19.,
+            ))
+            .child(chooser)
             .child(
                 div()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Lecteur sélectionné"),
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        theme::pill(
+                            Button::new("device-play")
+                                .icon(IconName::Play)
+                                .label("Lire sur ce lecteur")
+                                .on_click(cx.listener(move |p, _, _, cx| {
+                                    if let Some(card) = playable.clone() {
+                                        p.start(card, cx);
+                                    }
+                                })),
+                            Look::Solid(&theme::MINT),
+                            Height::Hero,
+                            self.card.is_none(),
+                            cx,
+                        )
+                        .flex_1(),
+                    )
+                    .child(theme::round(
+                        Button::new("device-pause")
+                            .icon(if paused {
+                                IconName::Play
+                            } else {
+                                IconName::Pause
+                            })
+                            .accessibility_label(if paused {
+                                "Reprendre la lecture"
+                            } else {
+                                "Mettre en pause"
+                            })
+                            .tooltip(if paused { "Reprendre" } else { "Pause" })
+                            .on_click(cx.listener(|p, _, _, cx| {
+                                let command = if p.paused {
+                                    PlayerCommand::Resume
+                                } else {
+                                    PlayerCommand::Pause
+                                };
+                                p.paused = !p.paused;
+                                p.player(command, cx);
+                            })),
+                        Look::Outline,
+                        48.,
+                        false,
+                        cx,
+                    ))
+                    .child(theme::round(
+                        Button::new("device-stop")
+                            .icon(IconName::Square)
+                            .accessibility_label("Arrêter la lecture")
+                            .tooltip("Arrêter")
+                            .on_click(cx.listener(|p, _, _, cx| {
+                                p.paused = false;
+                                p.player(PlayerCommand::Stop, cx);
+                            })),
+                        Look::Outline,
+                        48.,
+                        false,
+                        cx,
+                    )),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .child(label("Volume"))
+                            .children(self.volume_set.then(|| {
+                                div()
+                                    .font_weight(FontWeight::EXTRA_BOLD)
+                                    .text_color(theme::c(theme::SKY.ink))
+                                    .child(format!("{level} %"))
+                            })),
+                    )
+                    .child(Slider::new(&self.volume).bg(theme::c(theme::SKY.accent))),
             );
-        let commands = [
-            PlayerCommand::Pause,
-            PlayerCommand::Resume,
-            PlayerCommand::Stop,
-            PlayerCommand::Reboot,
-            PlayerCommand::Events,
-            PlayerCommand::Status,
-            PlayerCommand::BluetoothOff,
-            PlayerCommand::BluetoothDisconnect,
-            PlayerCommand::BluetoothState,
-        ];
-        let mut row = div().flex().flex_wrap().gap_2();
-        for command in commands {
-            row = row.child(
-                Button::new(command.label())
-                    .label(command.label())
-                    .on_click(cx.listener(move |v, _, _, cx| v.player(command.clone(), cx))),
-            );
+        let mut swatches = div().flex().flex_wrap().gap(px(8.));
+        for (index, (name, [r, g, b])) in LIGHTS.iter().enumerate() {
+            let shown = if (*r, *g, *b) == (0, 0, 0) {
+                0x3A3A3A
+            } else {
+                u32::from_be_bytes([0, *r, *g, *b])
+            };
+            let (r, g, b) = (*r, *g, *b);
+            let swatch = Button::new(("device-light", index))
+                .custom(
+                    ButtonCustomVariant::new(cx)
+                        .color(theme::c(shown))
+                        .hover(theme::c(shown))
+                        .active(theme::c(shown)),
+                )
+                .accessibility_label(format!("Veilleuse : {name}"))
+                .tooltip(*name)
+                .toggled(self.light == Some(index))
+                .bg(theme::c(shown))
+                .rounded(ButtonRounded::Size(px(999.)))
+                .size(px(40.))
+                .on_click(cx.listener(move |p, _, _, cx| {
+                    p.light = Some(index);
+                    p.player(PlayerCommand::Ambient { r, g, b }, cx);
+                }));
+            swatches = swatches.child(if self.light == Some(index) {
+                swatch.shadow(swatch_ring())
+            } else {
+                swatch
+            });
         }
-        body = body.child(row);
-        body = body
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(Input::new(&self.inputs[&Field::Volume]))
-                    .child(
-                        Button::new("volume")
-                            .label("Régler le volume")
-                            .on_click(cx.listener(|v, _, _, cx| v.volume(cx))),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(Input::new(&self.inputs[&Field::Light]))
-                    .child(
-                        Button::new("light")
-                            .label("Régler la lumière")
-                            .on_click(cx.listener(|v, _, _, cx| v.light(cx))),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(Input::new(&self.inputs[&Field::Sleep]))
-                    .child(
-                        Button::new("sleep")
-                            .label("Minuterie")
-                            .on_click(cx.listener(|v, _, _, cx| v.sleep(cx))),
-                    ),
-            );
-        body = body
-            .child(
-                Button::new("load-config")
-                    .label("Charger les réglages du lecteur")
-                    .on_click(cx.listener(|v, _, _, cx| {
-                        v.send(
-                            Command::DeviceConfig {
-                                account: v.account.clone(),
-                                device: v.device.clone(),
-                            },
-                            cx,
-                        )
+        let mut timers = div().flex().flex_wrap().gap(px(6.));
+        for (name, seconds) in TIMERS {
+            timers = timers.child(theme::pill(
+                Button::new(("device-timer", seconds as usize))
+                    .label(name)
+                    .on_click(cx.listener(move |p, _, _, cx| {
+                        p.timer = Some(seconds);
+                        p.player(PlayerCommand::SleepTimer { seconds }, cx);
                     })),
+                if self.timer == Some(seconds) {
+                    Look::Dark
+                } else {
+                    Look::Soft(&theme::LIGHT_SAND)
+                },
+                Height::Small,
+                false,
+                cx,
+            ));
+        }
+        card = card
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .child(label("Veilleuse"))
+                    .child(swatches),
             )
             .child(
-                Button::new("rest-status")
-                    .label("Actualiser l’état du lecteur")
-                    .on_click(cx.listener(|v, _, _, cx| {
-                        v.send(
-                            Command::DeviceStatus {
-                                account: v.account.clone(),
-                                device: v.device.clone(),
-                            },
-                            cx,
-                        )
-                    })),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .child(label("Minuterie"))
+                    .child(timers),
             );
+        if !online {
+            card = card.child(theme::note(
+                "Ce lecteur semble hors ligne : allumez-le et vérifiez qu’il est connecté au Wi-Fi.",
+            ));
+        }
+        if !self.status.is_empty() {
+            card = card.child(theme::note(self.status.clone()));
+        }
+        card.into_any_element()
+    }
+    /// « Jour et nuit », the collapsed « Plus de réglages » and their content.
+    pub fn settings(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let night = self.night;
+        let mut column = div().flex().flex_col().gap(px(12.));
+        let mut card = theme::card().px(px(20.)).py(px(18.)).child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(10.))
+                .child(theme::heading("Jour et nuit", 19.))
+                .child(
+                    theme::segmented()
+                        .child(theme::segment(
+                            Button::new("device-day")
+                                .icon(IconName::Sun)
+                                .label("Jour")
+                                .on_click(cx.listener(|p, _, _, cx| {
+                                    p.night = false;
+                                    cx.notify();
+                                })),
+                            !night,
+                            Height::Small,
+                            cx,
+                        ))
+                        .child(theme::segment(
+                            Button::new("device-night")
+                                .icon(IconName::Moon)
+                                .label("Nuit")
+                                .on_click(cx.listener(|p, _, _, cx| {
+                                    p.night = true;
+                                    cx.notify();
+                                })),
+                            night,
+                            Height::Small,
+                            cx,
+                        )),
+                ),
+        );
         if self.loaded {
-            for f in [
-                Field::Name,
-                Field::Day,
-                Field::Night,
-                Field::DayLimit,
-                Field::NightLimit,
-                Field::NightLight,
-                Field::Dim,
-                Field::Shutdown,
-                Field::VolumeLevel,
-                Field::BluetoothEnabled,
-                Field::ClockFace,
-                Field::Locale,
-                Field::HourFormat,
-                Field::DayBrightness,
-                Field::NightBrightness,
-                Field::DimBrightness,
-                Field::DayDaily,
-                Field::NightDaily,
-                Field::DayRadio,
-                Field::NightRadio,
-            ] {
-                body = body.child(f.label()).child(Input::new(&self.inputs[&f]));
+            let tiles: [(&str, Field); 4] = if night {
+                [
+                    ("Commence à (HH:MM)", Field::Night),
+                    ("Volume maximal", Field::NightLimit),
+                    ("Luminosité de l’écran", Field::NightBrightness),
+                    ("Couleur de la lumière", Field::NightLight),
+                ]
+            } else {
+                [
+                    ("Commence à (HH:MM)", Field::Day),
+                    ("Volume maximal", Field::DayLimit),
+                    ("Luminosité de l’écran", Field::DayBrightness),
+                    ("Couleur de la lumière", Field::Light),
+                ]
+            };
+            let mut grid = div().flex().flex_wrap().gap(px(10.));
+            for (text, field) in tiles {
+                grid = grid.child(
+                    div()
+                        .flex_1()
+                        .min_w(px(160.))
+                        .flex_basis(relative(0.4))
+                        .bg(theme::c(theme::CREAM))
+                        .rounded(px(14.))
+                        .px(px(12.))
+                        .py(px(10.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .child(caption(text))
+                        .child(theme::small_field(Input::new(self.stored(field)))),
+                );
             }
-            body = body
+            card = card.child(grid).child(
+                div().flex().justify_end().child(theme::pill(
+                    Button::new("save-device-config")
+                        .label("Enregistrer ces réglages")
+                        .on_click(cx.listener(|p, _, _, cx| p.save(cx))),
+                    Look::Soft(&theme::SKY),
+                    Height::Medium,
+                    false,
+                    cx,
+                )),
+            );
+        } else if self.loading {
+            card = card.child(theme::note("Lecture des réglages du lecteur…"));
+        } else {
+            card = card
+                .child(theme::note(
+                    "Les réglages de ce lecteur n’ont pas pu être lus. Vérifiez qu’il est allumé, puis réessayez.",
+                ))
+                .child(div().flex().justify_end().child(theme::pill(
+                    Button::new("load-config")
+                        .label("Lire les réglages")
+                        .on_click(cx.listener(|p, _, _, cx| p.load(cx))),
+                    Look::Soft(&theme::SKY),
+                    Height::Medium,
+                    false,
+                    cx,
+                )));
+        }
+        column = column.child(card).child(
+            theme::disclosure(
+                "device-more",
+                "Plus de réglages",
+                "Casque, arrêt auto, raccourcis (bêta)",
+                self.more_open,
+                cx,
+            )
+            .on_click(cx.listener(|p, _, _, cx| {
+                p.more_open = !p.more_open;
+                cx.notify();
+            })),
+        );
+        if self.more_open {
+            column = column.child(self.more(cx));
+        }
+        column.into_any_element()
+    }
+    /// Everything behind « Plus de réglages »: rarely changed settings, the raw Yoto
+    /// values, beta shortcuts and the technical player commands.
+    fn more(&mut self, cx: &mut Context<Self>) -> Div {
+        let labelled = |text: &'static str, input: &Entity<InputState>| {
+            div()
+                .flex_1()
+                .min_w(px(180.))
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .child(caption(text))
+                .child(theme::small_field(Input::new(input)))
+        };
+        let row = || div().flex().flex_wrap().gap(px(10.));
+        let mut card = theme::card();
+        if self.loaded {
+            card = card
+                .child(theme::heading("Lecteur", 17.))
+                .child(labelled("Nom du lecteur", self.stored(Field::Name)))
+                .child(
+                    row()
+                        .child(labelled(
+                            "Délai avant atténuation de l’écran",
+                            self.stored(Field::Dim),
+                        ))
+                        .child(labelled("Délai avant arrêt auto", self.stored(Field::Shutdown))),
+                )
                 .child(
                     Checkbox::new("repeat")
                         .label("Répéter les pistes")
                         .checked(self.repeat)
-                        .on_click(cx.listener(|v, checked, _, cx| {
-                            v.repeat = *checked;
+                        .on_click(cx.listener(|p, checked, _, cx| {
+                            p.repeat = *checked;
                             cx.notify();
                         })),
                 )
@@ -598,8 +938,8 @@ impl Render for DevicePanel {
                     Checkbox::new("headphones")
                         .label("Casque Bluetooth")
                         .checked(self.headphones)
-                        .on_click(cx.listener(|v, checked, _, cx| {
-                            v.headphones = *checked;
+                        .on_click(cx.listener(|p, checked, _, cx| {
+                            p.headphones = *checked;
                             cx.notify();
                         })),
                 )
@@ -607,28 +947,107 @@ impl Render for DevicePanel {
                     Checkbox::new("limited")
                         .label("Limiter le volume du casque")
                         .checked(self.limited)
-                        .on_click(cx.listener(|v, checked, _, cx| {
-                            v.limited = *checked;
+                        .on_click(cx.listener(|p, checked, _, cx| {
+                            p.limited = *checked;
                             cx.notify();
                         })),
                 )
-                .child(
-                    Button::new("save-device-config")
+                .child(theme::heading("Valeurs Yoto avancées", 17.))
+                .child(theme::note(
+                    "Valeurs transmises telles quelles à Yoto. Ne les modifiez que si vous savez ce qu’elles font.",
+                ));
+            let mut raw = row();
+            for field in [
+                Field::VolumeLevel,
+                Field::BluetoothEnabled,
+                Field::ClockFace,
+                Field::Locale,
+                Field::HourFormat,
+                Field::DimBrightness,
+                Field::DayDaily,
+                Field::NightDaily,
+                Field::DayRadio,
+                Field::NightRadio,
+            ] {
+                raw = raw.child(labelled(field.label(), self.stored(field)));
+            }
+            card = card.child(raw).child(
+                div().flex().justify_end().child(theme::pill(
+                    Button::new("save-device-more")
                         .label("Enregistrer ces réglages")
-                        .primary()
-                        .on_click(cx.listener(|v, _, _, cx| v.save(cx))),
-                );
+                        .on_click(cx.listener(|p, _, _, cx| p.save(cx))),
+                    Look::Soft(&theme::SKY),
+                    Height::Medium,
+                    false,
+                    cx,
+                )),
+            );
         }
-        body.child(Field::DayShortcut.label())
-            .child(Input::new(&self.inputs[&Field::DayShortcut]))
-            .child(Field::NightShortcut.label())
-            .child(Input::new(&self.inputs[&Field::NightShortcut]))
+        card = card
             .child(
-                Button::new("save-shortcuts")
-                    .label("Enregistrer les raccourcis")
-                    .disabled(!self.loaded)
-                    .on_click(cx.listener(|v, _, _, cx| v.shortcuts(cx))),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(theme::heading("Raccourcis", 17.))
+                    .child(theme::tag("bêta", &theme::BUTTER)),
             )
-            .child(div().text_sm().child(self.status.clone()))
+            .child(labelled(
+                Field::DayShortcut.label(),
+                self.stored(Field::DayShortcut),
+            ))
+            .child(labelled(
+                Field::NightShortcut.label(),
+                self.stored(Field::NightShortcut),
+            ))
+            .child(
+                div().flex().justify_end().child(theme::pill(
+                    Button::new("save-shortcuts")
+                        .label("Enregistrer les raccourcis")
+                        .on_click(cx.listener(|p, _, _, cx| p.shortcuts(cx))),
+                    Look::Soft(&theme::SKY),
+                    Height::Medium,
+                    !self.loaded,
+                    cx,
+                )),
+            )
+            .child(theme::heading("Commandes techniques", 17.));
+        let mut commands = div().flex().flex_wrap().gap(px(6.)).child(theme::pill(
+            Button::new("rest-status")
+                .label("Actualiser l’état du lecteur")
+                .on_click(cx.listener(|p, _, _, cx| {
+                    p.send(
+                        Command::DeviceStatus {
+                            account: p.account.clone(),
+                            device: p.device.clone(),
+                        },
+                        cx,
+                    )
+                })),
+            Look::Outline,
+            Height::Small,
+            false,
+            cx,
+        ));
+        for command in [
+            PlayerCommand::Status,
+            PlayerCommand::Events,
+            PlayerCommand::BluetoothState,
+            PlayerCommand::BluetoothOff,
+            PlayerCommand::BluetoothDisconnect,
+            PlayerCommand::Reboot,
+        ] {
+            let label = command.label();
+            commands = commands.child(theme::pill(
+                Button::new(label)
+                    .label(label)
+                    .on_click(cx.listener(move |p, _, _, cx| p.player(command.clone(), cx))),
+                Look::Outline,
+                Height::Small,
+                false,
+                cx,
+            ));
+        }
+        card.child(commands)
     }
 }

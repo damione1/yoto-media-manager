@@ -12,7 +12,7 @@ Connect your account, open `Lecteurs`, and refresh the data with `Actualiser dep
 
 A player must be connected to receive a command. If its state looks outdated, refresh again and check its Wi-Fi connection.
 
-From a playlist in `Mes playlists Yoto`, choose `Lire sur le lecteur sélectionné`. The player panel offers the available controls, including pause, resume, stop, volume, and a timer.
+In the `Lecture sur « … »` card, pick one of your Yoto playlists, then choose `Lire sur ce lecteur`. The same card has pause/resume and stop buttons, the volume slider, the night-light colors (`Veilleuse`) and the sleep timer (`Minuterie`). To open, edit or delete a Yoto playlist, use `Playlists`.
 
 ## Understand confirmations
 
@@ -22,7 +22,9 @@ Some features, such as lighting or Bluetooth, depend on the model and the API's 
 
 ## Settings and shortcuts
 
-Choose `Charger les réglages du lecteur` before changing settings. Adjust the values you want, then choose `Enregistrer ces réglages`. The app reads the configuration again to verify the result.
+The player's settings are read as soon as you select it. `Jour et nuit` shows the start time, maximum volume, screen brightness and light color of each mode; switch between `Jour` and `Nuit`, adjust the values, then choose `Enregistrer ces réglages`. If the settings could not be read, choose `Lire les réglages`.
+
+Rarer settings (player name, headphones, automatic shutdown, raw Yoto values), shortcuts and technical commands are under `Plus de réglages`.
 
 Day and night shortcuts are shown separately. Changing one does not erase the other. Saving an empty selection for one mode explicitly removes its shortcuts. Some predefined Yoto shortcuts may be visible but cannot be edited.
 
