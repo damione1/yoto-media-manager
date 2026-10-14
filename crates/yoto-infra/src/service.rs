@@ -2430,6 +2430,7 @@ impl Service {
             self.process_job(&mut job, cancel.clone()).await
         };
         let outcome = self.db.publication_outcome(&job).ok().flatten();
+        let failure = result.as_ref().err().map(ToString::to_string);
         let result = if cancel.load(std::sync::atomic::Ordering::SeqCst)
             && !outcome.as_ref().is_some_and(|o| o.uncertain())
             && !matches!(result, Ok(JobOutput::Published { .. }))
@@ -2483,6 +2484,9 @@ impl Service {
                 },
             },
         };
+        if let (JobState::Reconciling, Some(failure)) = (&state, failure) {
+            eprintln!("Yoto publication {} left to verify: {failure}", job.id);
+        }
         job.state = state;
         if !account_session
             .as_ref()
@@ -2629,7 +2633,10 @@ impl Service {
                 if let Some((card, base)) = base {
                     let read = self.auth.access(&account, Scope::UserContentView).await?;
                     let remote = self.api.card(&read, card).await?;
-                    if meaningful(&remote) != meaningful(base) {
+                    if let Some(difference) = changed_on_yoto(&remote, base) {
+                        eprintln!(
+                            "Yoto playlist changed since its confirmed version at {difference}"
+                        );
                         job.state = JobState::Conflict { remote };
                         return Err(Failure::Conflict);
                     }
@@ -2672,12 +2679,8 @@ impl Service {
                     .auth
                     .access(&account, Scope::UserContentView)
                     .await
-                    .map_err(|_| Failure::Ambiguous)?;
-                let confirmed = self
-                    .api
-                    .card(&read, &card)
-                    .await
-                    .map_err(|_| Failure::Ambiguous)?;
+                    .map_err(unconfirmed)?;
+                let confirmed = self.api.card(&read, &card).await.map_err(unconfirmed)?;
                 if !contains_document(&confirmed, &document) {
                     return Err(Failure::Ambiguous);
                 }
@@ -3086,14 +3089,44 @@ impl Service {
         .map_err(storage)?
     }
 }
-fn meaningful(v: &serde_json::Value) -> serde_json::Value {
-    let mut v = v.clone();
-    if let Some(o) = v.as_object_mut() {
-        for key in ["createdAt", "updatedAt", "_id", "userId"] {
-            o.remove(key);
-        }
+/// Yoto accepted a write that could not be read back: its outcome stays to be verified.
+fn unconfirmed(failure: Failure) -> Failure {
+    eprintln!("Yoto readback after a write failed: {failure}");
+    Failure::Ambiguous
+}
+/// Fields Yoto keeps up to date itself: record identities and timestamps, display URLs it
+/// derives from an icon, track ids and readable sizes. A parent never edits them.
+const MAINTAINED_BY_YOTO: [&str; 7] = [
+    "createdAt",
+    "updatedAt",
+    "_id",
+    "userId",
+    "iconUrl16x16",
+    "uid",
+    "readableDuration",
+];
+/// Where the card on Yoto differs from the version last confirmed, if it does. Yoto finishes
+/// processing a card after it was written (measured audio, display URLs, timestamps), so
+/// only a change someone could have made counts: anything else written over is recomputed.
+fn changed_on_yoto(remote: &serde_json::Value, base: &serde_json::Value) -> Option<String> {
+    let (remote, base) = (edited_by_parents(remote), edited_by_parents(base));
+    document_difference(&remote, &base, "").or_else(|| document_difference(&base, &remote, ""))
+}
+fn edited_by_parents(value: &serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    match value {
+        Value::Object(o) => Value::Object(
+            o.iter()
+                .filter(|(k, _)| {
+                    !MAINTAINED_BY_YOTO.contains(&k.as_str())
+                        && !MEASURED_BY_YOTO.contains(&k.as_str())
+                })
+                .map(|(k, v)| (k.clone(), edited_by_parents(v)))
+                .collect(),
+        ),
+        Value::Array(a) => Value::Array(a.iter().map(edited_by_parents).collect()),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => value.clone(),
     }
-    v
 }
 fn contains_document(actual: &serde_json::Value, expected: &serde_json::Value) -> bool {
     match document_difference(actual, expected, "") {
