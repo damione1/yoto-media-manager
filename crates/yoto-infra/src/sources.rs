@@ -232,6 +232,106 @@ fn run_youtube(
     }
     Err(problem.failure())
 }
+/// Longest title kept from YouTube, so it stays readable on a player and in lists.
+pub const YOUTUBE_TITLE_MAX: usize = 100;
+/// Words that describe an upload rather than the work itself.
+const TITLE_NOISE: &[&str] = &[
+    "official",
+    "officiel",
+    "officielle",
+    "video",
+    "vidéo",
+    "videoclip",
+    "audio",
+    "lyric",
+    "lyrics",
+    "paroles",
+    "clip",
+    "visualizer",
+    "visualiser",
+    "hd",
+    "hq",
+    "4k",
+    "1080p",
+    "720p",
+    "topic",
+];
+/// Words that may accompany the noise words without carrying meaning on their own.
+const TITLE_FILLER: &[&str] = &["music", "musical", "musique", "with", "avec", "the", "en"];
+/// A bracketed or trailing part such as « Official Music Video », « HD » or « Topic ».
+fn title_noise(part: &str) -> bool {
+    let lower = part.to_lowercase();
+    let words: Vec<&str> = lower
+        .split(|c: char| c.is_whitespace() || matches!(c, '-' | '/' | ',' | '&' | '+'))
+        .filter(|w| !w.is_empty())
+        .collect();
+    !words.is_empty()
+        && words
+            .iter()
+            .all(|w| TITLE_NOISE.contains(w) || TITLE_FILLER.contains(w))
+        && words.iter().any(|w| TITLE_NOISE.contains(w))
+}
+/// Remove « (Official Video) », « [HD] », « - Topic », lyric and audio tags from a
+/// YouTube title, tidy its spacing and cap its length. Meaningful brackets such as
+/// « (Live) » or « (Remix) » are kept. Returns an empty string only for an empty title.
+pub fn clean_youtube_title(raw: &str) -> String {
+    let mut kept = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(open) = rest.find(['(', '[', '【']) {
+        let opener = rest[open..].chars().next().unwrap_or('(');
+        let closer = match opener {
+            '[' => ']',
+            '【' => '】',
+            _ => ')',
+        };
+        let inner_start = open + opener.len_utf8();
+        let Some(length) = rest[inner_start..].find(closer) else {
+            break;
+        };
+        let inner_end = inner_start + length;
+        kept.push_str(&rest[..open]);
+        if !title_noise(&rest[inner_start..inner_end]) {
+            kept.push_str(&rest[open..inner_end + closer.len_utf8()]);
+        }
+        rest = &rest[inner_end + closer.len_utf8()..];
+    }
+    kept.push_str(rest);
+    let mut title = kept.split_whitespace().collect::<Vec<_>>().join(" ");
+    const SEPARATORS: [&str; 5] = [" - ", " | ", " – ", " — ", " // "];
+    loop {
+        title = title
+            .trim_end_matches(|c: char| {
+                c.is_whitespace() || matches!(c, '-' | '|' | '–' | '—' | ':' | ',')
+            })
+            .to_owned();
+        let cut = SEPARATORS
+            .iter()
+            .filter_map(|s| title.rfind(s).map(|at| (at, s.len())))
+            .max_by_key(|(at, _)| *at);
+        match cut {
+            Some((at, length)) if at > 0 && title_noise(&title[at + length..]) => {
+                title.truncate(at)
+            }
+            Some(_) | None => break,
+        }
+    }
+    if title.is_empty() {
+        title = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    }
+    if title.chars().count() > YOUTUBE_TITLE_MAX {
+        let mut short: String = title.chars().take(YOUTUBE_TITLE_MAX - 1).collect();
+        if let Some(space) = short.rfind(' ').filter(|at| *at > YOUTUBE_TITLE_MAX / 2) {
+            short.truncate(space);
+        }
+        title = format!(
+                "{}…",
+                short.trim_end_matches(
+                    |c: char| c.is_whitespace() || matches!(c, '-' | '|' | ',' | ':')
+                )
+            );
+    }
+    title
+}
 #[derive(Deserialize)]
 struct YoutubeInfo {
     #[serde(rename = "_type")]
@@ -275,7 +375,11 @@ fn inspection(info: YoutubeInfo) -> Result<SourceInspection> {
         .map(|e| {
             Ok(SourceEntry {
                 id: e.id.clone(),
-                title: e.title.unwrap_or(e.id.clone()),
+                title: e
+                    .title
+                    .map(|t| clean_youtube_title(&t))
+                    .filter(|t| !t.is_empty())
+                    .unwrap_or(e.id.clone()),
                 duration: e.duration.map(MediaTime::from_seconds).transpose()?,
                 url: e
                     .webpage_url
@@ -342,7 +446,11 @@ impl SourceProvider for YoutubeSource<'_> {
                 })?;
                 Ok(Acquired {
                     path: output,
-                    title: info.title.unwrap_or_else(|| info.id.clone()),
+                    title: info
+                        .title
+                        .map(|t| clean_youtube_title(&t))
+                        .filter(|t| !t.is_empty())
+                        .unwrap_or_else(|| info.id.clone()),
                     provenance: Provenance::Youtube {
                         url: chosen,
                         video_id: info.id,
@@ -602,5 +710,60 @@ mod inspection_tests {
         )
         .unwrap();
         assert_eq!(inspection(multi).unwrap().kind, SourceShape::Playlist);
+    }
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::{YOUTUBE_TITLE_MAX, clean_youtube_title as clean};
+    #[test]
+    fn upload_tags_are_removed() {
+        let cases = [
+            ("Artist - Song (Official Video)", "Artist - Song"),
+            ("Artist - Song [Official Music Video]", "Artist - Song"),
+            ("Artist - Song (Official Audio) [HD]", "Artist - Song"),
+            ("Song (Lyrics)", "Song"),
+            ("Song (Lyric Video)", "Song"),
+            ("Song [4K]", "Song"),
+            ("Artiste - Chanson (Clip Officiel)", "Artiste - Chanson"),
+            ("Artiste - Chanson (Paroles)", "Artiste - Chanson"),
+            ("Chanson | Vidéo officielle", "Chanson"),
+            ("Artist - Topic", "Artist"),
+            ("Song - Official Video HD", "Song"),
+            ("  Song   with   spaces  ", "Song with spaces"),
+            ("Song【MV】(Official Video)", "Song【MV】"),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(clean(raw), expected, "{raw}");
+        }
+    }
+    #[test]
+    fn meaningful_parts_are_kept() {
+        for raw in [
+            "Song (Live)",
+            "Song (Remix)",
+            "Song (Full Version)",
+            "Le Petit Prince - Chapitre 1",
+            "Audio",
+            "(Official Video)",
+            "Song (unclosed",
+        ] {
+            let expected = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert_eq!(clean(raw), expected, "{raw}");
+        }
+        assert_eq!(clean(""), "");
+    }
+    #[test]
+    fn long_titles_are_capped_at_a_word() {
+        let raw = "Une très longue histoire ".repeat(10);
+        let title = clean(&raw);
+        assert!(title.chars().count() <= YOUTUBE_TITLE_MAX);
+        let kept = title.strip_suffix('…').unwrap();
+        assert!(
+            raw.starts_with(kept) && raw[kept.len()..].starts_with(' '),
+            "{title}"
+        );
+        let unbroken = "x".repeat(300);
+        assert_eq!(clean(&unbroken).chars().count(), YOUTUBE_TITLE_MAX);
     }
 }
