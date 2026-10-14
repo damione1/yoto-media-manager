@@ -7,7 +7,7 @@ order: 4
 
 Dans `Médiathèque`, choisissez `Écouter` sur le média voulu. Le lecteur affiche son titre et sa durée, un bouton de lecture et un curseur pour se déplacer. Les outils de modification sont là quand vous en avez besoin.
 
-![Le lecteur simple dans une médiathèque de démonstration](../../docs/images/ux-player-simple.png)
+![La médiathèque : chaque média affiche sa version, Original ou Découpé, et un bouton de lecture](../../docs/images/library-fr.png)
 
 ## Retirer une introduction ou un générique
 
@@ -19,7 +19,7 @@ Dans `Médiathèque`, choisissez `Écouter` sur le média voulu. Le lecteur affi
 
 Dans le dialogue de découpe, la lecture ne joue que la plage sélectionnée. `Arrêter` arrête l’écoute. `Annuler` ou la touche Échap ferme le dialogue sans créer de version ; votre original reste intact.
 
-![Le dialogue de découpe et ses deux bornes](../../docs/images/ux-trim-dialog.png)
+![Le dialogue de découpe : les deux poignées autour de la partie gardée, le début, la fin et la durée gardée, Écouter la sélection et Appliquer](../../docs/images/trim-fr.png)
 
 La fin doit suivre le début et rester dans la durée de l’original. L’application signale une erreur si les bornes ne sont pas valides.
 

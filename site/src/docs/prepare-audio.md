@@ -7,7 +7,7 @@ order: 4
 
 From `Médiathèque`, choose `Écouter` on the media you want. The player shows its title and duration, a play button, and a slider for seeking. Editing tools are available when you need them.
 
-![The simple player in a demonstration library](images/ux-player-simple.png)
+![The library: each media shows its version, Original or Trimmed, and a play button](images/library-en.png)
 
 ## Remove an introduction or credits
 
@@ -19,7 +19,7 @@ From `Médiathèque`, choose `Écouter` on the media you want. The player shows 
 
 Playback in the trimming dialog plays only the selected range. `Arrêter` stops the preview. `Annuler` or Escape closes the dialog without creating a version; your original stays intact.
 
-![The trimming dialog and its two boundaries](images/ux-trim-dialog.png)
+![The trimming dialog: the two handles around the kept part, the start, end and kept length, Listen to the selection and Apply](images/trim-en.png)
 
 The end must follow the start and stay within the original duration. The app reports an error if the boundaries are invalid.
 
