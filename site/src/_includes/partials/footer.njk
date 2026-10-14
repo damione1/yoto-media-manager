@@ -1,0 +1,13 @@
+{% from "icons.njk" import logo %}
+<footer class="site-foot">
+  <div class="wrap foot-row">
+    <span class="foot-brand">{{ logo(28) }}{{ site.name }}</span>
+    <nav class="foot-links" aria-label="{{ t.footer.label }}">
+      <a href="/{{ loc.dir }}docs/">{{ t.footer.guide }}</a>
+      <a href="{{ site.releases }}">{{ t.footer.releases }}</a>
+      <a href="{{ site.notices }}">{{ t.footer.notices }}</a>
+      <a href="{{ site.repo }}">{{ t.footer.source }}</a>
+    </nav>
+    <p class="foot-legal">{{ t.footer.notAffiliated }}<br>© {{ site.year }} {{ site.author }}</p>
+  </div>
+</footer>
