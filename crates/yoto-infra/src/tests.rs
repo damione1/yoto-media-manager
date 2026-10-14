@@ -483,7 +483,9 @@ async fn a_failed_transcode_is_reported_with_its_progress() {
     let upload = UploadId::new("upload2").unwrap();
     match api.ingestion("API-TOKEN", &upload).await.unwrap() {
         crate::api::Ingestion::Failed(progress) => assert_eq!(progress.percent, Some(37)),
-        other => panic!("expected a failed transcode, got {other:?}"),
+        other @ (crate::api::Ingestion::Ready(_) | crate::api::Ingestion::Working(_)) => {
+            panic!("expected a failed transcode, got {other:?}")
+        }
     }
 }
 #[test]
