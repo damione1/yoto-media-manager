@@ -419,7 +419,9 @@ fn replace(plan: &InstallPlan) -> Result<(), UpdateError> {
         rollback(plan)?;
         #[cfg(windows)]
         if plan.platform == Platform::Windows && plan.destination.join("unins000.exe").is_file() {
-            let _ = update_uninstall_version(&Version::parse(CURRENT_VERSION).map_err(error)?);
+            if let AppVersion::Release(previous) = AppVersion::current() {
+                let _ = update_uninstall_version(&previous);
+            }
         }
         return Err(error(
             "Relaunch failed; the previous application was restored",

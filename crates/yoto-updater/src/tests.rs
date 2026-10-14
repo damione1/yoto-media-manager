@@ -27,7 +27,7 @@ fn manifest(version: &str, platform: Platform) -> Manifest {
 }
 #[test]
 fn no_downgrade_and_platform_is_exact() {
-    let current = Version::parse("0.2.0").unwrap();
+    let current = AppVersion::Release(Version::parse("0.2.0").unwrap());
     assert!(
         select_release(
             manifest("0.1.0", Platform::MacArm),
@@ -64,7 +64,7 @@ fn no_downgrade_and_platform_is_exact() {
 }
 #[test]
 fn external_urls_and_excessive_size_rejected() {
-    let current = Version::parse("0.1.0").unwrap();
+    let current = AppVersion::Release(Version::parse("0.1.0").unwrap());
     let mut value = manifest("0.2.0", Platform::Windows);
     value.platforms.get_mut(&Platform::Windows).unwrap().url =
         "https://attacker.invalid/update.zip".into();
@@ -98,4 +98,82 @@ fn signed_identity_cannot_be_relabelled_as_a_new_release_or_platform() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn build_version_parsing_is_strict() {
+    assert_eq!(version::parse_release("1.2.3"), Some((1, 2, 3)));
+    assert_eq!(version::parse_release("0.10.0"), Some((0, 10, 0)));
+    for text in [
+        "",
+        "nightly",
+        "1.2",
+        "1.2.3.4",
+        "01.2.3",
+        "1.02.3",
+        "1.2.03",
+        "v1.2.3",
+        "1.2.3-beta.1",
+        "1.2.3+build",
+        " 1.2.3",
+        "1.2.3\n",
+        "1..3",
+        "1.2.x",
+        "+1.2.3",
+    ] {
+        assert_eq!(version::parse_release(text), None, "{text:?}");
+    }
+    assert_eq!(
+        AppVersion::from_build("1.2.3"),
+        AppVersion::Release(Version::new(1, 2, 3))
+    );
+    assert_eq!(
+        AppVersion::from_build(version::NIGHTLY),
+        AppVersion::Nightly
+    );
+    // Tests are built without YOTO_APP_VERSION unless a release build sets it.
+    match option_env!("YOTO_APP_VERSION") {
+        Some(value) if !value.is_empty() => assert_eq!(CURRENT_VERSION, value),
+        _ => {
+            assert_eq!(CURRENT_VERSION, "nightly");
+            assert!(AppVersion::current().is_nightly());
+        }
+    }
+}
+#[test]
+fn nightly_is_offered_the_latest_release_and_never_current() {
+    for version in ["0.0.1", "0.1.0", "99.0.0"] {
+        let release = select_release(
+            manifest(version, Platform::MacArm),
+            &AppVersion::Nightly,
+            Platform::MacArm,
+        )
+        .unwrap()
+        .expect("a nightly is offered every published release");
+        assert_eq!(release.version, Version::parse(version).unwrap());
+    }
+    // The manifest is still validated for a nightly.
+    let mut value = manifest("0.3.0", Platform::Windows);
+    value.platforms.get_mut(&Platform::Windows).unwrap().url =
+        "https://attacker.invalid/update.zip".into();
+    assert!(select_release(value, &AppVersion::Nightly, Platform::Windows).is_err());
+}
+#[tokio::test]
+async fn nightly_refuses_to_download_and_replace_itself() {
+    let updater = Updater::for_version(AppVersion::Nightly).unwrap();
+    let release = Arc::new(
+        select_release(
+            manifest("1.0.0", Platform::Windows),
+            &AppVersion::Nightly,
+            Platform::Windows,
+        )
+        .unwrap()
+        .unwrap(),
+    );
+    updater.download(release).await;
+    assert!(matches!(
+        updater.state().as_ref(),
+        UpdateState::Failed(error) if matches!(error.as_ref(), UpdateError::Install(_))
+    ));
+    assert!(updater.prepared().is_err());
 }

@@ -3,6 +3,7 @@ mod install;
 mod network;
 #[cfg(test)]
 mod tests;
+mod version;
 pub use install::{PreparedUpdate, apply_pending_update};
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -15,7 +16,33 @@ use std::{
 };
 use tokio::sync::{Mutex, watch};
 
-pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The version shown to people: the release tag's `X.Y.Z`, or `nightly` for a build made
+/// without `YOTO_APP_VERSION` (local and development builds).
+pub const CURRENT_VERSION: &str = match option_env!("YOTO_APP_VERSION") {
+    Some(value) if !value.is_empty() => value,
+    _ => version::NIGHTLY,
+};
+/// What the updater compares against the published release.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppVersion {
+    Release(Version),
+    /// A local or development build: never reported as up to date, never replaced in place.
+    Nightly,
+}
+impl AppVersion {
+    pub fn current() -> Self {
+        Self::from_build(CURRENT_VERSION)
+    }
+    fn from_build(text: &str) -> Self {
+        match version::parse_release(text) {
+            Some((major, minor, patch)) => Self::Release(Version::new(major, minor, patch)),
+            None => Self::Nightly,
+        }
+    }
+    pub fn is_nightly(&self) -> bool {
+        matches!(self, Self::Nightly)
+    }
+}
 const PUBLIC_KEY: &str = include_str!("../../../distribution/updater.pub");
 const MANIFEST_URL: &str =
     "https://github.com/damione1/yoto-media-manager/releases/latest/download/latest.json";
@@ -113,6 +140,7 @@ pub enum UpdateAction {
     State,
 }
 pub struct Updater {
+    version: AppVersion,
     prepared: std::sync::Mutex<Option<Arc<PreparedUpdate>>>,
     state: watch::Sender<Arc<UpdateState>>,
     gate: Mutex<()>,
@@ -121,6 +149,9 @@ pub struct Updater {
 }
 impl Updater {
     pub fn new() -> Result<Arc<Self>, UpdateError> {
+        Self::for_version(AppVersion::current())
+    }
+    fn for_version(version: AppVersion) -> Result<Arc<Self>, UpdateError> {
         let client = reqwest::Client::builder()
             .user_agent(format!("YotoMediaManager/{CURRENT_VERSION}"))
             .https_only(true)
@@ -131,6 +162,7 @@ impl Updater {
             .map_err(|e| UpdateError::Network(e.to_string()))?;
         let (state, _) = watch::channel(Arc::new(UpdateState::Idle));
         Ok(Arc::new(Self {
+            version,
             prepared: std::sync::Mutex::new(None),
             state,
             gate: Mutex::new(()),
@@ -195,9 +227,11 @@ impl Updater {
             | UpdateState::Failed(_) => {}
         }
         self.set(UpdateState::Checking);
-        let result = network::check(&self.client).await;
+        let result = network::check(&self.client, &self.version).await;
         match result {
             Ok(Some(release)) => self.set(UpdateState::Available(Arc::new(release))),
+            // A nightly is never "up to date": with no published release, nothing is claimed.
+            Ok(None) if self.version.is_nightly() => self.set(UpdateState::Idle),
             Ok(None) => self.set(UpdateState::Current),
             Err(error) => self.set(UpdateState::Failed(Arc::new(error))),
         }
@@ -206,6 +240,15 @@ impl Updater {
         let Ok(_gate) = self.gate.try_lock() else {
             return;
         };
+        if self.version.is_nightly() {
+            // A nightly may run from a source tree or a development bundle with its own
+            // identity: replacing it in place could clobber either, so the release is
+            // installed by hand.
+            self.failed(UpdateError::Install(
+                "Development builds are not replaced by the updater".into(),
+            ));
+            return;
+        }
         self.cancel.store(false, Ordering::SeqCst);
         self.set(UpdateState::Downloading {
             release: release.clone(),
@@ -245,7 +288,7 @@ impl Updater {
 }
 fn select_release(
     manifest: Manifest,
-    current: &Version,
+    current: &AppVersion,
     platform: Platform,
 ) -> Result<Option<Release>, UpdateError> {
     if !manifest.version.pre.is_empty() || !manifest.version.build.is_empty() {
@@ -253,7 +296,11 @@ fn select_release(
             "Only stable semantic versions are supported".into(),
         ));
     }
-    if manifest.version <= *current {
+    // Any published release is offered to a nightly; it is never "current" nor a downgrade
+    // that happens on its own, since installing it stays a manual step.
+    if let AppVersion::Release(current) = current
+        && manifest.version <= *current
+    {
         return Ok(None);
     }
     let artifact = manifest
