@@ -360,7 +360,8 @@ impl TrimPanel {
                     | JobState::Conflict { .. }
                     | JobState::Reconciling
                     | JobState::Completed { .. } => {
-                        self.status = format!("Préparation : {}…", job.state.label())
+                        self.status =
+                            format!("Préparation : {}…", wording::labels::job_state(&job.state))
                     }
                 }
             }

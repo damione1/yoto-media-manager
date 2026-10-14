@@ -53,8 +53,8 @@ impl AppView {
             }
         };
         let title = match transfer.read(cx).direction {
-            Direction::Export => text::EXPORT_TITLE,
-            Direction::Import => text::IMPORT_TITLE,
+            Direction::Export => text::export_title(),
+            Direction::Import => text::import_title(),
         };
         window.open_dialog(cx, move |dialog, _, _| {
             dialog.title(title).w(px(560.)).child(transfer.clone())
@@ -81,7 +81,8 @@ impl LibraryTransfer {
             runtime: view.runtime.clone(),
             folder: None,
             key,
-            key_input: cx.new(|cx| InputState::new(window, cx).placeholder(text::KEY_PLACEHOLDER)),
+            key_input: cx
+                .new(|cx| InputState::new(window, cx).placeholder(text::key_placeholder())),
             copied: false,
             busy: false,
             hint: None,
@@ -112,8 +113,8 @@ impl LibraryTransfer {
         cx.spawn(async move |weak, cx| {
             let picked = rfd::AsyncFileDialog::new()
                 .set_title(match direction {
-                    Direction::Export => text::FOLDER_PICKER,
-                    Direction::Import => text::EXPORT_PICKER,
+                    Direction::Export => text::folder_picker(),
+                    Direction::Import => text::export_picker(),
                 })
                 .pick_folder()
                 .await;
@@ -128,7 +129,7 @@ impl LibraryTransfer {
                         Some(export) => t.folder = Some(export),
                         None => {
                             t.folder = None;
-                            t.hint = Some(text::NOT_AN_EXPORT);
+                            t.hint = Some(text::not_an_export());
                         }
                     },
                 }
@@ -146,7 +147,7 @@ impl LibraryTransfer {
         let (command, target) = match self.direction {
             Direction::Export => {
                 let Some(folder) = self.folder.clone() else {
-                    return self.fail(text::FOLDER_MISSING, cx);
+                    return self.fail(text::folder_missing(), cx);
                 };
                 let destination = free_path(&folder, &text::export_folder_name(&today()));
                 (
@@ -163,10 +164,10 @@ impl LibraryTransfer {
                     Err(hint) => return self.fail(hint, cx),
                 };
                 let Some(source) = self.folder.clone() else {
-                    return self.fail(text::EXPORT_MISSING, cx);
+                    return self.fail(text::export_missing(), cx);
                 };
                 let Some(destination) = imported_destination() else {
-                    return self.fail(text::NO_LIBRARY_FOLDER, cx);
+                    return self.fail(text::no_library_folder(), cx);
                 };
                 (
                     Command::Restore {
@@ -228,8 +229,8 @@ impl LibraryTransfer {
 
     fn folder_row(&self, cx: &mut Context<Self>) -> Div {
         let (choose, again) = match self.direction {
-            Direction::Export => (text::CHOOSE_FOLDER, text::CHOOSE_OTHER_FOLDER),
-            Direction::Import => (text::CHOOSE_EXPORT, text::CHOOSE_OTHER_EXPORT),
+            Direction::Export => (text::choose_folder(), text::choose_other_folder()),
+            Direction::Import => (text::choose_export(), text::choose_other_export()),
         };
         div()
             .flex()
@@ -240,7 +241,7 @@ impl LibraryTransfer {
                 theme::meta(
                     self.folder
                         .as_ref()
-                        .map_or_else(|| text::NO_FOLDER.into(), |f| f.display().to_string()),
+                        .map_or_else(|| text::no_folder().into(), |f| f.display().to_string()),
                 )
                 .max_w_full()
                 .truncate(),
@@ -262,7 +263,7 @@ impl LibraryTransfer {
             Direction::Export => {
                 let shown = wording::grouped_recovery_key(&self.key);
                 let copy = shown.clone();
-                self.step(text::EXPORT_STEP_KEY)
+                self.step(text::export_step_key())
                     .child(
                         div()
                             .flex()
@@ -289,9 +290,9 @@ impl LibraryTransfer {
                                         IconName::Copy
                                     })
                                     .label(if self.copied {
-                                        text::COPIED
+                                        text::copied()
                                     } else {
-                                        text::COPY
+                                        text::copy()
                                     })
                                     .on_click(cx.listener(move |t, _, _, cx| {
                                         cx.write_to_clipboard(ClipboardItem::new_string(
@@ -306,10 +307,10 @@ impl LibraryTransfer {
                                 cx,
                             )),
                     )
-                    .child(theme::note(text::KEY_REMINDER))
+                    .child(theme::note(text::key_reminder()))
             }
             Direction::Import => self
-                .step(text::IMPORT_STEP_KEY)
+                .step(text::import_step_key())
                 .child(theme::small_field(Input::new(&self.key_input))),
         }
     }
@@ -318,8 +319,8 @@ impl LibraryTransfer {
 impl Render for LibraryTransfer {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (icon, family, intro) = match self.direction {
-            Direction::Export => (IconName::Upload, &theme::LILAC, text::EXPORT_INTRO),
-            Direction::Import => (IconName::Download, &theme::MINT, text::IMPORT_INTRO),
+            Direction::Export => (IconName::Upload, &theme::LILAC, text::export_intro()),
+            Direction::Import => (IconName::Download, &theme::MINT, text::import_intro()),
         };
         let mut body = div().flex().flex_col().gap(px(14.)).child(
             div()
@@ -332,12 +333,12 @@ impl Render for LibraryTransfer {
         body = match self.direction {
             Direction::Export => body
                 .child(
-                    self.step(text::EXPORT_STEP_FOLDER)
+                    self.step(text::export_step_folder())
                         .child(self.folder_row(cx)),
                 )
                 .child(self.key_block(cx)),
             Direction::Import => body.child(self.key_block(cx)).child(
-                self.step(text::IMPORT_STEP_FOLDER)
+                self.step(text::import_step_folder())
                     .child(self.folder_row(cx)),
             ),
         };
@@ -354,8 +355,8 @@ impl Render for LibraryTransfer {
                     .text_color(theme::c(theme::INK_SOFT))
                     .child(Spinner::new().color(theme::c(family.accent)))
                     .child(match self.direction {
-                        Direction::Export => text::EXPORTING,
-                        Direction::Import => text::IMPORTING,
+                        Direction::Export => text::exporting(),
+                        Direction::Import => text::importing(),
                     }),
             );
         }
@@ -370,7 +371,7 @@ impl Render for LibraryTransfer {
                 let owner = self.owner.clone();
                 open_imported = Some(theme::pill(
                     Button::new("transfer-open-imported")
-                        .label(text::OPEN_IMPORTED)
+                        .label(text::open_imported())
                         .on_click(move |_, window, cx| {
                             let _ = owner.update(cx, |v, cx| v.open_profile(open.clone(), cx));
                             window.close_dialog(cx);
@@ -392,8 +393,8 @@ impl Render for LibraryTransfer {
             theme::pill(
                 Button::new("transfer-run")
                     .label(match self.direction {
-                        Direction::Export => text::EXPORT,
-                        Direction::Import => text::IMPORT,
+                        Direction::Export => text::export(),
+                        Direction::Import => text::import(),
                     })
                     .loading(self.busy)
                     .on_click(cx.listener(|t, _, _, cx| t.run(cx))),
@@ -409,7 +410,7 @@ impl Render for LibraryTransfer {
                 .justify_end()
                 .gap(px(8.))
                 .child(DialogClose::new().child(theme::pill(
-                    Button::new("transfer-close").label(text::CLOSE),
+                    Button::new("transfer-close").label(text::close()),
                     Look::Outline,
                     Height::Medium,
                     false,

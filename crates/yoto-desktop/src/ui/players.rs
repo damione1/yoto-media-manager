@@ -136,7 +136,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                             .child(theme::pill(
                                 Button::new("players-login")
                                     .label(if view.connecting {
-                                        wording::connect::WAITING
+                                        wording::connect::waiting()
                                     } else {
                                         "Connecter Yoto"
                                     })

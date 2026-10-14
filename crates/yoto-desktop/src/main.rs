@@ -1,11 +1,14 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 gpui_kit::actions!(yoto, [Quit]);
+#[macro_use]
+mod i18n;
 mod image_http;
 mod ui;
 use gpui_kit::*;
 use std::sync::Arc;
 use yoto_infra::{Session, media::Tools};
 fn main() {
+    choose_language();
     if let Err(e) = launch() {
         eprintln!("{e}");
         // A double-clicked app has no terminal: a launch failure must be visible on screen.
@@ -19,16 +22,31 @@ fn main() {
         rfd::MessageDialog::new()
             .set_title(ui::PRODUCT_NAME)
             .set_description(if updating {
-                format!("La mise à jour n’a pas pu être installée.\n\n{detail}")
+                tr!(
+                    "La mise à jour n’a pas pu être installée.\n\n{detail}",
+                    detail = detail
+                )
             } else {
-                format!(
-                    "L’application n’a pas pu démarrer.\n\n{detail}\n\nSi le problème persiste, réinstallez l’application depuis GitHub Releases."
+                tr!(
+                    "L’application n’a pas pu démarrer.\n\n{detail}\n\nSi le problème persiste, réinstallez l’application depuis GitHub Releases.",
+                    detail = detail
                 )
             })
             .set_level(rfd::MessageLevel::Error)
             .show();
         std::process::exit(1);
     }
+}
+/// The interface language, before anything is shown: the one saved in the profile's
+/// settings, or else the operating system's.
+fn choose_language() {
+    let saved = yoto_infra::default_profile()
+        .ok()
+        .and_then(|profile| yoto_infra::settings::Settings::load(&profile).language);
+    i18n::set_language(i18n::resolve(
+        saved.as_deref(),
+        i18n::system_locale().as_deref(),
+    ));
 }
 fn launch() -> Result<(), Box<dyn std::error::Error>> {
     if yoto_updater::apply_pending_update()? {

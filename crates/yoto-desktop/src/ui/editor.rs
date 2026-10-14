@@ -59,17 +59,17 @@ impl SyncState {
     }
     fn track_label(self) -> &'static str {
         match self {
-            Self::Sending => text::TRACK_SENDING,
-            Self::ToCheck => text::TO_CHECK,
-            Self::Unsaved => text::UNSAVED,
-            Self::OnYoto => text::TRACK_ON_YOTO,
+            Self::Sending => text::track_sending(),
+            Self::ToCheck => text::to_check(),
+            Self::Unsaved => text::unsaved(),
+            Self::OnYoto => text::track_on_yoto(),
         }
     }
     fn playlist_label(self) -> &'static str {
         match self {
-            Self::Sending => text::SAVING,
+            Self::Sending => text::saving(),
             Self::ToCheck | Self::Unsaved => self.track_label(),
-            Self::OnYoto => text::SAVED,
+            Self::OnYoto => text::saved(),
         }
     }
     fn family(self) -> &'static theme::Family {
@@ -103,7 +103,7 @@ fn pending_status(state: &JobState) -> String {
                 .into()
         }
         JobState::Completed { .. } | JobState::Failed { .. } | JobState::Cancelled => {
-            state.label().into()
+            wording::labels::job_state(state).into()
         }
     }
 }
@@ -615,7 +615,7 @@ impl PlaylistEditor {
         let pending = self.autosave.has_pending() || self.queued_media.is_some();
         if pending && self.held() {
             return QuitState::Unsaved(if self.status.is_empty() {
-                text::NEEDS_CHECK.into()
+                text::needs_check().into()
             } else {
                 self.status.clone()
             });
@@ -893,7 +893,7 @@ impl PlaylistEditor {
         self.sent = Some(sent);
         self.save_updates.begin();
         if target != CommitTarget::Editor {
-            self.status = text::WRITING.into();
+            self.status = text::writing().into();
         }
         self.notify_parent(cx);
         cx.notify();
@@ -912,7 +912,7 @@ impl PlaylistEditor {
                             target,
                         });
                         if target != CommitTarget::Editor {
-                            v.status = text::WRITING_AND_CHECKING.into();
+                            v.status = text::writing_and_checking().into();
                         }
                     }
                     Err(e) => v.fail_operation(e, cx),
@@ -1850,7 +1850,7 @@ impl PlaylistEditor {
             }
         } else {
             self.queued_media.get_or_insert_with(Vec::new).extend(media);
-            self.status = text::WRITING.into();
+            self.status = text::writing().into();
             self.schedule(cx);
             cx.notify();
         }
@@ -2427,7 +2427,7 @@ impl PlaylistEditor {
                         .into_any_element(),
                     )),
             )
-            .child(theme::note(text::AUTOMATIC))
+            .child(theme::note(text::automatic()))
     }
     fn advanced_panel(&self, cx: &mut Context<Self>) -> Div {
         use theme::{Height, Look};
@@ -3020,7 +3020,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                     (PlaylistSyncState::Synced, Some(0)) => "Vide".into(),
                                     (PlaylistSyncState::Synced, Some(1)) => "1 piste".into(),
                                     (PlaylistSyncState::Synced, Some(n)) => format!("{n} pistes"),
-                                    (state, _) => state.label().into(),
+                                    (state, _) => wording::labels::playlist_sync(state).into(),
                                 }
                             };
                             let surface = if selected {
@@ -3109,7 +3109,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                 })
                 .max_by_key(|job| publication_job_key(job));
             let message = job
-                .map(|job| job.state.label())
+                .map(|job| wording::labels::job_state(&job.state))
                 .unwrap_or("Création et vérification sur Yoto…");
             main = main.child(
                 div()

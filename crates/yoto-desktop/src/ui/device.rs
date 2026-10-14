@@ -1194,7 +1194,7 @@ impl DevicePanel {
             PlayerCommand::BluetoothDisconnect,
             PlayerCommand::Reboot,
         ] {
-            let label = command.label();
+            let label = wording::labels::player_command(&command);
             let reboot = matches!(command, PlayerCommand::Reboot);
             commands = commands.child(theme::pill(
                 Button::new(label)

@@ -75,8 +75,10 @@ pub struct AppView {
     pub group_editors: BTreeMap<(AccountId, Option<GroupId>), Entity<group::GroupEditor>>,
     pub selected_group: Option<Option<GroupId>>,
     /// « Mode avancé » in Compte: shows the technical settings parents rarely need.
-    /// Kept for this session only; it starts off.
+    /// Saved in [`Self::settings`]; it starts off.
     pub advanced: bool,
+    /// Interface settings saved in the profile: the language and the advanced mode.
+    settings: yoto_infra::settings::Settings,
     /// The YouTube tool imports use, read when « Mode avancé » is turned on.
     pub youtube_tool: Option<yoto_infra::youtube_tool::YoutubeToolStatus>,
     /// Quitting waits for playlist edits to reach Yoto.
@@ -113,10 +115,10 @@ impl AppView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let search =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher dans vos médias…"));
+        let search = cx
+            .new(|cx| InputState::new(window, cx).placeholder(tr!("Rechercher dans vos médias…")));
         let new_title =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Titre de la playlist"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(tr!("Titre de la playlist")));
         let youtube = cx
             .new(|cx| InputState::new(window, cx).placeholder("https://www.youtube.com/watch?v=…"));
         let mut subscriptions = vec![cx.observe(&search, |view, _, cx| {
@@ -176,6 +178,7 @@ impl AppView {
         });
         let library_rows = (0..snapshot.media.len()).collect();
         let updater = cx.new(|cx| update::UpdatePanel::new(runtime.clone(), service.clone(), cx));
+        let settings = yoto_infra::settings::Settings::load(service.profile());
         subscriptions.push(cx.observe(&updater, |_, _, cx| cx.notify()));
         let mut view = Self {
             updater,
@@ -187,7 +190,7 @@ impl AppView {
             job_page: None,
             job_offset: 0,
             receipt_card: cx
-                .new(|cx| InputState::new(window, cx).placeholder("Identifiant de la carte")),
+                .new(|cx| InputState::new(window, cx).placeholder(tr!("Identifiant de la carte"))),
             route: Route::Library,
             selected_media: None,
             selected_media_set: Default::default(),
@@ -223,11 +226,15 @@ impl AppView {
             _subscriptions: subscriptions,
             group_editors: BTreeMap::new(),
             selected_group: None,
-            advanced: false,
+            advanced: settings.advanced_mode,
+            settings,
             youtube_tool: None,
             quitting: false,
         };
         view.refresh_playlists(cx);
+        if view.advanced {
+            view.youtube_tool(yoto_infra::youtube_tool::YoutubeToolAction::State, cx);
+        }
         view
     }
     fn adopt(&mut self, prepared: PreparedSnapshot, cx: &mut Context<Self>) {
@@ -518,7 +525,7 @@ impl AppView {
                             Ok(reply) => reply,
                             Err(Failure::Cancelled) if connecting => {
                                 // The parent gave up on the browser sign-in: nothing failed.
-                                view.status = wording::connect::CANCELLED.into();
+                                view.status = wording::connect::cancelled().into();
                                 cx.notify();
                                 return;
                             }
@@ -666,7 +673,7 @@ impl AppView {
     pub fn choose_profile(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |weak, cx| {
             if let Some(folder) = rfd::AsyncFileDialog::new()
-                .set_title(wording::other_library::PICKER)
+                .set_title(wording::other_library::picker())
                 .pick_folder()
                 .await
             {
@@ -834,8 +841,10 @@ impl AppView {
             cx.defer(move |cx| {
                 let _ = cx.update_window(window, |_, window, cx| {
                     use gpui_kit::component::{WindowExt, notification::Notification};
-                    window
-                        .push_notification(Notification::info(wording::autosave::QUIT_SAVING), cx);
+                    window.push_notification(
+                        Notification::info(wording::autosave::quit_saving()),
+                        cx,
+                    );
                 });
             });
         }
@@ -857,7 +866,7 @@ impl AppView {
                 unsaved.extend(
                     waiting
                         .into_iter()
-                        .map(|title| (title, wording::autosave::QUIT_TIMED_OUT.to_owned())),
+                        .map(|title| (title, wording::autosave::quit_timed_out().to_owned())),
                 );
                 let _ = weak.update(cx, |v, cx| {
                     v.quitting = false;
@@ -895,9 +904,9 @@ impl AppView {
                 confirm_destructive(
                     window,
                     cx,
-                    wording::autosave::QUIT_TITLE,
+                    wording::autosave::quit_title(),
                     wording::autosave::quit_description(&unsaved),
-                    wording::autosave::QUIT_ANYWAY,
+                    wording::autosave::quit_anyway(),
                     |_, cx| cx.quit(),
                 );
             });
@@ -906,6 +915,8 @@ impl AppView {
     /// Turn « Mode avancé » on or off everywhere it applies.
     pub fn set_advanced(&mut self, advanced: bool, cx: &mut Context<Self>) {
         self.advanced = advanced;
+        self.settings.advanced_mode = advanced;
+        self.save_settings();
         if advanced {
             self.youtube_tool(yoto_infra::youtube_tool::YoutubeToolAction::State, cx);
         }
@@ -916,6 +927,38 @@ impl AppView {
             });
         }
         cx.notify();
+    }
+    /// Switch the interface language now and remember it. Every view renders again in the
+    /// new language; texts kept in inputs (their placeholders) are set again too.
+    pub fn set_language(
+        &mut self,
+        language: crate::i18n::Language,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        crate::i18n::set_language(language);
+        self.settings.language = Some(language.code().into());
+        self.save_settings();
+        self.relabel(window, cx);
+        cx.refresh_windows();
+    }
+    /// Placeholders of the inputs, in the interface language.
+    fn relabel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let placeholders = [
+            (&self.search, tr!("Rechercher dans vos médias…")),
+            (&self.new_title, tr!("Titre de la playlist")),
+            (&self.receipt_card, tr!("Identifiant de la carte")),
+        ];
+        for (input, placeholder) in placeholders {
+            input.update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
+        }
+    }
+    /// Keep the interface settings for the next launch. Failing to write them only costs
+    /// the choice at the next launch, so it is reported without interrupting.
+    fn save_settings(&mut self) {
+        if let Err(e) = self.settings.save(self.service.profile()) {
+            self.status = failure_text(&e);
+        }
     }
 }
 impl AppView {
@@ -1168,12 +1211,12 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
                 theme::c(theme::CREAM)
             })
             .active(theme::c(theme::SURFACE));
-        let item = Button::new(route.label())
+        let item = Button::new(wording::labels::route(route))
             .custom(variant)
             .accessibility_label(if count > 0 {
-                format!("{} ({count})", route.label())
+                format!("{} ({count})", wording::labels::route(route))
             } else {
-                route.label().to_owned()
+                wording::labels::route(route).to_owned()
             })
             .toggled(active)
             .bg(surface)
@@ -1208,7 +1251,7 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
                                     .text_color(theme::c(family.icon)),
                             ),
                     )
-                    .child(div().flex_1().child(route.label()))
+                    .child(div().flex_1().child(wording::labels::route(route)))
                     .children((count > 0).then(|| theme::badge(count, family))),
             )
             .on_click(cx.listener(move |view, _, _, cx| {
@@ -1352,8 +1395,8 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
 fn cancel_connect(id: &'static str, height: theme::Height, cx: &mut Context<AppView>) -> Button {
     theme::pill(
         Button::new(id)
-            .label(wording::connect::CANCEL)
-            .tooltip(wording::connect::CANCEL_HINT)
+            .label(wording::connect::cancel())
+            .tooltip(wording::connect::cancel_hint())
             .on_click(cx.listener(|v, _, _, cx| v.send(Command::CancelConnect, cx))),
         theme::Look::Ghost,
         height,
@@ -1457,7 +1500,7 @@ fn remote_syncing(snapshot: &Snapshot) -> bool {
         .any(|state| matches!(state, RemoteSyncState::Syncing))
 }
 fn remote_sync_message(snapshot: &Snapshot, collection: RemoteCollection) -> String {
-    let label = collection.label();
+    let label = wording::labels::remote_collection(collection);
     match snapshot.remote_sync.get(&collection) {
         None => format!("{label} · Synchroniser pour actualiser les données Yoto."),
         Some(RemoteSyncState::Syncing) => format!("{label} · Synchronisation en cours…"),

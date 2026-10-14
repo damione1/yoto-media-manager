@@ -13,8 +13,8 @@ pub fn render(view: &mut AppView, cx: &mut Context<AppView>) -> AnyElement {
         .flex_col()
         .gap(px(18.))
         .child(theme::screen_header(
-            "Compte et synchronisation",
-            "Votre collection personnelle, sur cet ordinateur et sur Yoto.",
+            tr!("Compte et synchronisation"),
+            tr!("Votre collection personnelle, sur cet ordinateur et sur Yoto."),
         ))
         .child(
             div()
@@ -40,6 +40,7 @@ pub fn render(view: &mut AppView, cx: &mut Context<AppView>) -> AnyElement {
                         .flex()
                         .flex_col()
                         .gap(px(14.))
+                        .child(language(cx))
                         .child(advanced_mode(view, cx)),
                 ),
         )
@@ -58,10 +59,10 @@ fn initial(label: &str) -> String {
 /// « actualisé il y a 2 min » from the age of the oldest refreshed collection.
 fn refreshed_text(age_seconds: u64) -> String {
     match age_seconds {
-        0..60 => "actualisé à l’instant".into(),
-        60..3600 => format!("actualisé il y a {} min", age_seconds / 60),
-        3600..86_400 => format!("actualisé il y a {} h", age_seconds / 3600),
-        _ => format!("actualisé il y a {} j", age_seconds / 86_400),
+        0..60 => tr!("actualisé à l’instant").into(),
+        60..3600 => tr!("actualisé il y a {minutes} min", minutes = age_seconds / 60),
+        3600..86_400 => tr!("actualisé il y a {hours} h", hours = age_seconds / 3600),
+        _ => tr!("actualisé il y a {days} j", days = age_seconds / 86_400),
     }
 }
 
@@ -76,8 +77,8 @@ fn account_menu(
     theme::round(
         Button::new(element_id("account-menu", &id))
             .icon(IconName::Ellipsis)
-            .accessibility_label("Options du compte")
-            .tooltip("Options du compte"),
+            .accessibility_label(tr!("Options du compte"))
+            .tooltip(tr!("Options du compte")),
         Look::Soft(&theme::MINT),
         40.,
         false,
@@ -88,15 +89,15 @@ fn account_menu(
         let owner = owner.clone();
         let id = id.clone();
         menu.item(
-            PopupMenuItem::new("Déconnecter ce compte").on_click(move |_, window, cx| {
+            PopupMenuItem::new(tr!("Déconnecter ce compte")).on_click(move |_, window, cx| {
                 let owner = owner.clone();
                 let id = id.clone();
                 confirm_destructive(
                     window,
                     cx,
-                    "Déconnecter ce compte Yoto ?",
-                    "Les envois en cours vers Yoto seront interrompus. Vos playlists restent sur votre compte Yoto et votre médiathèque reste sur cet ordinateur. Vous pourrez vous reconnecter à tout moment.",
-                    "Déconnecter",
+                    tr!("Déconnecter ce compte Yoto ?"),
+                    tr!("Les envois en cours vers Yoto seront interrompus. Vos playlists restent sur votre compte Yoto et votre médiathèque reste sur cet ordinateur. Vous pourrez vous reconnecter à tout moment."),
+                    tr!("Déconnecter"),
                     move |_, cx| {
                         let _ = owner
                             .update(cx, |v, cx| v.send(Command::Disconnect(id.clone()), cx));
@@ -149,15 +150,15 @@ fn accounts(view: &AppView, cx: &mut Context<AppView>) -> Vec<AnyElement> {
                 ).bg(theme::c(theme::SURFACE)))
                 .child(theme::heading(
                     if view.snapshot.accounts.is_empty() {
-                        "Connectez votre compte Yoto"
+                        tr!("Connectez votre compte Yoto")
                     } else {
-                        "Choisissez le compte à utiliser"
+                        tr!("Choisissez le compte à utiliser")
                     },
                     22.,
                 ))
-                .child(theme::note(
-                    "Connectez Yoto pour retrouver vos playlists et les envoyer à vos lecteurs. Votre médiathèque reste disponible hors ligne.",
-                ))
+                .child(theme::note(tr!(
+                    "Connectez Yoto pour retrouver vos playlists et les envoyer à vos lecteurs. Votre médiathèque reste disponible hors ligne."
+                )))
                 .children(view.snapshot.accounts.is_empty().then(|| {
                     div()
                         .flex()
@@ -166,9 +167,9 @@ fn accounts(view: &AppView, cx: &mut Context<AppView>) -> Vec<AnyElement> {
                         .child(theme::pill(
                             Button::new("login")
                                 .label(if view.connecting {
-                                    wording::connect::WAITING
+                                    wording::connect::waiting()
                                 } else {
-                                    "Connecter mon compte Yoto"
+                                    tr!("Connecter mon compte Yoto")
                                 })
                                 .loading(view.connecting)
                                 .on_click(cx.listener(|v, _, _, cx| v.send(Command::Connect, cx))),
@@ -206,11 +207,11 @@ fn accounts(view: &AppView, cx: &mut Context<AppView>) -> Vec<AnyElement> {
                                 .truncate()
                                 .child(account.label.clone()),
                         )
-                        .child(theme::meta("Connecté")),
+                        .child(theme::meta(tr!("Connecté"))),
                 )
                 .child(theme::pill(
                     Button::new(element_id("choose-account", &account.id))
-                        .label("Utiliser ce compte")
+                        .label(tr!("Utiliser ce compte"))
                         .on_click(cx.listener(move |v, _, _, cx| {
                             v.send(Command::SelectAccount(select.clone()), cx)
                         })),
@@ -255,16 +256,16 @@ fn accounts(view: &AppView, cx: &mut Context<AppView>) -> Vec<AnyElement> {
                         .child(
                             div()
                                 .font_weight(FontWeight::EXTRA_BOLD)
-                                .child("Un autre compte Yoto ?"),
+                                .child(tr!("Un autre compte Yoto ?")),
                         )
-                        .child(theme::meta("Par exemple celui des grands-parents.")),
+                        .child(theme::meta(tr!("Par exemple celui des grands-parents."))),
                 )
                 .child(theme::pill(
                     Button::new("login")
                         .label(if view.connecting {
-                            wording::connect::WAITING
+                            wording::connect::waiting()
                         } else {
-                            "Ajouter un compte"
+                            tr!("Ajouter un compte")
                         })
                         .loading(view.connecting)
                         .on_click(cx.listener(|v, _, _, cx| v.send(Command::Connect, cx))),
@@ -294,24 +295,30 @@ fn active_card(view: &AppView, account: &Account, cx: &mut Context<AppView>) -> 
         .count();
     let complete = snapshot.remote_sync.len() == RemoteCollection::ALL.len();
     let summary: String = if syncing {
-        "Actualisation en cours…".into()
+        tr!("Actualisation en cours…").into()
     } else if failures > 0 {
-        format!(
-            "{failures} élément(s) à actualiser. Les données déjà récupérées restent disponibles."
+        trn!(
+            "{count} élément à actualiser. Les données déjà récupérées restent disponibles.",
+            "{count} éléments à actualiser. Les données déjà récupérées restent disponibles.",
+            failures
         )
     } else if complete {
-        "Vos playlists et lecteurs sont à jour.".into()
+        tr!("Vos playlists et lecteurs sont à jour.").into()
     } else {
-        "Vos playlists se chargent automatiquement. Actualisez pour retrouver aussi vos lecteurs."
+        tr!("Vos playlists se chargent automatiquement. Actualisez pour retrouver aussi vos lecteurs.")
             .into()
     };
-    let plural = |count: usize, one: &str, many: &str| match count {
-        1 => format!("1 {one}"),
-        n => format!("{n} {many}"),
-    };
     let mut detail = vec![
-        plural(snapshot.remote.len(), "playlist", "playlists"),
-        plural(snapshot.devices.len(), "lecteur", "lecteurs"),
+        trn!(
+            "{count} playlist",
+            "{count} playlists",
+            snapshot.remote.len()
+        ),
+        trn!(
+            "{count} lecteur",
+            "{count} lecteurs",
+            snapshot.devices.len()
+        ),
     ];
     let oldest = snapshot
         .remote_sync
@@ -359,7 +366,7 @@ fn active_card(view: &AppView, account: &Account, cx: &mut Context<AppView>) -> 
                                 .text_size(px(14.))
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(theme::c(theme::MINT.ink))
-                                .child("Connecté · utilisé pour la synchronisation"),
+                                .child(tr!("Connecté · utilisé pour la synchronisation")),
                         ),
                 )
                 .child(account_menu(
@@ -388,9 +395,9 @@ fn active_card(view: &AppView, account: &Account, cx: &mut Context<AppView>) -> 
                 .child(theme::pill(
                     Button::new("account-sync")
                         .label(if syncing {
-                            "Actualisation…"
+                            tr!("Actualisation…")
                         } else {
-                            "Actualiser"
+                            tr!("Actualiser")
                         })
                         .loading(syncing)
                         .on_click(cx.listener(move |v, _, _, cx| {
@@ -406,9 +413,9 @@ fn active_card(view: &AppView, account: &Account, cx: &mut Context<AppView>) -> 
             theme::pill(
                 Button::new("account-sync-details")
                     .label(if view.account_sync_details_open {
-                        "Masquer le détail"
+                        tr!("Masquer le détail")
                     } else {
-                        "Voir le détail"
+                        tr!("Voir le détail")
                     })
                     .on_click(cx.listener(|v, _, _, cx| {
                         v.account_sync_details_open = !v.account_sync_details_open;
@@ -439,6 +446,47 @@ fn active_card(view: &AppView, account: &Account, cx: &mut Context<AppView>) -> 
     card.into_any_element()
 }
 
+/// « Langue / Language »: the interface language, applied at once. The title and the
+/// language names stay the same in every language, so anyone can find theirs.
+fn language(cx: &mut Context<AppView>) -> AnyElement {
+    use crate::i18n::Language;
+    let current = crate::i18n::language();
+    let choices = Language::ALL.map(|language| {
+        theme::segment(
+            Button::new(element_id("language", language.code()))
+                .label(language.native_name())
+                .on_click(cx.listener(move |v, _, window, cx| {
+                    if crate::i18n::language() != language {
+                        v.set_language(language, window, cx);
+                    }
+                })),
+            current == language,
+            Height::Small,
+            cx,
+        )
+    });
+    theme::card()
+        .p(px(22.))
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(10.))
+                .child(theme::icon_tile(IconName::Globe, &theme::SKY, 40., 12.))
+                .child(
+                    div()
+                        .flex_1()
+                        .child(theme::heading("Langue / Language", 20.)),
+                )
+                .child(theme::segmented().children(choices)),
+        )
+        .child(theme::note(tr!(
+            "Le changement s’applique tout de suite à toute l’application."
+        )))
+        .into_any_element()
+}
+
 /// The « Mode avancé » switch: technical settings stay out of sight until a parent asks.
 fn advanced_mode(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
     use gpui_kit::component::switch::Switch;
@@ -450,17 +498,17 @@ fn advanced_mode(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                 .items_center()
                 .gap(px(10.))
                 .child(theme::icon_tile(IconName::Settings2, &theme::STONE, 40., 12.))
-                .child(div().flex_1().child(theme::heading("Mode avancé", 20.)))
+                .child(div().flex_1().child(theme::heading(tr!("Mode avancé"), 20.)))
                 .child(
                     Switch::new("advanced-mode")
-                        .accessibility_label("Mode avancé")
+                        .accessibility_label(tr!("Mode avancé"))
                         .checked(view.advanced)
                         .on_click(cx.listener(|v, checked, _, cx| v.set_advanced(*checked, cx))),
                 ),
         )
-        .child(theme::note(
-            "Affiche les réglages techniques : lecture interactive, événements des pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, raccourcis et commandes techniques des lecteurs ; ouverture d’une autre médiathèque. Inutile au quotidien.",
-        ));
+        .child(theme::note(tr!(
+            "Affiche les réglages techniques : lecture interactive, événements des pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, raccourcis et commandes techniques des lecteurs ; ouverture d’une autre médiathèque. Inutile au quotidien."
+        )));
     if view.advanced {
         card.child(youtube_tool(view, cx))
             .child(other_library(cx))
@@ -476,11 +524,15 @@ fn other_library(cx: &mut Context<AppView>) -> AnyElement {
     use wording::other_library as text;
     theme::inset()
         .gap(px(8.))
-        .child(div().font_weight(FontWeight::EXTRA_BOLD).child(text::TITLE))
-        .child(theme::note(text::NOTE))
+        .child(
+            div()
+                .font_weight(FontWeight::EXTRA_BOLD)
+                .child(text::title()),
+        )
+        .child(theme::note(text::note()))
         .child(theme::pill(
             Button::new("choose-profile")
-                .label(text::OPEN)
+                .label(text::open())
                 .on_click(cx.listener(|v, _, _, cx| v.choose_profile(cx))),
             Look::Outline,
             Height::Medium,
@@ -500,8 +552,12 @@ fn youtube_tool(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
         .is_some_and(|s| s.activity == ToolActivity::Checking);
     let mut section = theme::inset()
         .gap(px(8.))
-        .child(div().font_weight(FontWeight::EXTRA_BOLD).child(text::TITLE))
-        .child(theme::note(text::NOTE));
+        .child(
+            div()
+                .font_weight(FontWeight::EXTRA_BOLD)
+                .child(text::title()),
+        )
+        .child(theme::note(text::note()));
     if let Some(status) = &view.youtube_tool {
         section = section.child(div().text_size(px(14.)).child(text::version(status)));
         if let Some(activity) = text::activity(&status.activity) {
@@ -511,7 +567,7 @@ fn youtube_tool(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
     section
         .child(theme::pill(
             Button::new("update-youtube-tool")
-                .label(text::UPDATE)
+                .label(text::update())
                 .disabled(checking)
                 .on_click(cx.listener(|v, _, _, cx| v.youtube_tool(YoutubeToolAction::Update, cx))),
             Look::Outline,
@@ -528,6 +584,9 @@ mod tests {
     #[core::prelude::v1::test]
     fn refresh_age_reads_naturally() {
         assert_eq!(refreshed_text(12), "actualisé à l’instant");
+        crate::i18n::tests::with_language(crate::i18n::Language::English, || {
+            assert_eq!(refreshed_text(150), "refreshed 2 min ago");
+        });
         assert_eq!(refreshed_text(150), "actualisé il y a 2 min");
         assert_eq!(refreshed_text(7_300), "actualisé il y a 2 h");
         assert_eq!(refreshed_text(200_000), "actualisé il y a 2 j");

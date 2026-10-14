@@ -550,7 +550,11 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
         JobState::Failed { failure } | JobState::Retry { failure, .. } => (
             rose_mark(),
             if matches!(job.state, JobState::Retry { .. }) {
-                format!("{} · {}", job.state.label(), failure_text(failure))
+                format!(
+                    "{} · {}",
+                    wording::labels::job_state(&job.state),
+                    failure_text(failure)
+                )
             } else {
                 failure_text(failure)
             },
@@ -571,7 +575,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
         ),
         JobState::WaitingForAuthentication => (
             rose_mark(),
-            job.state.label().into(),
+            wording::labels::job_state(&job.state).into(),
             theme::MUTED,
             vec![
                 theme::pill(
@@ -633,7 +637,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
         }
         JobState::Reconciling => (
             rose_mark(),
-            job.state.label().into(),
+            wording::labels::job_state(&job.state).into(),
             theme::MUTED,
             vec![
                 theme::pill(
@@ -824,11 +828,14 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
         JobState::Cancelled => &theme::STONE,
     };
     let actions = || div().flex().flex_wrap().gap(px(8.));
-    let mut body = div().flex().flex_col().gap(px(14.)).child(
-        div()
-            .flex()
-            .child(theme::tag(job.state.label(), state_family)),
-    );
+    let mut body = div()
+        .flex()
+        .flex_col()
+        .gap(px(14.))
+        .child(div().flex().child(theme::tag(
+            wording::labels::job_state(&job.state),
+            state_family,
+        )));
     if let JobRequest::Import {
         selection: ImportSelection::Youtube { url, .. },
     } = &job.request

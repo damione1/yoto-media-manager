@@ -371,14 +371,14 @@ fn library_menu(has_media: bool, cx: &mut Context<AppView>) -> impl IntoElement 
         )
         .separator()
         .item(
-            PopupMenuItem::new(text::EXPORT_MENU).on_click(move |_, window, cx| {
+            PopupMenuItem::new(text::export_menu()).on_click(move |_, window, cx| {
                 let _ = export.update(cx, |v, cx| {
                     v.open_transfer(transfer::Direction::Export, window, cx)
                 });
             }),
         )
         .item(
-            PopupMenuItem::new(text::IMPORT_MENU).on_click(move |_, window, cx| {
+            PopupMenuItem::new(text::import_menu()).on_click(move |_, window, cx| {
                 let _ = import.update(cx, |v, cx| {
                     v.open_transfer(transfer::Direction::Import, window, cx)
                 });
