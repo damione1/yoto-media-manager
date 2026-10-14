@@ -11,14 +11,12 @@ pub const PRODUCT_NAME: &str = "YotoMediaManager";
 
 /// Plain-language text for a failure, in French, with the next step when there is one.
 pub fn failure_text(failure: &Failure) -> String {
+    let known = |message: &str| known_message(message).map(str::to_owned);
     match failure {
-        Failure::Validation(message) => known_message(message)
-            .map(str::to_owned)
-            .unwrap_or_else(|| message.clone()),
-        Failure::Media(message) => known_message(message).map(str::to_owned).unwrap_or_else(|| {
-            format!("L’audio n’a pas pu être traité. Détail : {message}")
-        }),
-        Failure::Storage(message) => known_message(message).map(str::to_owned).unwrap_or_else(|| {
+        Failure::Validation(message) => known(message).unwrap_or_else(|| message.clone()),
+        Failure::Media(message) => known(message)
+            .unwrap_or_else(|| format!("L’audio n’a pas pu être traité. Détail : {message}")),
+        Failure::Storage(message) => known(message).unwrap_or_else(|| {
             format!("Un problème est survenu sur cet ordinateur. Détail : {message}")
         }),
         Failure::Tool(message) => format!(
@@ -30,26 +28,27 @@ pub fn failure_text(failure: &Failure) -> String {
         Failure::Authentication => {
             "Connectez votre compte Yoto dans « Compte » pour continuer.".into()
         }
-        Failure::Permission(message) => known_message(message).map(str::to_owned).unwrap_or_else(|| {
-            "Yoto n’autorise pas cette action pour ce compte. Reconnectez votre compte pour accorder l’accès.".into()
-        }),
+        Failure::Permission(message) => known(message).unwrap_or_else(|| PERMISSION_DENIED.into()),
         Failure::RateLimit {
             retry_after_seconds,
-        } => format!(
-            "Yoto a reçu trop de demandes. Réessayez dans {retry_after_seconds} secondes."
-        ),
-        Failure::Compatibility(message) => known_message(message).map(str::to_owned).unwrap_or_else(|| {
-            format!("Yoto a répondu d’une manière inattendue. Réessayez plus tard. Détail : {message}")
+        } => {
+            format!("Yoto a reçu trop de demandes. Réessayez dans {retry_after_seconds} secondes.")
+        }
+        Failure::Compatibility(message) => known(message).unwrap_or_else(|| {
+            format!(
+                "Yoto a répondu d’une manière inattendue. Réessayez plus tard. Détail : {message}"
+            )
         }),
         Failure::Conflict => {
             "Cette playlist a changé sur Yoto. Rechargez-la avant de continuer.".into()
         }
-        Failure::Ambiguous => {
-            "Yoto a peut-être reçu la modification. Vérifiez le résultat dans « Imports » avant de réessayer.".into()
-        }
+        Failure::Ambiguous => AMBIGUOUS.into(),
         Failure::Cancelled => "Opération annulée.".into(),
     }
 }
+
+const PERMISSION_DENIED: &str = "Yoto n’autorise pas cette action pour ce compte. Reconnectez votre compte pour accorder l’accès.";
+const AMBIGUOUS: &str = "Yoto a peut-être reçu la modification. Vérifiez le résultat dans « Imports » avant de réessayer.";
 
 /// Plain French for each service and domain message a parent can run into. Keys are the
 /// shared constants, so a renamed message breaks the build instead of showing English.

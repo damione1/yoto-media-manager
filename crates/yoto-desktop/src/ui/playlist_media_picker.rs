@@ -258,25 +258,94 @@ impl Render for MediaPicker {
         .h(px(320.))
         .min_h(px(120.));
         let selected = self.selected.len();
-        div().flex().flex_col().gap_4()
-            .child(if replacing { "Choisissez le média qui remplacera cette piste." } else { "Sélectionnez vos médias et la version à envoyer." })
-            .child(if self.rows.rows.is_empty() { div().p_6().child("Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer.").into_any_element() } else { rows.into_any_element() })
-            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."))
-            .child(div().flex().gap_2().items_center()
-                .child(theme::pill(Button::new("picker-import-media").label("Importer de l’audio").on_click(cx.listener(|v, _, window, cx| {
-                    let editor = v.editor.clone();
-                    window.close_dialog(cx);
-                    let _ = editor.update(cx, |e, cx| { e.picker_window = None; let _ = e.parent.update(cx, |p, cx| p.navigate(Route::Imports, cx)); });
-                })), theme::Look::Outline, theme::Height::Medium, busy, cx))
-                .child(div().flex_1())
-                .child(DialogClose::new().child(theme::pill(Button::new("picker-cancel").label("Annuler"), theme::Look::Ghost, theme::Height::Medium, busy, cx)))
-                .child(theme::pill(Button::new("picker-add-selected").label(if busy { "Envoi en cours…".into() } else { format!("Ajouter ({selected})") }).on_click(cx.listener(|v, _, _, cx| {
-                    let mut batch = v.selected.iter().filter_map(|media| v.versions.get(media).map(|recipe| (*media, *recipe))).collect::<Vec<_>>();
-                    batch.sort_by_key(|(media, _)| v.rows.positions.get(media).copied());
-                    let _ = v.editor.update(cx, |e, cx| e.add_media_batch(batch, cx));
-                })), theme::Look::Primary, theme::Height::Medium, selected == 0 || blocked, cx)))
-            .children(busy.then(|| div().flex().gap_2().items_center().child(Spinner::new().small()).child(status.clone())))
-            .children((!busy && !status.is_empty()).then(|| div().text_sm().child(status)))
+        let list = if self.rows.rows.is_empty() {
+            div()
+                .p_6()
+                .child(theme::note(
+                    "Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer.",
+                ))
+                .into_any_element()
+        } else {
+            rows.into_any_element()
+        };
+        let actions = div()
+            .flex()
+            .gap_2()
+            .items_center()
+            .child(theme::pill(
+                Button::new("picker-import-media")
+                    .label("Importer de l’audio")
+                    .on_click(cx.listener(|v, _, window, cx| v.go_to_imports(window, cx))),
+                theme::Look::Outline,
+                theme::Height::Medium,
+                busy,
+                cx,
+            ))
+            .child(div().flex_1())
+            .child(DialogClose::new().child(theme::pill(
+                Button::new("picker-cancel").label("Annuler"),
+                theme::Look::Ghost,
+                theme::Height::Medium,
+                busy,
+                cx,
+            )))
+            .child(theme::pill(
+                Button::new("picker-add-selected")
+                    .label(if busy {
+                        "Envoi en cours…".into()
+                    } else {
+                        format!("Ajouter ({selected})")
+                    })
+                    .on_click(cx.listener(|v, _, _, cx| v.add_selected(cx))),
+                theme::Look::Primary,
+                theme::Height::Medium,
+                selected == 0 || blocked,
+                cx,
+            ));
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(theme::note(if replacing {
+                "Choisissez le média qui remplacera cette piste."
+            } else {
+                "Sélectionnez vos médias et la version à envoyer."
+            }))
+            .child(list)
+            .child(theme::note(
+                "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist.",
+            ))
+            .child(actions)
+            .children(busy.then(|| {
+                div()
+                    .flex()
+                    .gap_2()
+                    .items_center()
+                    .child(Spinner::new().small())
+                    .child(status.clone())
+            }))
+            .children((!busy && !status.is_empty()).then(|| theme::note(status)))
+    }
+}
+impl MediaPicker {
+    /// Close the picker and open « Imports » to bring in new audio.
+    fn go_to_imports(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let editor = self.editor.clone();
+        window.close_dialog(cx);
+        let _ = editor.update(cx, |e, cx| {
+            e.picker_window = None;
+            let _ = e.parent.update(cx, |p, cx| p.navigate(Route::Imports, cx));
+        });
+    }
+    /// Send the ticked media, in library order, with the version chosen for each.
+    fn add_selected(&mut self, cx: &mut Context<Self>) {
+        let mut batch = self
+            .selected
+            .iter()
+            .filter_map(|media| self.versions.get(media).map(|recipe| (*media, *recipe)))
+            .collect::<Vec<_>>();
+        batch.sort_by_key(|(media, _)| self.rows.positions.get(media).copied());
+        let _ = self.editor.update(cx, |e, cx| e.add_media_batch(batch, cx));
     }
 }
 #[cfg(test)]

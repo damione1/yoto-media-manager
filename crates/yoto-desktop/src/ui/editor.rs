@@ -65,6 +65,33 @@ impl SyncState {
         }
     }
 }
+const CHANGED_ON_YOTO: &str =
+    "La playlist a changé sur Yoto. Choisissez « Recharger la version Yoto » avant de continuer.";
+const DELETED_ON_YOTO: &str =
+    "Cette playlist a été supprimée sur Yoto. Choisissez une autre playlist dans la liste.";
+/// Status line while a save is on its way to Yoto.
+fn pending_status(state: &JobState) -> String {
+    match state {
+        JobState::Queued => "Envoi sur Yoto en attente…".into(),
+        JobState::Running { phase } => format!("{}…", phase.label()),
+        JobState::Retry { failure, .. } => {
+            format!("Nouvel essai automatique : {}", failure_text(failure))
+        }
+        JobState::WaitingForAuthentication => {
+            "Reconnectez le compte Yoto pour terminer l’envoi.".into()
+        }
+        JobState::Conflict { .. } => {
+            "La playlist a changé sur Yoto. Vérifiez la version distante avant de continuer.".into()
+        }
+        JobState::Reconciling => {
+            "Yoto a peut-être reçu la modification. Vérification requise avant un nouvel envoi."
+                .into()
+        }
+        JobState::Completed { .. } | JobState::Failed { .. } | JobState::Cancelled => {
+            state.label().into()
+        }
+    }
+}
 pub struct PlaylistEditor {
     pub draft: Playlist,
     parent: WeakEntity<AppView>,
@@ -289,10 +316,7 @@ impl PlaylistEditor {
         {
             return;
         }
-        let valid = self.gather(cx).is_ok();
-        self.draft.revision = self.base_revision;
-        let clean = valid
-            && serde_json::to_value(&self.draft).ok() == serde_json::to_value(&self.base).ok();
+        let clean = self.unchanged(cx);
         self.deleted = canonical.is_none();
         self.external = canonical.clone();
         if clean && let Some(canonical) = canonical {
@@ -303,14 +327,18 @@ impl PlaylistEditor {
                         entity.update(cx, |v, cx| {
                             // Deferred hydration rechecks the draft: a keystroke between
                             // reconcile and this callback must never be discarded.
-                            if canonical.revision <= v.base_revision || v.external.as_ref().is_some_and(|p|p.revision>canonical.revision) { return }
-                            let valid=v.gather(cx).is_ok();
-                            v.draft.revision=v.base_revision;
-                            if valid && serde_json::to_value(&v.draft).ok()==serde_json::to_value(&v.base).ok() {
+                            let newer = v
+                                .external
+                                .as_ref()
+                                .is_some_and(|p| p.revision > canonical.revision);
+                            if canonical.revision <= v.base_revision || newer {
+                                return;
+                            }
+                            if v.unchanged(cx) {
                                 v.adopt(canonical, window, cx);
                             } else {
-                                v.external=Some(canonical);
-                                v.status="La playlist a changé sur Yoto. Choisissez « Recharger la version Yoto » avant de continuer.".into();
+                                v.external = Some(canonical);
+                                v.status = CHANGED_ON_YOTO.into();
                                 cx.notify();
                             }
                         })
@@ -318,9 +346,21 @@ impl PlaylistEditor {
                 }
             });
         } else {
-            self.status=if self.deleted { "Cette playlist a été supprimée sur Yoto. Choisissez une autre playlist dans la liste." } else { "La playlist a changé sur Yoto. Choisissez « Recharger la version Yoto » avant de continuer." }.into();
+            self.status = if self.deleted {
+                DELETED_ON_YOTO
+            } else {
+                CHANGED_ON_YOTO
+            }
+            .into();
         }
         cx.notify();
+    }
+    /// Whether the draft still equals the last saved playlist (a draft that does not
+    /// validate counts as changed).
+    fn unchanged(&mut self, cx: &App) -> bool {
+        let valid = self.gather(cx).is_ok();
+        self.draft.revision = self.base_revision;
+        valid && serde_json::to_value(&self.draft).ok() == serde_json::to_value(&self.base).ok()
     }
     fn adopt(&mut self, draft: Playlist, window: &mut Window, cx: &mut Context<Self>) {
         // Sections the parent opened stay open across the reload that follows each save.
@@ -533,12 +573,12 @@ impl PlaylistEditor {
         }
         for chapter in &mut self.draft.chapters {
             let original = self.base.chapters.iter().find(|c| c.id == chapter.id);
-            if matches!(&chapter.icon,Some(IconReference::Local {asset}) if abandoned.contains(asset))
+            if matches!(&chapter.icon, Some(IconReference::Local { asset }) if abandoned.contains(asset))
             {
                 chapter.icon = original.and_then(|c| c.icon.clone());
             }
             for track in &mut chapter.tracks {
-                if matches!(&track.icon,Some(IconReference::Local {asset}) if abandoned.contains(asset))
+                if matches!(&track.icon, Some(IconReference::Local { asset }) if abandoned.contains(asset))
                 {
                     track.icon = original
                         .and_then(|c| c.tracks.iter().find(|t| t.id == track.id))
@@ -779,15 +819,7 @@ impl PlaylistEditor {
             | JobState::WaitingForAuthentication
             | JobState::Conflict { .. }
             | JobState::Reconciling) => {
-                self.status = match state {
-                    JobState::Queued => "Envoi sur Yoto en attente…".into(),
-                    JobState::Running { phase } => format!("{}…", phase.label()),
-                    JobState::Retry { failure, .. } => format!("Nouvel essai automatique : {}", failure_text(failure)),
-                    JobState::WaitingForAuthentication => "Reconnectez le compte Yoto pour terminer l’envoi.".into(),
-                    JobState::Conflict { .. } => "La playlist a changé sur Yoto. Vérifiez la version distante avant de continuer.".into(),
-                    JobState::Reconciling => "Yoto a peut-être reçu la modification. Vérification requise avant un nouvel envoi.".into(),
-                    JobState::Completed { .. } | JobState::Failed { .. } | JobState::Cancelled => unreachable!("terminal states handled above"),
-                };
+                self.status = pending_status(state);
                 self.operation = Some(PlaylistOperation::Pending {
                     job: job.id,
                     state: state.clone(),

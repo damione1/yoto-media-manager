@@ -639,10 +639,19 @@ impl AppView {
     }
     pub fn open_profile(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
         let runtime = self.runtime.clone();
-        cx.spawn(async move|weak,cx|{
-            let result=runtime.spawn_blocking(move|| {let profile=yoto_infra::canonical_profile(&path)?;if !profile.join("catalogue.db").is_file(){return Err(Failure::Validation("Choisissez un profil Yoto existant contenant catalogue.db".into()));}let mut command=std::process::Command::new(std::env::current_exe().map_err(|e|Failure::Storage(e.to_string()))?);command.env("YOTO_PROFILE",profile);if cfg!(debug_assertions)&&std::env::args().any(|a|a=="--isolated"){command.arg("--isolated");}command.spawn().map_err(|e|Failure::Storage(e.to_string()))?;Ok(())}).await;
-            let _=weak.update(cx,|v,cx|{match result {Ok(Ok(()))=>v.status="La médiathèque choisie s’ouvre dans une autre fenêtre ; celle-ci reste disponible.".into(),Ok(Err(e))=>v.report_error(e,cx),Err(e)=>v.report_error(Failure::Storage(e.to_string()),cx)}cx.notify();});
-        }).detach();
+        cx.spawn(async move |weak, cx| {
+            let result = runtime.spawn_blocking(move || launch_profile(&path)).await;
+            let _ = weak.update(cx, |v, cx| {
+                match joined(result) {
+                    Ok(()) => {
+                        v.status = "La médiathèque choisie s’ouvre dans une autre fenêtre ; celle-ci reste disponible.".into()
+                    }
+                    Err(e) => v.report_error(e, cx),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
     pub fn choose_profile(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |weak, cx| {
@@ -803,6 +812,25 @@ impl AppView {
         }
         cx.notify();
     }
+}
+/// Start another copy of the app on an existing library folder.
+fn launch_profile(path: &std::path::Path) -> yoto_domain::Result<()> {
+    let profile = yoto_infra::canonical_profile(path)?;
+    if !profile.join("catalogue.db").is_file() {
+        return Err(Failure::Validation(
+            "Choisissez un profil Yoto existant contenant catalogue.db".into(),
+        ));
+    }
+    let executable = std::env::current_exe().map_err(|e| Failure::Storage(e.to_string()))?;
+    let mut command = std::process::Command::new(executable);
+    command.env("YOTO_PROFILE", profile);
+    if cfg!(debug_assertions) && std::env::args().any(|a| a == "--isolated") {
+        command.arg("--isolated");
+    }
+    command
+        .spawn()
+        .map_err(|e| Failure::Storage(e.to_string()))?;
+    Ok(())
 }
 /// A service call run on the Tokio runtime, with a failed runtime task reported like any
 /// other local failure.
