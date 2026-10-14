@@ -491,11 +491,12 @@ fn replace(plan: &InstallPlan) -> Result<(), UpdateError> {
         return Err(error(failure));
     }
     #[cfg(windows)]
-    if plan.platform == Platform::Windows && plan.destination.join("unins000.exe").is_file() {
-        if let Err(failure) = update_uninstall_version(&plan.version) {
-            rollback(plan)?;
-            return Err(failure);
-        }
+    if plan.platform == Platform::Windows
+        && plan.destination.join("unins000.exe").is_file()
+        && let Err(failure) = update_uninstall_version(&plan.version)
+    {
+        rollback(plan)?;
+        return Err(failure);
     }
     let result = launch_application(&plan.destination, plan.platform);
     if result.is_err() {
