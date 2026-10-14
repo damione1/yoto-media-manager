@@ -33,6 +33,8 @@ Les changements sont enregistrés sur Yoto automatiquement ; il n’y a pas de b
 
 L’étiquette à côté du titre affiche `Enregistrement…` pendant l’envoi des changements et `Enregistré sur Yoto` une fois que Yoto les a reçus. Vous pouvez continuer à modifier pendant ce temps : ce que vous changez pendant un enregistrement est envoyé juste après. Les changements encore en attente sont envoyés quand vous ouvrez une autre playlist ou une autre page, et avant que l’application se ferme. S’ils ne peuvent pas être enregistrés, un message nomme la playlist et explique pourquoi ; en quittant, vous pouvez rester ou choisir `Quitter quand même`.
 
+![L’éditeur de playlist : la couverture, l’étiquette Enregistré sur Yoto à côté du titre, et chaque piste avec son icône et son état Sur Yoto](../../docs/images/playlist-fr.png)
+
 En cas d’erreur, le message et le détail de la tâche expliquent ce qui demande encore votre attention.
 
 ## Choisir les illustrations
@@ -40,6 +42,8 @@ En cas d’erreur, le message et le détail de la tâche expliquent ce qui deman
 Une couverture représente la playlist. De petites icônes représentent ses chapitres ou ses pistes sur le lecteur.
 
 Choisissez `Changer l’icône` dans le menu de l’audio. Le dialogue propose le catalogue `Yoto` et vos images personnelles dans `Mes icônes`. Sélectionnez une icône pour l’appliquer, ou importez une image pour l’ajouter à vos icônes personnelles. Le dialogue se ferme et le changement est enregistré sur Yoto avec vos autres changements.
+
+![Le choix d’icône ouvert sur une piste qui vient d’être ajoutée, avec le catalogue Yoto et Mes icônes](../../docs/images/playlist-icons-fr.png)
 
 Une chanson affiche un seul titre. Les playlists dont les chapitres contiennent plusieurs pistes gardent cette structure ; leurs réglages détaillés restent disponibles dans les menus.
 

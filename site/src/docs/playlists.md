@@ -33,6 +33,8 @@ Changes are saved to Yoto automatically; there is no save or publish button. Tex
 
 The tag next to the title shows `Enregistrement…` while changes are on their way and `Enregistré sur Yoto` once Yoto has them. You can keep editing meanwhile: what you change during a save is sent right after it. Changes still waiting are sent when you open another playlist or page and before the app quits. If they cannot be saved, a message names the playlist and explains why; when quitting, you can stay or choose `Quitter quand même`.
 
+![The playlist editor: the cover, the Saved on Yoto tag next to the title, and each track with its icon and its On Yoto state](images/playlist-en.png)
+
 If an error occurs, the message and task details explain what still needs attention.
 
 ## Choose illustrations
@@ -40,6 +42,8 @@ If an error occurs, the message and task details explain what still needs attent
 A cover represents the playlist. Small icons represent its chapters or tracks on the player.
 
 Choose `Changer l’icône` from the audio's menu. The dialog offers the `Yoto` catalog and your personal images in `Mes icônes`. Select an icon to apply it, or import an image to add it to your personal icons. The dialog closes and the change is saved to Yoto with your other changes.
+
+![The icon picker open over a newly added track, with the Yoto catalog and My icons](images/playlist-icons-en.png)
 
 A song displays a single title. Playlists with chapters containing multiple tracks keep that structure; their detailed settings remain available in the menus.
 

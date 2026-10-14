@@ -29,6 +29,8 @@ The original is preserved. The prepared version is available alongside it.
 4. Follow the upload. The tracks appear after Yoto confirms the update.
 5. Rename chapters and choose their illustrations. Changes are sent directly to Yoto.
 
+![A playlist in the editor, saved on Yoto, with four tracks and their icons](images/playlist-en.png)
+
 You can import and prepare audio without a Yoto account. Creating and editing playlists requires a connected account.
 
 ## Listen on your player

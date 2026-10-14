@@ -17,6 +17,8 @@ L’application copie et analyse chaque fichier. Votre fichier source reste à s
 2. Choisissez `Importer`. Une vidéo seule est téléchargée directement.
 3. Suivez le téléchargement et l’analyse dans l’historique des imports.
 
+![Importer de l’audio : un lien YouTube collé dans le champ, et la tâche terminée, prête dans la médiathèque](../../docs/images/imports-fr.png)
+
 Pour une playlist YouTube, l’application affiche les vidéos disponibles. Sélectionnez celles que vous voulez, puis choisissez `Importer la sélection`. Cette sélection est demandée même quand la playlist ne contient qu’une vidéo. L’application limite la sélection à 100 vidéos.
 
 Le téléchargement et l’extraction de l’audio se font sur votre ordinateur. L’audio est envoyé à Yoto quand vous choisissez de l’ajouter à une playlist. Les vidéos privées, les contenus qui demandent une connexion et certaines vidéos restreintes peuvent être inaccessibles.

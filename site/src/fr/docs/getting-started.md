@@ -29,6 +29,8 @@ L’original est conservé. La version préparée est disponible à côté.
 4. Suivez l’envoi. Les pistes apparaissent quand Yoto a confirmé la mise à jour.
 5. Renommez les chapitres et choisissez leurs illustrations. Les changements sont envoyés directement à Yoto.
 
+![Une playlist dans l’éditeur, enregistrée sur Yoto, avec quatre pistes et leurs icônes](../../docs/images/playlist-fr.png)
+
 Vous pouvez importer et préparer de l’audio sans compte Yoto. Créer et modifier des playlists demande un compte connecté.
 
 ## Écouter sur votre lecteur
