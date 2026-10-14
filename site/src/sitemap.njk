@@ -1,0 +1,20 @@
+---
+permalink: sitemap.xml
+eleventyExcludeFromCollections: true
+---
+{%- macro entry(url) %}
+  {%- for loc in locales %}
+  <url>
+    <loc>{{ site.url }}{{ url | localeUrl(loc.code) }}</loc>
+    {%- for alt in locales %}
+    <xhtml:link rel="alternate" hreflang="{{ alt.htmlLang }}" href="{{ site.url }}{{ url | localeUrl(alt.code) }}"/>
+    {%- endfor %}
+    <xhtml:link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ url | localeUrl('en') }}"/>
+  </url>
+  {%- endfor %}
+{%- endmacro -%}
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+{{- entry("/") }}
+{%- for p in collections.docs_en %}{{ entry(p.url) }}{% endfor %}
+</urlset>

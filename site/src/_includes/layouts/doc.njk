@@ -1,0 +1,53 @@
+---
+layout: layouts/base.njk
+---
+{% from "icons.njk" import icon %}
+{#
+  One guide page: the guide's running order on the left (collapsible on
+  phones), the page itself in a readable measure, the page's own sections
+  listed at its head, and previous/next at its foot.
+#}
+{% set pages = collections["docs_" + loc.code] %}
+{% set sections = content | toc %}
+{% set prev = pages | getPreviousCollectionItem(page) %}
+{% set next = pages | getNextCollectionItem(page) %}
+<div class="wrap docs">
+  <aside class="docs-side">
+    <details class="docs-menu">
+      <summary>{{ icon("book", 17) }}{{ t.docs.contents }}</summary>
+      <nav aria-label="{{ t.docs.contents }}">
+        <ol class="docs-pages">
+          {%- for p in pages %}
+          <li><a href="{{ p.url }}"{% if p.url == page.url %} aria-current="page"{% endif %}>{{ p.data.title }}</a></li>
+          {%- endfor %}
+        </ol>
+      </nav>
+    </details>
+  </aside>
+
+  <article class="docs-body">
+    <p class="docs-kicker">{{ t.docs.title }}</p>
+    {% set parts = content | splitTitle %}
+    <div class="prose">
+      {{ parts[0] | safe }}
+      {%- if sections.length > 1 %}
+      <nav class="docs-toc" aria-label="{{ t.docs.onThisPage }}">
+        <span class="docs-toc-h">{{ t.docs.onThisPage }}</span>
+        <ul>
+          {%- for s in sections %}<li><a href="#{{ s.id }}">{{ s.text }}</a></li>{% endfor %}
+        </ul>
+      </nav>
+      {%- endif %}
+      {{ parts[1] | safe }}
+    </div>
+
+    <nav class="docs-pager" aria-label="{{ t.docs.prev }} / {{ t.docs.next }}">
+      {%- if prev %}
+      <a class="pager-prev" href="{{ prev.url }}" rel="prev"><span>{{ icon("arrowLeft", 16) }}{{ t.docs.prev }}</span><strong>{{ prev.data.title }}</strong></a>
+      {%- endif %}
+      {%- if next %}
+      <a class="pager-next" href="{{ next.url }}" rel="next"><span>{{ t.docs.next }}{{ icon("arrowRight", 16) }}</span><strong>{{ next.data.title }}</strong></a>
+      {%- endif %}
+    </nav>
+  </article>
+</div>

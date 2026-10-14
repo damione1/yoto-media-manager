@@ -1,0 +1,191 @@
+{
+  "meta": {
+    "title": "YotoMediaManager · Les chansons qu’ils réclament, sur leur Yoto",
+    "description": "Une application pour les parents qui ont un Yoto à la maison : importez de l’audio depuis un fichier ou un lien YouTube, découpez-le et ajoutez-le à une playlist de votre compte Yoto. Pour macOS et Windows.",
+    "ogDescription": "Importez une chanson, gardez juste le bon morceau et ajoutez-la à une playlist de leur Yoto. Une application pour macOS et Windows.",
+    "imageAlt": "L’icône de YotoMediaManager à côté de la phrase : les chansons qu’ils réclament, sur leur Yoto.",
+    "docsSuffix": "Guide YotoMediaManager",
+    "notFoundTitle": "Page introuvable · YotoMediaManager"
+  },
+  "nav": {
+    "skip": "Aller au contenu",
+    "main": "Principale",
+    "how": "Comment ça marche",
+    "see": "En action",
+    "faq": "Questions",
+    "guide": "Guide d’utilisation",
+    "download": "Télécharger",
+    "language": "Langue",
+    "home": "Accueil YotoMediaManager"
+  },
+  "hero": {
+    "badge": "Pour les parents qui ont un Yoto à la maison",
+    "title": "Les chansons qu’ils réclament,",
+    "titleAccent": "sur leur Yoto.",
+    "sub": "Une comptine trouvée sur YouTube, une histoire dans votre langue, la berceuse de Mamie : importez-la, gardez juste le bon morceau, et rangez-la dans une playlist de votre lecteur.",
+    "ctaMac": "Télécharger pour macOS",
+    "ctaWin": "Pour Windows",
+    "note": "macOS et Windows · fonctionne avec votre compte Yoto",
+    "cardTitle": "Chansons du soir",
+    "cardMeta": "4 pistes · 9 min",
+    "tracks": [
+      { "title": "Une souris verte", "dur": "1:52", "family": "mint", "pixel": "heart" },
+      { "title": "Dodo, l’enfant do", "dur": "2:40", "family": "lilac", "pixel": "moon" },
+      { "title": "Frère Jacques", "dur": "1:34", "family": "butter", "pixel": "star" },
+      { "title": "Berceuse de Brahms", "dur": "3:21", "family": "sky", "pixel": "note" }
+    ],
+    "toast": "Envoyé sur Yoto. La carte est à jour."
+  },
+  "how": {
+    "title": "Quatre étapes, un seul endroit",
+    "sub": "Plus besoin de jongler entre un convertisseur, un éditeur audio et le site de Yoto.",
+    "steps": [
+      { "title": "Importer", "text": "Collez un lien YouTube ou choisissez un fichier audio sur votre ordinateur.", "family": "peach" },
+      { "title": "Découper", "text": "Retirez l’intro ou le générique. L’original est toujours conservé.", "family": "sky" },
+      { "title": "Composer", "text": "Créez une playlist, ajoutez vos pistes et donnez à chacune sa petite icône.", "family": "lilac" },
+      { "title": "Écouter", "text": "Choisissez le lecteur de la chambre et lancez la playlist depuis l’app.", "family": "mint" }
+    ]
+  },
+  "see": {
+    "title": "En action",
+    "sub": "Ce ne sont pas des vidéos : ce sont de petites reproductions des écrans de l’app, qui rejouent les mêmes étapes.",
+    "pause": "Mettre l’animation en pause",
+    "play": "Lire l’animation",
+    "scenes": {
+      "import": {
+        "title": "Collez un lien, récupérez la chanson",
+        "text": "Collez une vidéo ou une playlist YouTube publique, ou ajoutez un fichier de votre ordinateur. L’audio est téléchargé et préparé sur votre ordinateur, puis attend dans votre médiathèque.",
+        "alt": "Animation de l’application : un lien YouTube est collé dans Importer de l’audio, le téléchargement et la préparation avancent, et la chanson apparaît en haut de la Médiathèque."
+      },
+      "trim": {
+        "title": "Gardez juste le bon morceau",
+        "text": "Faites glisser les deux poignées après l’intro et avant le générique, écoutez la sélection, puis appliquez. Votre original est toujours conservé, et la version découpée est prête pour vos playlists.",
+        "alt": "Animation du dialogue de découpe : les poignées de début et de fin se rapprochent, les temps de début et de fin se mettent à jour, la sélection est écoutée, puis Appliquer est choisi."
+      },
+      "playlist": {
+        "title": "Directement sur leur Yoto",
+        "text": "Ajoutez une chanson à une playlist et donnez-lui sa petite icône pixel. Les changements sont enregistrés sur votre compte Yoto au fur et à mesure : il n’y a pas de bouton pour publier.",
+        "alt": "Animation de l’éditeur de playlist : une chanson est ajoutée à la playlist, une icône est choisie pour elle, et l’état passe de Enregistrement à Enregistré sur Yoto."
+      }
+    }
+  },
+  "features": {
+    "title": "Ce que vous pouvez faire",
+    "sub": "Vos fichiers restent sur votre ordinateur. Vos playlists vivent sur votre compte Yoto, et les changements y sont envoyés directement.",
+    "items": [
+      { "text": "Importer des fichiers audio ou coller un lien YouTube.", "family": "peach", "pixel": "note" },
+      { "text": "Écouter et découper l’audio en gardant l’original.", "family": "sky", "pixel": "star" },
+      { "text": "Créer et modifier vos playlists directement sur votre compte Yoto.", "family": "lilac", "pixel": "moon" },
+      { "text": "Choisir parmi les icônes pixel de Yoto ou importer vos images.", "family": "butter", "pixel": "sun" },
+      { "text": "Choisir un lecteur et contrôler la lecture depuis l’app.", "family": "mint", "pixel": "heart" }
+    ]
+  },
+  "story": {
+    "title": "Un parent, un tout-petit et une poignée de chansons",
+    "body": "Le catalogue Yoto est formidable. Mais mon enfant de deux ans avait une liste bien plus courte : quelques comptines préférées, en boucle. Celles qu’on aimait étaient sur YouTube, et souvent pas dans notre langue. Yoto permet d’ajouter son propre audio et ouvre son API aux développeurs : j’ai réuni toutes les étapes dans une seule app.",
+    "sign": "Damien, parent et développeur"
+  },
+  "faq": {
+    "title": "Questions fréquentes",
+    "items": [
+      { "q": "Est-ce une application officielle Yoto ?", "a": "Non. YotoMediaManager est une application indépendante, construite sur l’API que Yoto met à disposition des développeurs. Vous vous connectez avec votre propre compte Yoto, sur le site de Yoto." },
+      { "q": "Où sont stockés mes fichiers ?", "a": "Votre médiathèque reste sur votre ordinateur. Seul l’audio que vous ajoutez à une playlist est envoyé sur votre compte Yoto." },
+      { "q": "Faut-il un compte Yoto ?", "a": "Pour importer et découper de l’audio, non. Pour créer des playlists et les écouter sur un lecteur, oui." },
+      { "q": "Mes originaux sont-ils modifiés quand je découpe ?", "a": "Jamais. La découpe crée une version à côté de l’original, que vous pouvez exporter à tout moment." },
+      { "q": "L’application est-elle terminée ?", "a": "Elle est encore en rodage : certaines combinaisons de lecteurs et d’ordinateurs restent à valider. L’app vous prévient quand une fonction n’est pas disponible, et vous propose les nouvelles versions dès leur publication." }
+    ]
+  },
+  "cta": {
+    "title": "Remplissez leur Yoto de leurs chansons préférées.",
+    "mac": "Télécharger pour macOS",
+    "win": "Pour Windows",
+    "note": "Les téléchargements sont sur la page des versions GitHub."
+  },
+  "footer": {
+    "label": "Pied de page",
+    "guide": "Guide d’utilisation",
+    "releases": "Versions",
+    "notices": "Licences tierces",
+    "source": "Code source",
+    "notAffiliated": "Application indépendante, non affiliée à Yoto Ltd. Yoto est une marque de Yoto Ltd."
+  },
+  "docs": {
+    "title": "Guide d’utilisation",
+    "contents": "Sommaire du guide",
+    "onThisPage": "Sur cette page",
+    "prev": "Précédent",
+    "next": "Suivant"
+  },
+  "notFound": {
+    "title": "Cette page n’est pas ici",
+    "text": "Le lien est peut-être ancien, ou la page a changé de place.",
+    "home": "Retour à l’accueil",
+    "guide": "Ouvrir le guide d’utilisation"
+  },
+  "mock": {
+    "brand": "YotoMediaManager",
+    "tagline": "Votre audio. Vos histoires.",
+    "account": "Famille Collin",
+    "connected": "Connecté à Yoto",
+    "navLibrary": "Médiathèque",
+    "navPlaylists": "Playlists",
+    "navImports": "Imports",
+    "navPlayers": "Lecteurs",
+    "navAccount": "Compte",
+    "importTitle": "Importer de l’audio",
+    "importSub": "Depuis YouTube ou depuis un fichier de votre ordinateur.",
+    "ytLabel": "Lien YouTube",
+    "ytUrl": "youtube.com/watch?v=une-souris-verte",
+    "ytHint": "Une vidéo ou une playlist publique. On récupère seulement l’audio.",
+    "importBtn": "Importer",
+    "addFile": "Ajouter un fichier audio",
+    "activities": "Activités",
+    "downloading": "Téléchargement",
+    "preparing": "Préparation audio locale",
+    "ready": "Prêt dans la médiathèque",
+    "listen": "Écouter",
+    "libraryTitle": "Médiathèque",
+    "libraryMeta": "{n} audios · sur cet ordinateur",
+    "trimmed": "Découpé",
+    "original": "Original",
+    "newSong": { "title": "Une souris verte", "meta": "1 min 52 · Comptine" },
+    "library": [
+      { "title": "Berceuse de Brahms", "meta": "3 min 21 · Musique", "family": "lilac", "pixel": "moon", "tag": "original" },
+      { "title": "Dodo, l’enfant do", "meta": "2 min 40 · Comptine", "family": "sky", "pixel": "moon", "tag": "original" },
+      { "title": "Frère Jacques", "meta": "1 min 34 · Comptine", "family": "butter", "pixel": "star", "tag": "trimmed" }
+    ],
+    "trimTitle": "Découper « Une souris verte »",
+    "trimSub": "Déplacez les poignées pour garder la partie qui vous plaît.",
+    "start": "Début",
+    "end": "Fin",
+    "kept": "Durée gardée",
+    "listenSel": "Écouter la sélection",
+    "stop": "Arrêter",
+    "level": "Égaliser le volume",
+    "levelHint": "Utile quand une chanson est beaucoup plus forte que les autres.",
+    "keptNote": "Votre original est conservé. Appliquer crée une version pour vos playlists.",
+    "cancel": "Annuler",
+    "apply": "Appliquer",
+    "preparingTrim": "Préparation de votre découpe…",
+    "trimDone": "Version découpée prête",
+    "music": "Musique",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré sur Yoto",
+    "onYoto": "Sur Yoto",
+    "sending": "Envoi sur Yoto…",
+    "addMedia": "Ajouter des médias",
+    "playlistTitle": "Chansons du soir",
+    "playlistMetaBefore": "3 pistes · 6 min",
+    "playlistMetaAfter": "4 pistes · 8 min",
+    "tracks": [
+      { "title": "Une souris verte", "meta": "1 min 52", "family": "mint", "pixel": "heart" },
+      { "title": "Dodo, l’enfant do", "meta": "2 min 40", "family": "lilac", "pixel": "moon" },
+      { "title": "Frère Jacques", "meta": "1 min 34", "family": "butter", "pixel": "star" }
+    ],
+    "incoming": { "title": "Au clair de la lune", "meta": "2 min 05" },
+    "chooseIcon": "Choisir une icône",
+    "iconsYoto": "Yoto",
+    "iconsMine": "Mes icônes",
+    "useIcon": "Utiliser cette icône"
+  }
+}

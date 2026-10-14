@@ -1,0 +1,137 @@
+---
+pagination: { data: locales, size: 1, alias: loc }
+permalink: "{{ loc.dir }}index.html"
+layout: layouts/base.njk
+---
+{% from "icons.njk" import icon, pixel, play %}
+{% from "mocks/mocks.njk" import importScene, trimScene, playlistScene %}
+
+{% macro downloads(t, primary, secondary, onInk = false) %}
+<a class="btn btn-primary btn-lg" href="{{ site.latest }}">{{ icon("download", 20, 2.6) }}{{ primary }}</a>
+<a class="btn {{ 'btn-light' if onInk else 'btn-ghost' }} btn-lg" href="{{ site.latest }}">{{ secondary }}</a>
+{% endmacro %}
+
+{# ── Hero ── #}
+<section class="hero wrap" aria-labelledby="hero-title">
+  <div class="hero-copy">
+    <p class="badge f-lilac">{{ t.hero.badge }}</p>
+    <h1 id="hero-title" class="h-display">{{ t.hero.title }} <span class="accent">{{ t.hero.titleAccent }}</span></h1>
+    <p class="lede">{{ t.hero.sub }}</p>
+    <div id="download" class="actions">{{ downloads(t, t.hero.ctaMac, t.hero.ctaWin) }}</div>
+    <p class="meta">{{ t.hero.note }}</p>
+  </div>
+
+  <div class="hero-visual" aria-hidden="true">
+    <div class="hero-blob"></div>
+    <div class="hero-card">
+      <div class="hero-card-head">
+        <span class="tile f-lilac tile-lg">{{ pixel("moon", 40) }}</span>
+        <div><p class="card-title">{{ t.hero.cardTitle }}</p><p class="meta">{{ t.hero.cardMeta }}</p></div>
+      </div>
+      <ul class="hero-tracks">
+        {%- for tr in t.hero.tracks %}
+        <li><span class="tile f-{{ tr.family }} tile-sm">{{ pixel(tr.pixel, 20) }}</span><span class="tr-title">{{ tr.title }}</span><span class="meta">{{ tr.dur }}</span></li>
+        {%- endfor %}
+      </ul>
+      <p class="toast"><span class="toast-ok">{{ icon("check", 12, 3.6) }}</span>{{ t.hero.toast }}</p>
+    </div>
+  </div>
+</section>
+
+{# ── How it works ── #}
+<section id="how" class="band band-white" aria-labelledby="how-title">
+  <div class="wrap stack">
+    <header class="section-head">
+      <h2 id="how-title" class="h2">{{ t.how.title }}</h2>
+      <p class="lede">{{ t.how.sub }}</p>
+    </header>
+    <ol class="steps">
+      {%- for s in t.how.steps %}
+      <li class="step f-{{ s.family }}">
+        <span class="step-n" aria-hidden="true">{{ loop.index }}</span>
+        <h3 class="h3">{{ s.title }}</h3>
+        <p>{{ s.text }}</p>
+      </li>
+      {%- endfor %}
+    </ol>
+  </div>
+</section>
+
+{# ── The app, playing its own steps ── #}
+<section id="see" class="band" aria-labelledby="see-title">
+  <div class="wrap stack">
+    <header class="section-head">
+      <h2 id="see-title" class="h2">{{ t.see.title }}</h2>
+      <p class="lede">{{ t.see.sub }}</p>
+    </header>
+    {%- for key in ["import", "trim", "playlist"] %}
+    {% set sc = t.see.scenes[key] %}
+    <article class="scene{% if loop.index % 2 == 0 %} scene-flip{% endif %}" aria-labelledby="scene-{{ key }}">
+      <div class="scene-copy">
+        <h3 id="scene-{{ key }}" class="h3">{{ sc.title }}</h3>
+        <p>{{ sc.text }}</p>
+      </div>
+      <figure class="plate">
+        {%- if key == "import" %}{{ importScene(t) }}
+        {%- elif key == "trim" %}{{ trimScene(t, waveBars) }}
+        {%- else %}{{ playlistScene(t) }}{% endif %}
+        <figcaption class="sr-only">{{ sc.alt }}</figcaption>
+        <button class="plate-toggle" type="button" data-toggle data-pause="{{ t.see.pause }}" data-play="{{ t.see.play }}" hidden>
+          <span class="pt-pause" aria-hidden="true"><i></i><i></i></span><span class="pt-play" aria-hidden="true">{{ play(12) }}</span><span class="pt-label">{{ t.see.pause }}</span>
+        </button>
+      </figure>
+    </article>
+    {%- endfor %}
+  </div>
+</section>
+
+{# ── Features ── #}
+<section class="band" aria-labelledby="features-title">
+  <div class="wrap features">
+    <header class="features-head">
+      <h2 id="features-title" class="h2">{{ t.features.title }}</h2>
+      <p class="lede">{{ t.features.sub }}</p>
+    </header>
+    <ul class="feature-list">
+      {%- for f in t.features.items %}
+      <li><span class="tile f-{{ f.family }} tile-sm">{{ pixel(f.pixel, 20) }}</span><span>{{ f.text }}</span></li>
+      {%- endfor %}
+    </ul>
+  </div>
+</section>
+
+{# ── The story ── #}
+<section class="wrap story-wrap" aria-labelledby="story-title">
+  <div class="story f-lilac">
+    <span class="story-mark" aria-hidden="true">{{ pixel("heart", 56) }}</span>
+    <div class="story-text">
+      <h2 id="story-title" class="h2 h2-sm">{{ t.story.title }}</h2>
+      <p>{{ t.story.body }}</p>
+      <p class="story-sign">{{ t.story.sign }}</p>
+    </div>
+  </div>
+</section>
+
+{# ── Questions ── #}
+<section id="faq" class="band band-white" aria-labelledby="faq-title">
+  <div class="wrap narrow stack-sm">
+    <h2 id="faq-title" class="h2">{{ t.faq.title }}</h2>
+    {%- for q in t.faq.items %}
+    <details class="faq">
+      <summary>{{ q.q }}{{ icon("chevron", 20) }}</summary>
+      <p>{{ q.a }}</p>
+    </details>
+    {%- endfor %}
+  </div>
+</section>
+
+{# ── Last call ── #}
+<section class="wrap cta-wrap" aria-labelledby="cta-title">
+  <div class="cta">
+    <h2 id="cta-title" class="h2">{{ t.cta.title }}</h2>
+    <div class="cta-do">
+      <div class="actions">{{ downloads(t, t.cta.mac, t.cta.win, true) }}</div>
+      <p class="cta-note">{{ t.cta.note }}</p>
+    </div>
+  </div>
+</section>

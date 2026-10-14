@@ -1,0 +1,191 @@
+{
+  "meta": {
+    "title": "YotoMediaManager · The songs they ask for, on their Yoto",
+    "description": "A desktop app for parents with a Yoto at home: import audio from a file or a YouTube link, trim it, and add it to a playlist on your Yoto account. For macOS and Windows.",
+    "ogDescription": "Import a song, keep just the right part, and add it to a playlist on their Yoto. A desktop app for macOS and Windows.",
+    "imageAlt": "The YotoMediaManager icon next to the line: the songs they ask for, on their Yoto.",
+    "docsSuffix": "YotoMediaManager guide",
+    "notFoundTitle": "Page not found · YotoMediaManager"
+  },
+  "nav": {
+    "skip": "Skip to content",
+    "main": "Main",
+    "how": "How it works",
+    "see": "See it work",
+    "faq": "Questions",
+    "guide": "User guide",
+    "download": "Download",
+    "language": "Language",
+    "home": "YotoMediaManager home"
+  },
+  "hero": {
+    "badge": "For parents with a Yoto at home",
+    "title": "The songs they ask for,",
+    "titleAccent": "on their Yoto.",
+    "sub": "A nursery rhyme found on YouTube, a story in your language, Grandma’s lullaby: import it, keep just the right part, and add it to a playlist on your player.",
+    "ctaMac": "Download for macOS",
+    "ctaWin": "For Windows",
+    "note": "macOS and Windows · works with your Yoto account",
+    "cardTitle": "Evening songs",
+    "cardMeta": "4 tracks · 9 min",
+    "tracks": [
+      { "title": "Twinkle, Twinkle, Little Star", "dur": "1:52", "family": "mint", "pixel": "heart" },
+      { "title": "Hush, Little Baby", "dur": "2:40", "family": "lilac", "pixel": "moon" },
+      { "title": "Row, Row, Row Your Boat", "dur": "1:34", "family": "butter", "pixel": "star" },
+      { "title": "Brahms’ Lullaby", "dur": "3:21", "family": "sky", "pixel": "note" }
+    ],
+    "toast": "Sent to Yoto. The card is up to date."
+  },
+  "how": {
+    "title": "Four steps, one place",
+    "sub": "No more juggling a converter, an audio editor and the Yoto website.",
+    "steps": [
+      { "title": "Import", "text": "Paste a YouTube link or choose an audio file on your computer.", "family": "peach" },
+      { "title": "Trim", "text": "Cut the intro or the credits. The original is always kept.", "family": "sky" },
+      { "title": "Compose", "text": "Create a playlist, add your tracks and give each one its little icon.", "family": "lilac" },
+      { "title": "Listen", "text": "Pick the player in the bedroom and start the playlist from the app.", "family": "mint" }
+    ]
+  },
+  "see": {
+    "title": "See it work",
+    "sub": "These are not videos: they are small reproductions of the app’s screens, playing out the same steps.",
+    "pause": "Pause animation",
+    "play": "Play animation",
+    "scenes": {
+      "import": {
+        "title": "Paste a link, get the song",
+        "text": "Paste a public YouTube video or playlist, or add a file from your computer. The audio is downloaded and prepared on your computer, then waits in your library.",
+        "alt": "Animation of the app: a YouTube link is pasted into Import audio, the download and preparation progress, and the song appears at the top of the Library."
+      },
+      "trim": {
+        "title": "Keep just the right part",
+        "text": "Drag the two handles past the intro and the credits, listen to the selection, then apply. Your original is always kept, and the trimmed version is ready for your playlists.",
+        "alt": "Animation of the trim dialog: the start and end handles move inward, the start and end times update, the selection plays, then Apply is pressed."
+      },
+      "playlist": {
+        "title": "Straight onto their Yoto",
+        "text": "Add a song to a playlist and give it its little pixel icon. Changes are saved to your Yoto account as you go: there is no publish button.",
+        "alt": "Animation of the playlist editor: a song is added to the playlist, an icon is picked for it, and the status changes from Saving to Saved on Yoto."
+      }
+    }
+  },
+  "features": {
+    "title": "What you can do",
+    "sub": "Your files stay on your computer. Your playlists live on your Yoto account, and changes are sent there directly.",
+    "items": [
+      { "text": "Import audio files or paste a YouTube link.", "family": "peach", "pixel": "note" },
+      { "text": "Listen and trim your audio while keeping the original.", "family": "sky", "pixel": "star" },
+      { "text": "Create and edit playlists directly on your Yoto account.", "family": "lilac", "pixel": "moon" },
+      { "text": "Choose Yoto’s pixel art icons or upload your own images.", "family": "butter", "pixel": "sun" },
+      { "text": "Choose a player and control playback from the app.", "family": "mint", "pixel": "heart" }
+    ]
+  },
+  "story": {
+    "title": "One parent, a toddler and a handful of songs",
+    "body": "Yoto has a wonderful catalogue. But my two-year-old had a much shorter wish list: a few favourite nursery rhymes, on repeat. The ones we loved were on YouTube, and often not in our language. Yoto lets families bring their own audio and opens its API to developers, so I brought every step into one app.",
+    "sign": "Damien, parent and developer"
+  },
+  "faq": {
+    "title": "Frequently asked questions",
+    "items": [
+      { "q": "Is this an official Yoto app?", "a": "No. YotoMediaManager is an independent app, built on the API Yoto makes available to developers. You sign in with your own Yoto account, on Yoto’s website." },
+      { "q": "Where are my files stored?", "a": "Your library stays on your computer. Only the audio you add to a playlist is sent to your Yoto account." },
+      { "q": "Do I need a Yoto account?", "a": "Not to import and trim audio. To create playlists and play them on a player, yes." },
+      { "q": "Are my originals changed when I trim?", "a": "Never. Trimming creates a version next to the original, which you can export at any time." },
+      { "q": "Is the app finished?", "a": "It is still being validated: some combinations of players and computers remain to be tested. The app tells you when a feature is not available, and offers new versions as soon as they are published." }
+    ]
+  },
+  "cta": {
+    "title": "Fill their Yoto with their favourite songs.",
+    "mac": "Download for macOS",
+    "win": "For Windows",
+    "note": "Downloads are on the GitHub releases page."
+  },
+  "footer": {
+    "label": "Footer",
+    "guide": "User guide",
+    "releases": "Releases",
+    "notices": "Third-party notices",
+    "source": "Source code",
+    "notAffiliated": "Independent app, not affiliated with Yoto Ltd. Yoto is a trademark of Yoto Ltd."
+  },
+  "docs": {
+    "title": "User guide",
+    "contents": "Guide contents",
+    "onThisPage": "On this page",
+    "prev": "Previous",
+    "next": "Next"
+  },
+  "notFound": {
+    "title": "This page is not here",
+    "text": "The link may be old, or the page may have moved.",
+    "home": "Back to the home page",
+    "guide": "Open the user guide"
+  },
+  "mock": {
+    "brand": "YotoMediaManager",
+    "tagline": "Your audio. Your stories.",
+    "account": "The Collins family",
+    "connected": "Connected to Yoto",
+    "navLibrary": "Library",
+    "navPlaylists": "Playlists",
+    "navImports": "Imports",
+    "navPlayers": "Players",
+    "navAccount": "Account",
+    "importTitle": "Import audio",
+    "importSub": "From YouTube or from a file on your computer.",
+    "ytLabel": "YouTube link",
+    "ytUrl": "youtube.com/watch?v=twinkle-little-star",
+    "ytHint": "A public video or playlist. Only the audio is kept.",
+    "importBtn": "Import",
+    "addFile": "Add an audio file",
+    "activities": "Activities",
+    "downloading": "Downloading",
+    "preparing": "Preparing audio on this computer",
+    "ready": "Ready in the library",
+    "listen": "Listen",
+    "libraryTitle": "Library",
+    "libraryMeta": "{n} audios · on this computer",
+    "trimmed": "Trimmed",
+    "original": "Original",
+    "newSong": { "title": "Twinkle, Twinkle, Little Star", "meta": "1 min 52 · Nursery rhyme" },
+    "library": [
+      { "title": "Brahms’ Lullaby", "meta": "3 min 21 · Music", "family": "lilac", "pixel": "moon", "tag": "original" },
+      { "title": "Hush, Little Baby", "meta": "2 min 40 · Nursery rhyme", "family": "sky", "pixel": "moon", "tag": "original" },
+      { "title": "Row, Row, Row Your Boat", "meta": "1 min 34 · Nursery rhyme", "family": "butter", "pixel": "star", "tag": "trimmed" }
+    ],
+    "trimTitle": "Trim “Twinkle, Twinkle, Little Star”",
+    "trimSub": "Move the handles to keep the part you like.",
+    "start": "Start",
+    "end": "End",
+    "kept": "Kept length",
+    "listenSel": "Listen to the selection",
+    "stop": "Stop",
+    "level": "Level the volume",
+    "levelHint": "Useful when one song is much louder than the others.",
+    "keptNote": "Your original is kept. Apply creates a version for your playlists.",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "preparingTrim": "Preparing your trim…",
+    "trimDone": "Trimmed version ready",
+    "music": "Music",
+    "saving": "Saving…",
+    "saved": "Saved on Yoto",
+    "onYoto": "On Yoto",
+    "sending": "Sending to Yoto…",
+    "addMedia": "Add media",
+    "playlistTitle": "Evening songs",
+    "playlistMetaBefore": "3 tracks · 6 min",
+    "playlistMetaAfter": "4 tracks · 8 min",
+    "tracks": [
+      { "title": "Twinkle, Twinkle, Little Star", "meta": "1 min 52", "family": "mint", "pixel": "heart" },
+      { "title": "Hush, Little Baby", "meta": "2 min 40", "family": "lilac", "pixel": "moon" },
+      { "title": "Row, Row, Row Your Boat", "meta": "1 min 34", "family": "butter", "pixel": "star" }
+    ],
+    "incoming": { "title": "Rock-a-bye Baby", "meta": "2 min 05" },
+    "chooseIcon": "Choose an icon",
+    "iconsYoto": "Yoto",
+    "iconsMine": "My icons",
+    "useIcon": "Use this icon"
+  }
+}
