@@ -176,6 +176,8 @@ pub struct PlaylistEditor {
     /// The playlist is being deleted on Yoto.
     deleting: bool,
     picker_window: Option<AnyWindowHandle>,
+    /// Why the icon chosen in the open icon picker was refused, shown inside the picker.
+    icon_error: Option<String>,
     _subscriptions: Vec<Subscription>,
     options_open: bool,
     advanced_open: bool,
@@ -329,6 +331,7 @@ impl PlaylistEditor {
             refresh_icons: None,
             deleting: false,
             picker_window: None,
+            icon_error: None,
             _subscriptions: vec![],
             options_open: false,
             advanced_open: false,
@@ -820,6 +823,10 @@ impl PlaylistEditor {
             },
             Some(PlaylistOperation::Failed(_)) | None => false,
         }
+    }
+    /// Why the icon chosen in the open icon picker was refused.
+    pub(super) fn icon_error(&self) -> Option<&str> {
+        self.icon_error.as_deref()
     }
     /// Media are being added: the media picker waits for them.
     pub(super) fn busy(&self) -> bool {
@@ -1777,6 +1784,7 @@ impl PlaylistEditor {
             )
         });
         self.picker_window = Some(window.window_handle());
+        self.icon_error = None;
         let weak = editor.downgrade();
         window.open_dialog(cx, move |dialog, _, _| {
             let cancel = picker.downgrade();
@@ -1793,6 +1801,7 @@ impl PlaylistEditor {
                 .on_close(move |_, _, cx| {
                     let _ = close.update(cx, |v, cx| {
                         v.picker_window = None;
+                        v.icon_error = None;
                         cx.notify();
                     });
                 })
@@ -1813,8 +1822,14 @@ impl PlaylistEditor {
                 .owning_remote(cx)
                 .is_ok_and(|(owner, _)| &owner == account)
         {
-            self.status =
+            let refused: String =
                 tr!("Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes.").into();
+            // With the picker open, the parent reads why there rather than behind it.
+            if self.picker_window.is_some() {
+                self.icon_error = Some(refused);
+            } else {
+                self.status = refused;
+            }
             if let IconReference::Local { asset } = icon {
                 self.send(Command::ReleaseAsset(asset), cx);
             }
@@ -1825,6 +1840,7 @@ impl PlaylistEditor {
             self.cache_icon(*asset, cx);
         }
         self.assign_icon(chapter, track, Some(icon));
+        self.icon_error = None;
         self.refresh_icons = Some(account.clone());
         self.close_picker(cx);
         self.changed(Change::Discrete, cx);
@@ -2059,6 +2075,48 @@ impl PlaylistEditor {
                 }
             }
         }
+    }
+    /// The playlist's real cover, or an empty slot inviting the parent to choose one;
+    /// either way a click opens the cover choice.
+    fn cover_button(&self, blocked: bool, cx: &mut Context<Self>) -> Button {
+        use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
+        let asset = self.draft.metadata.cover;
+        let url = pixelart::cover_url(self.draft.metadata.extra.get("cover"));
+        let label = if asset.is_some() || url.is_some() {
+            tr!("Changer la couverture")
+        } else {
+            tr!("Choisir une couverture")
+        };
+        let picture = match self.parent.upgrade() {
+            Some(parent) => {
+                if let Some(asset) = asset
+                    && !parent.read(cx).cover_previews.contains_key(&asset)
+                {
+                    let reader = parent.downgrade();
+                    cx.defer(move |cx| {
+                        let _ =
+                            reader.update(cx, |parent, cx| parent.load_cover_preview(asset, cx));
+                    });
+                }
+                pixelart::playlist_cover(asset, url, parent.read(cx), 120., 26., true)
+            }
+            None => theme::empty_icon_slot(120., 26., true).into_any_element(),
+        };
+        Button::new("cover")
+            .custom(
+                ButtonCustomVariant::new(cx)
+                    .color(theme::c(theme::SURFACE).opacity(0.))
+                    .hover(theme::c(theme::CREAM))
+                    .active(theme::c(theme::SAND)),
+            )
+            .rounded(ButtonRounded::Size(px(26.)))
+            .size(px(120.))
+            .p(px(0.))
+            .accessibility_label(label)
+            .tooltip(label)
+            .disabled(blocked)
+            .child(picture)
+            .on_click(cx.listener(|v, _, _, cx| v.cover(cx)))
     }
     fn cover(&mut self, cx: &mut Context<Self>) {
         let service = self.service.clone();
@@ -2306,7 +2364,6 @@ impl PlaylistEditor {
         if held { SyncState::OnYoto } else { state }
     }
     fn header(&self, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
-        use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
         use theme::{Height, Look};
         let tracks = self
             .draft
@@ -2340,8 +2397,6 @@ impl PlaylistEditor {
         // Duplicating copies what Yoto holds and deleting must not race a write.
         let writing = self.autosave.in_flight() || self.autosave.has_pending();
         let state = self.sync_state();
-        let seed = self.base.id.to_string();
-        let cover_family = theme::family_for(&seed);
         let creating = self
             .parent
             .upgrade()
@@ -2349,30 +2404,7 @@ impl PlaylistEditor {
         let owner = cx.entity().downgrade();
         let duplicate = owner.clone();
         let remove = owner.clone();
-        let cover = Button::new("cover")
-            .custom(
-                ButtonCustomVariant::new(cx)
-                    .color(theme::c(cover_family.soft))
-                    .hover(theme::c(cover_family.soft))
-                    .active(theme::c(cover_family.step)),
-            )
-            .bg(theme::c(cover_family.soft))
-            .rounded(ButtonRounded::Size(px(26.)))
-            .size(px(120.))
-            .shadow(theme::step(cover_family.step, 3.))
-            .accessibility_label(tr!("Choisir une couverture"))
-            .tooltip(if self.draft.metadata.cover.is_some() {
-                tr!("Changer la couverture")
-            } else {
-                tr!("Choisir une couverture")
-            })
-            .disabled(blocked)
-            .child(theme::pixel_glyph(
-                theme::Glyph::for_seed(&seed),
-                cover_family.accent,
-                7.,
-            ))
-            .on_click(cx.listener(|v, _, _, cx| v.cover(cx)));
+        let cover = self.cover_button(blocked, cx);
         let mut tags = div().flex().gap(px(6.));
         if self.draft.metadata.category != Category::None {
             tags = tags.child(theme::tag(
@@ -2985,6 +3017,10 @@ pub struct PlaylistRow {
     pub state: PlaylistSyncState,
     /// Track count read from the remote card, when its document has one.
     pub tracks: Option<usize>,
+    /// The cover chosen on this computer for the playlist, if any.
+    pub cover_asset: Option<AssetId>,
+    /// The cover Yoto shows for the card, if any.
+    pub cover: Option<SharedString>,
 }
 /// Build the catalog once on the snapshot worker, never while rendering/scrolling.
 fn publication_job_key(job: &Job) -> (u64, Revision, u8) {
@@ -3064,6 +3100,14 @@ pub fn playlist_rows(snapshot: &Snapshot) -> Vec<PlaylistRow> {
                             .map(Vec::len)
                             .sum()
                     }),
+                cover_asset: playlist.and_then(|id| {
+                    snapshot
+                        .playlists
+                        .iter()
+                        .find(|p| p.id == *id)
+                        .and_then(|p| p.metadata.cover)
+                }),
+                cover: pixelart::cover_url(card.document.pointer("/metadata/cover")),
             }
         })
         .collect::<Vec<_>>();
@@ -3203,6 +3247,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
                     range
                         .map(|index| {
+                            if let Some(asset) = view.playlist_rows[index].cover_asset {
+                                view.load_cover_preview(asset, cx);
+                            }
                             let row = &view.playlist_rows[index];
                             let target = row.target.clone();
                             let key = format!("{}:{}", target.account, target.card);
@@ -3251,7 +3298,14 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                         .flex()
                                         .items_center()
                                         .gap(px(12.))
-                                        .child(theme::thumbnail(&key, 44., 12.))
+                                        .child(pixelart::playlist_cover(
+                                            row.cover_asset,
+                                            row.cover.clone(),
+                                            view,
+                                            44.,
+                                            12.,
+                                            false,
+                                        ))
                                         .child(
                                             div()
                                                 .flex_1()

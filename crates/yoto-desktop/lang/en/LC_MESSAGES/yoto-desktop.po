@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 09:28-0400\n"
+"POT-Creation-Date: 2026-10-14 09:45-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -890,6 +890,14 @@ msgstr "Deleting on Yoto…"
 msgid "Playlist supprimée sur Yoto."
 msgstr "Playlist deleted on Yoto."
 
+#: src/ui/editor.rs
+msgid "Changer la couverture"
+msgstr "Change the cover"
+
+#: src/ui/editor.rs
+msgid "Choisir une couverture"
+msgstr "Choose a cover"
+
 #: src/ui/editor.rs src/ui/group.rs src/ui/pixelart.rs
 msgid "Image"
 msgstr "Image"
@@ -912,14 +920,6 @@ msgid "{count} piste · {duration}"
 msgid_plural "{count} pistes · {duration}"
 msgstr[0] "{count} track · {duration}"
 msgstr[1] "{count} tracks · {duration}"
-
-#: src/ui/editor.rs
-msgid "Choisir une couverture"
-msgstr "Choose a cover"
-
-#: src/ui/editor.rs
-msgid "Changer la couverture"
-msgstr "Change the cover"
 
 #: src/ui/editor.rs
 msgid "Plus d’actions"
@@ -1504,7 +1504,9 @@ msgid ""
 "Vous avez regardé dans l’application Yoto et la playlist vous convient ? "
 "Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour "
 "ici."
-msgstr "Checked the playlist in the Yoto app and it looks right? Keep it as it is: nothing is sent again, and the playlist updates here."
+msgstr ""
+"Checked the playlist in the Yoto app and it looks right? Keep it as it is: "
+"nothing is sent again, and the playlist updates here."
 
 #: src/ui/imports.rs
 msgid "Garder la version de Yoto"
@@ -1687,7 +1689,9 @@ msgid ""
 "Yoto ne montre pas exactement cet envoi. Si la playlist vous convient dans "
 "l’application Yoto, choisissez « Garder la version de Yoto » dans « Vérifier "
 "la publication »."
-msgstr "Yoto does not show exactly this upload. If the playlist looks right in the Yoto app, choose “Keep Yoto’s version” in “Check the upload”."
+msgstr ""
+"Yoto does not show exactly this upload. If the playlist looks right in the "
+"Yoto app, choose “Keep Yoto’s version” in “Check the upload”."
 
 #: src/ui/mod.rs
 msgid "Playlist Yoto ouverte."
@@ -1933,16 +1937,28 @@ msgid "Préparation de l’image…"
 msgstr "Preparing the image…"
 
 #: src/ui/pixelart.rs
+msgid "Cet élément n’est plus ouvert. Fermez cette fenêtre et rouvrez-le."
+msgstr "This item is no longer open. Close this window and open it again."
+
+#: src/ui/pixelart.rs
+msgid "Une de vos images"
+msgstr "One of your images"
+
+#: src/ui/pixelart.rs
 msgid "Mes icônes"
 msgstr "My icons"
 
 #: src/ui/pixelart.rs
+msgid "Mes images"
+msgstr "My images"
+
+#: src/ui/pixelart.rs
 msgid ""
-"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez aussi "
-"importer une image."
+"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez déjà "
+"reprendre une de vos images ou en importer une."
 msgstr ""
-"Connect your Yoto account to choose from its icons. You can also import an "
-"image."
+"Connect your Yoto account to choose from its icons. You can already reuse "
+"one of your images or import one."
 
 #: src/ui/pixelart.rs
 msgid "Chargement des icônes…"
@@ -1956,6 +1972,13 @@ msgstr "Could not load: {failure}"
 #: src/ui/pixelart.rs
 msgid "Aucune icône dans cette collection. Vous pouvez importer une image."
 msgstr "No icons in this collection. You can import an image."
+
+#: src/ui/pixelart.rs
+msgid ""
+"Aucune image pour l’instant. Importez-en une : vous pourrez la reprendre "
+"pour d’autres médias."
+msgstr ""
+"No image yet. Import one: you can reuse it for other media."
 
 #: src/ui/pixelart.rs
 msgid ""
@@ -3458,7 +3481,9 @@ msgstr "Two tracks have the same Yoto key."
 msgid ""
 "Cet envoi ne dit pas quelle playlist Yoto garder. Ouvrez-la dans "
 "« Playlists » pour la recharger depuis Yoto."
-msgstr "This upload does not say which Yoto playlist to keep. Open it in Playlists to reload it from Yoto."
+msgstr ""
+"This upload does not say which Yoto playlist to keep. Open it in Playlists "
+"to reload it from Yoto."
 
 #: src/ui/wording.rs
 msgid "Une clé de chapitre ou de piste est trop longue pour Yoto."

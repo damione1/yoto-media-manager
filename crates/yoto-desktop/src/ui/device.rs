@@ -387,6 +387,7 @@ impl DevicePanel {
                         | Reply::Prepared(_)
                         | Reply::Asset(_)
                         | Reply::PixelArt(_)
+                        | Reply::Picture(_)
                         | Reply::Image(_)
                         | Reply::Images(_),
                     )) => v.status = tr!("Réglages envoyés.").into(),
@@ -697,7 +698,12 @@ impl DevicePanel {
             let selected = self.card.clone();
             let (thumb, title, subtitle) = match chosen {
                 Some(card) => (
-                    theme::thumbnail(card.card.as_str(), 52., 14.),
+                    div().child(pixelart::remote_cover(
+                        pixelart::cover_url(card.document.pointer("/metadata/cover")),
+                        52.,
+                        14.,
+                        false,
+                    )),
                     card.title.clone(),
                     tr!("Playlist de votre compte Yoto"),
                 ),

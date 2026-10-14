@@ -228,6 +228,8 @@ pub enum Command {
     SavePixelArt(Box<PixelArt>),
     ReadPixelArt(AssetId),
     Thumbnail(AssetId),
+    /// A playlist cover small enough to draw on screen, as PNG bytes.
+    CoverPreview(AssetId),
     StoreImage {
         path: PathBuf,
         pixel_art: bool,
@@ -260,12 +262,17 @@ pub enum Reply {
     Updated,
     Saved(Revision),
     OpenedPlaylist(PlaylistId),
-    PlaylistOperation { playlist: PlaylistId, job: JobId },
+    PlaylistOperation {
+        playlist: PlaylistId,
+        job: JobId,
+    },
     Entries(SourceInspection),
     Waveform(Waveform),
     Prepared(RecipeId),
     Asset(AssetId),
     PixelArt(Box<PixelArt>),
+    /// An encoded picture to draw, such as a cover preview.
+    Picture(Vec<u8>),
     Image(FamilyImageId),
     Images(Vec<FamilyImageId>),
     Player(crate::players::CommandResult),
@@ -301,6 +308,13 @@ impl Reply {
     pub fn into_pixel_art(self) -> Result<PixelArt> {
         if let Self::PixelArt(art) = self {
             Ok(*art)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_picture(self) -> Result<Vec<u8>> {
+        if let Self::Picture(bytes) = self {
+            Ok(bytes)
         } else {
             Err(Self::unexpected())
         }
@@ -834,6 +848,7 @@ impl Service {
             | Command::SavePixelArt(_)
             | Command::ReadPixelArt(_)
             | Command::Thumbnail(_)
+            | Command::CoverPreview(_)
             | Command::StoreImage { .. }
             | Command::ImportIcon { .. }
             | Command::SetCover { .. } => None,
@@ -1616,6 +1631,7 @@ impl Service {
             | Command::Cancel(_)
             | Command::SavePixelArt(_)
             | Command::Thumbnail(_)
+            | Command::CoverPreview(_)
             | Command::ReadPixelArt(_)
             | Command::StoreImage { .. }
             | Command::ImportIcon { .. }
@@ -1665,6 +1681,7 @@ impl Service {
             | Command::SavePixelArt(_)
             | Command::ReadPixelArt(_)
             | Command::Thumbnail(_)
+            | Command::CoverPreview(_)
             | Command::StoreImage { .. }
             | Command::ImportIcon { .. }
             | Command::SetMediaIcon { .. }
@@ -2027,6 +2044,7 @@ impl Service {
                 self.pixel_art(id, false).map(Box::new).map(Reply::PixelArt)
             }
             Command::Thumbnail(id) => self.pixel_art(id, true).map(Box::new).map(Reply::PixelArt),
+            Command::CoverPreview(id) => self.cover_preview(id).map(Reply::Picture),
             Command::StoreImage { path, pixel_art } => {
                 let asset = if pixel_art {
                     let lease = self.store.lease("png")?;
@@ -2201,6 +2219,23 @@ impl Service {
         self.db
             .get(Table::Media, &id.to_string())?
             .ok_or_else(|| Failure::Storage(messages::MEDIA_NOT_FOUND.into()))
+    }
+    /// A cover reduced to at most `COVER_PREVIEW` pixels on its longer side, as PNG.
+    fn cover_preview(&self, id: AssetId) -> Result<Vec<u8>> {
+        const COVER_PREVIEW: u32 = 480;
+        let asset = self.asset(id)?;
+        let lease = self.store.materialize(&asset)?;
+        let image = crate::media::read_image(lease.path())?;
+        let image = if image.width().max(image.height()) > COVER_PREVIEW {
+            image.thumbnail(COVER_PREVIEW, COVER_PREVIEW)
+        } else {
+            image
+        };
+        let mut bytes = std::io::Cursor::new(vec![]);
+        image
+            .write_to(&mut bytes, image::ImageFormat::Png)
+            .map_err(crate::media_error)?;
+        Ok(bytes.into_inner())
     }
     fn pixel_art(&self, id: AssetId, thumbnail: bool) -> Result<PixelArt> {
         let asset = self.asset(id)?;

@@ -532,7 +532,8 @@ pub fn pixel_glyph(glyph: Glyph, color: u32, cell: f32) -> Div {
         },
     )
 }
-/// Thumbnail for something without artwork: a stable pastel tile and pixel glyph.
+/// Decoration for an empty state: a stable pastel tile and pixel glyph. It never stands
+/// for a cover or an icon, which show the real image or an empty slot.
 pub fn thumbnail(seed: &str, size: f32, radius: f32) -> Div {
     let family = family_for(seed);
     div()
