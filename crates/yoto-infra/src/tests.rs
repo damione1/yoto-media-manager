@@ -488,6 +488,29 @@ async fn a_failed_transcode_is_reported_with_its_progress() {
         }
     }
 }
+#[tokio::test]
+async fn covers_are_converted_by_yoto_to_the_card_format() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("POST"))
+        .and(path("/media/coverImage/user/me/upload"))
+        .and(query_param("autoconvert", "true"))
+        .and(query_param("coverType", "default"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "coverImage":{"mediaId":"cover1","mediaUrl":"https://example.test/pub/cover1"}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), b"png").unwrap();
+    assert_eq!(
+        api.upload_cover("API-TOKEN", file.path()).await.unwrap(),
+        "https://example.test/pub/cover1"
+    );
+}
 #[test]
 fn upload_time_grows_with_the_file_within_bounds() {
     use crate::api::upload_timeout;

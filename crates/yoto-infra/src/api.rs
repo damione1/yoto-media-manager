@@ -346,13 +346,15 @@ impl YotoGateway {
                 .ok_or_else(|| Failure::Compatibility("Icon mediaId missing".into()))?,
         )
     }
+    /// Send a playlist cover. Yoto converts it itself to the standard card cover (638×1011,
+    /// cropped around the centre), so a phone photo or a square image displays correctly.
     pub async fn upload_cover(&self, token: &str, path: &Path) -> Result<String> {
         let r = media_api::upload_cover_image(
             &self.configuration(token),
             path.to_owned(),
             None,
-            Some("false"),
-            None,
+            Some("true"),
+            Some("default"),
             Some("cover.png"),
         )
         .await
