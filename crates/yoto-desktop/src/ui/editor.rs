@@ -1561,7 +1561,10 @@ impl PlaylistEditor {
                                 )
                                 .child(theme::meta(meta).pl(px(8.))),
                         )
-                        .child(theme::tag(state.track_label(), state.family()))
+                        .child({
+                            let state = self.track_sync(&track.media, snapshot, state);
+                            theme::tag(state.track_label(), state.family())
+                        })
                         .children(playable.map(|(recipe, media)| {
                             let playing = self.previewing == Some(recipe);
                             theme::round(
@@ -2160,6 +2163,26 @@ impl PlaylistEditor {
             false,
         )
     }
+    /// One track's tag. A write sends only the audio Yoto does not hold yet: a track
+    /// already on Yoto, or whose audio was sent before to this account, stays « on Yoto »
+    /// while the playlist itself is being written.
+    fn track_sync(&self, media: &TrackMedia, snapshot: &Snapshot, state: SyncState) -> SyncState {
+        if state != SyncState::Sending {
+            return state;
+        }
+        let account = match &self.base.origin {
+            DraftOrigin::Existing { base } => Some(&base.account),
+            DraftOrigin::New => None,
+        };
+        let held = match media {
+            TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => true,
+            TrackMedia::Local { recipe, .. } => snapshot
+                .mappings
+                .iter()
+                .any(|m| m.recipe == *recipe && Some(&m.account) == account),
+        };
+        if held { SyncState::OnYoto } else { state }
+    }
     fn header(&self, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
         use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
         use theme::{Height, Look};
@@ -2694,7 +2717,10 @@ impl Render for PlaylistEditor {
                                     .child(format!("{}", index + 1)),
                             )
                             .child(theme::heading(track.title.clone(), 17.).flex_1().truncate())
-                            .child(theme::tag(state.track_label(), state.family())),
+                            .child({
+                                let state = self.track_sync(&track.media, &snapshot, state);
+                                theme::tag(state.track_label(), state.family())
+                            }),
                     );
                 }
             }
