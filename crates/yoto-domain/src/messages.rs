@@ -135,6 +135,7 @@ pub const IMAGE_DIMENSIONS_TOO_LARGE: &str = "Image dimensions too large";
 pub const PIXEL_ICON_SIZE: &str = "A pixel icon must be 16×16";
 pub const PIXEL_IMAGE_INVALID: &str = "Pixel image invalid";
 pub const ICON_NOT_UPLOADED: &str = "Icon has not been uploaded";
+pub const ICON_ABSENT: &str = "Icon image is not in the library";
 pub const AUDIO_OUTPUT_SILENT: &str = "Audio output did not respond";
 pub const RECOVERY_KEY_FORMAT: &str =
     "Recovery key must contain 64 hexadecimal characters (256 random bits)";
@@ -251,6 +252,7 @@ pub const ALL: &[&str] = &[
     PIXEL_ICON_SIZE,
     PIXEL_IMAGE_INVALID,
     ICON_NOT_UPLOADED,
+    ICON_ABSENT,
     AUDIO_OUTPUT_SILENT,
     RECOVERY_KEY_FORMAT,
     RECOVERY_KEY_LENGTH,

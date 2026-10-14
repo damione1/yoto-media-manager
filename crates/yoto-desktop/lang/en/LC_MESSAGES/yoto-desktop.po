@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 07:47-0400\n"
+"POT-Creation-Date: 2026-10-14 09:20-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -752,8 +752,20 @@ msgid "Changer l’icône du chapitre"
 msgstr "Change the chapter icon"
 
 #: src/ui/editor.rs
+msgid "Choisir une icône pour la piste"
+msgstr "Choose an icon for the track"
+
+#: src/ui/editor.rs
+msgid "Choisir une icône pour le chapitre"
+msgstr "Choose an icon for the chapter"
+
+#: src/ui/editor.rs src/ui/trim.rs
 msgid "Changer l’icône"
 msgstr "Change the icon"
+
+#: src/ui/editor.rs src/ui/trim.rs
+msgid "Choisir une icône"
+msgstr "Choose an icon"
 
 #: src/ui/editor.rs
 msgid "Options du chapitre"
@@ -787,7 +799,7 @@ msgstr "Track options"
 msgid "Retirer l’icône du chapitre"
 msgstr "Remove the chapter icon"
 
-#: src/ui/editor.rs
+#: src/ui/editor.rs src/ui/trim.rs
 msgid "Retirer l’icône"
 msgstr "Remove the icon"
 
@@ -852,10 +864,6 @@ msgid ""
 msgstr ""
 "Track events are turned on with interactive playback, in the playlist’s "
 "advanced settings."
-
-#: src/ui/editor.rs
-msgid "Choisir une icône"
-msgstr "Choose an icon"
 
 #: src/ui/editor.rs
 msgid "Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes."
@@ -1669,8 +1677,8 @@ msgid ""
 "pour voir son contenu actuel sur Yoto, puis réessayez la vérification dans "
 "quelques minutes."
 msgstr ""
-"Yoto does not show this upload yet. Open the playlist in Playlists to see what "
-"Yoto currently has, then check again in a few minutes."
+"Yoto does not show this upload yet. Open the playlist in Playlists to see "
+"what Yoto currently has, then check again in a few minutes."
 
 #: src/ui/mod.rs
 msgid "Playlist Yoto ouverte."
@@ -1912,6 +1920,14 @@ msgid "Mes icônes"
 msgstr "My icons"
 
 #: src/ui/pixelart.rs
+msgid ""
+"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez aussi "
+"importer une image."
+msgstr ""
+"Connect your Yoto account to choose from its icons. You can also import an "
+"image."
+
+#: src/ui/pixelart.rs
 msgid "Chargement des icônes…"
 msgstr "Loading icons…"
 
@@ -2058,8 +2074,12 @@ msgid "Sélectionnez vos médias et la version à envoyer."
 msgstr "Select your media and the version to send."
 
 #: src/ui/playlist_media_picker.rs
-msgid "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
-msgstr "The audio is sent to Yoto before it appears in your playlist."
+msgid ""
+"L’audio est envoyé à Yoto avant d’apparaître dans votre playlist. Pas "
+"d’icône ? Choisissez-la dans la Médiathèque, ou plus tard dans la playlist."
+msgstr ""
+"The audio is sent to Yoto before it appears in your playlist. No icon? "
+"Choose one in the Library, or later in the playlist."
 
 #: src/ui/playlist_move_picker.rs
 msgid "Déplacer"
@@ -2189,6 +2209,19 @@ msgstr "Apply"
 #: src/ui/trim.rs
 msgid "Ce média n’est plus disponible."
 msgstr "This media is no longer available."
+
+#: src/ui/trim.rs
+msgid "Enregistrement de l’icône…"
+msgstr "Saving the icon…"
+
+#: src/ui/trim.rs
+msgid ""
+"Icône enregistrée : elle accompagnera ce média dans vos prochaines playlists."
+msgstr "Icon saved: it will come with this media in your next playlists."
+
+#: src/ui/trim.rs
+msgid "Icône retirée."
+msgstr "Icon removed."
 
 #: src/ui/trim.rs
 #, rust-format
@@ -3314,6 +3347,10 @@ msgstr "This image cannot be used as an icon."
 #: src/ui/wording.rs
 msgid "Cette icône n’a pas encore été envoyée à Yoto."
 msgstr "This icon has not been sent to Yoto yet."
+
+#: src/ui/wording.rs
+msgid "Cette icône n’est plus disponible. Choisissez-en une autre."
+msgstr "This icon is no longer available. Choose another one."
 
 #: src/ui/wording.rs
 msgid "La sortie audio ne répond pas. Vérifiez le son de votre ordinateur."

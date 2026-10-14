@@ -804,6 +804,7 @@ pub(crate) fn catalogue_fixture(
             name: "fixture.mp3".into(),
         },
         recipes: vec![],
+        icon: None,
     };
     service
         .db
@@ -949,6 +950,7 @@ async fn ten_thousand_catalogue_rows_page_across_bounded_ipc_and_aliases_share_o
                 name: "fixture.mp3".into(),
             },
             recipes: vec![],
+            icon: None,
         };
         service
             .db
@@ -1128,6 +1130,7 @@ fn migration_failure_keeps_v1_and_recoverable_encrypted_snapshot() {
             name: "original.mp3".into(),
         },
         recipes: vec![RecipeId::new()],
+        icon: None,
     };
     let recipe = MediaRecipe {
         id: media.recipes[0],
@@ -1501,4 +1504,88 @@ async fn finished_tasks_leave_the_activity_list_but_stay_recorded() {
     // Trying it again brings it back to the list.
     service.execute(Command::Retry(failed.id)).await.unwrap();
     assert!(!stored(failed.id).dismissed);
+}
+#[tokio::test]
+async fn a_media_icon_survives_garbage_collection_and_reaches_new_chapters() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [13; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"encrypted source fixture").unwrap();
+    let audio = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &audio.id.to_string(), &audio)
+        .unwrap();
+    let (media, recipe) = catalogue_fixture(&service, audio.id, "Berceuse");
+    let Reply::Asset(icon) = service
+        .execute(Command::SavePixelArt(Box::new(PixelArt::blank())))
+        .await
+        .unwrap()
+    else {
+        panic!("saving pixel art returns its asset");
+    };
+    service
+        .execute(Command::SetMediaIcon {
+            media: media.id,
+            icon: Some(IconReference::Local { asset: icon }),
+        })
+        .await
+        .unwrap();
+    // The picker's short lease is gone: only the media keeps the icon now.
+    service
+        .db
+        .put(
+            Table::Remote,
+            &format!("draft-asset:{icon}"),
+            &DraftAssetLease {
+                asset: icon,
+                account: None,
+                expires: 0,
+            },
+        )
+        .unwrap();
+    service.execute(Command::CollectGarbage).await.unwrap();
+    assert!(service.asset(icon).is_ok());
+    let playlist = Playlist::new("Dodo".into()).unwrap();
+    service.db.save_playlist(&playlist).unwrap();
+    service
+        .execute(Command::AddMedia {
+            playlist: playlist.id,
+            media: vec![(media.id, recipe.id)],
+            part_title: None,
+        })
+        .await
+        .unwrap();
+    let chapter = &service.playlist(playlist.id).unwrap().chapters[0];
+    for reference in std::iter::once(&chapter.icon).chain(chapter.tracks.iter().map(|t| &t.icon)) {
+        assert!(matches!(reference, Some(IconReference::Local { asset }) if *asset == icon));
+    }
+    // An icon missing from the library is refused rather than stored.
+    assert!(
+        service
+            .execute(Command::SetMediaIcon {
+                media: media.id,
+                icon: Some(IconReference::Local {
+                    asset: AssetId::new()
+                }),
+            })
+            .await
+            .is_err()
+    );
+    // Removing it from the media leaves the playlist's copy, which still roots the image.
+    service
+        .execute(Command::SetMediaIcon {
+            media: media.id,
+            icon: None,
+        })
+        .await
+        .unwrap();
+    service.execute(Command::CollectGarbage).await.unwrap();
+    assert!(service.asset(icon).is_ok());
+    service
+        .execute(Command::DeletePlaylist(playlist.id))
+        .await
+        .unwrap();
+    service.execute(Command::CollectGarbage).await.unwrap();
+    assert!(service.asset(icon).is_err());
 }

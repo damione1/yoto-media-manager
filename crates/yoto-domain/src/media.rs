@@ -60,6 +60,10 @@ pub struct MediaItem {
     pub info: AudioInfo,
     pub provenance: Provenance,
     pub recipes: Vec<RecipeId>,
+    /// The 16×16 icon given to the chapter and tracks this media becomes in a playlist.
+    /// Changing it later leaves playlists that already hold the media as they are.
+    #[serde(default)]
+    pub icon: Option<IconReference>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(try_from = "(MediaTime, MediaTime)", into = "(MediaTime, MediaTime)")]

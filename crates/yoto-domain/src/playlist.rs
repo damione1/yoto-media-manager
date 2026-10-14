@@ -161,12 +161,13 @@ impl Playlist {
         }
         assets
     }
+    /// Add a media version as one chapter holding one track, both with the media's icon.
     pub fn add_media(&mut self, media: &MediaItem, recipe: RecipeId) -> Result<()> {
         let track = Track {
             id: TrackId::new(),
             key: TrackKey::fresh(),
             title: media.title.clone(),
-            icon: None,
+            icon: media.icon.clone(),
             events: None,
             media: TrackMedia::Local {
                 media: media.id,
@@ -178,7 +179,7 @@ impl Playlist {
             id: ChapterId::new(),
             key: ChapterKey::fresh(),
             title: media.title.clone(),
-            icon: None,
+            icon: media.icon.clone(),
             tracks: vec![track],
             extra: Extra::new(),
         });
@@ -186,7 +187,8 @@ impl Playlist {
     }
     /// Add a long audio cut into parts: one chapter titled like the media, holding one
     /// track per part recipe, in order, each titled with [`part_title_with`] from
-    /// `template` ([`PART_TITLE`] when `None`).
+    /// `template` ([`PART_TITLE`] when `None`). The chapter and every part carry the
+    /// media's icon.
     pub fn add_media_parts(
         &mut self,
         media: &MediaItem,
@@ -206,7 +208,7 @@ impl Playlist {
                         index + 1,
                         parts.len(),
                     ),
-                    icon: None,
+                    icon: media.icon.clone(),
                     events: None,
                     media: TrackMedia::Local {
                         media: media.id,
@@ -220,7 +222,7 @@ impl Playlist {
             id: ChapterId::new(),
             key: ChapterKey::fresh(),
             title: media.title.clone(),
-            icon: None,
+            icon: media.icon.clone(),
             tracks,
             extra: Extra::new(),
         });

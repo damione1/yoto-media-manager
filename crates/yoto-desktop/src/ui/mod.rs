@@ -49,6 +49,9 @@ pub struct AppView {
     pub library_rows: Vec<usize>,
     playlist_media_choices: Arc<editor::MediaChoices>,
     playlist_icon_choices: Arc<pixelart::IconChoices>,
+    /// Pixels of local media icons, read once and shared by every view of the library.
+    pub icon_previews: BTreeMap<AssetId, PixelArt>,
+    icon_requests: std::collections::BTreeSet<AssetId>,
     pub playlist_rows: Arc<Vec<editor::PlaylistRow>>,
     pub selected_playlist: Option<PlaylistId>,
     pub opening_playlist: Option<(AccountId, CardId)>,
@@ -204,6 +207,8 @@ impl AppView {
             library_rows,
             playlist_media_choices,
             playlist_icon_choices,
+            icon_previews: BTreeMap::new(),
+            icon_requests: Default::default(),
             playlist_rows,
             selected_playlist: None,
             opening_playlist: None,
@@ -235,6 +240,7 @@ impl AppView {
             quitting: false,
         };
         view.refresh_playlists(cx);
+        view.load_media_icons(cx);
         if view.advanced {
             view.youtube_tool(yoto_infra::youtube_tool::YoutubeToolAction::State, cx);
         }
@@ -285,6 +291,7 @@ impl AppView {
         self.snapshot = snapshot;
         self.revisions = revisions;
         self.search_index = index;
+        self.load_media_icons(cx);
         if let Some(id) = self.selected_playlist
             && !self.editors.contains_key(&id)
             && self
@@ -813,9 +820,11 @@ impl AppView {
         if !self.trims.contains_key(&id)
             && let Some(media) = self.snapshot.media.iter().find(|m| m.id == id)
         {
+            let parent = cx.entity().downgrade();
             let panel = cx.new(|cx| {
                 trim::TrimPanel::new(
                     media.clone(),
+                    parent.clone(),
                     self.service.clone(),
                     self.runtime.clone(),
                     window,
@@ -1607,6 +1616,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::AddMedia { .. }
         | Command::DeleteRecipe { .. }
         | Command::UpdateMedia { .. }
+        | Command::SetMediaIcon { .. }
         | Command::Prepare { .. }
         | Command::Export { .. }
         | Command::UpdateYotoPlaylist { .. }

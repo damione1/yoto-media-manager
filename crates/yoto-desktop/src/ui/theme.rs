@@ -549,6 +549,38 @@ pub fn thumbnail(seed: &str, size: f32, radius: f32) -> Div {
             (size / 16.).round().max(2.),
         ))
 }
+/// Where a Yoto icon goes but none is chosen: a dashed sand tile, never a decorative
+/// glyph, so nobody takes it for an icon the player will show. `plus` marks a slot that
+/// opens the icon picker.
+pub fn empty_icon_slot(size: f32, radius: f32, plus: bool) -> Div {
+    div()
+        .size(px(size))
+        .flex_shrink_0()
+        .rounded(px(radius))
+        .bg(c(CREAM))
+        .border_2()
+        .border_dashed()
+        .border_color(c(BOX_BORDER))
+        .flex()
+        .items_center()
+        .justify_center()
+        .children(plus.then(|| {
+            gpui_kit::component::Icon::new(IconName::Plus)
+                .size(px((size * 0.4).round()))
+                .text_color(c(MUTED_WARM))
+        }))
+}
+/// The stable pastel tile a chosen Yoto icon is drawn on.
+pub fn icon_frame(seed: &str, size: f32, radius: f32) -> Div {
+    div()
+        .size(px(size))
+        .flex_shrink_0()
+        .rounded(px(radius))
+        .bg(c(family_for(seed).soft))
+        .flex()
+        .items_center()
+        .justify_center()
+}
 
 /// How a pill button is painted.
 #[derive(Clone, Copy)]

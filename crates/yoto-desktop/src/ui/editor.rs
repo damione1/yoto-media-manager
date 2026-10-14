@@ -1214,24 +1214,23 @@ impl PlaylistEditor {
                 })
         });
     }
-    /// The 48 px tile showing a track or chapter icon, or a stable pastel glyph without one.
+    /// The 48 px tile showing a track or chapter icon, or an empty slot without one: what
+    /// the player will show, never a decoration it will not.
     fn icon_tile(&self, icon: &Option<IconReference>, seed: &str, cx: &App) -> Div {
-        let family = theme::family_for(seed);
-        let tile = div()
-            .size(px(48.))
-            .flex_shrink_0()
-            .rounded(px(14.))
-            .bg(theme::c(family.soft))
-            .flex()
-            .items_center()
-            .justify_center();
-        match self.preview_icon(icon, cx) {
-            Some(icon) => tile.child(icon),
-            None => tile.child(theme::pixel_glyph(
-                theme::Glyph::for_seed(seed),
-                family.accent,
-                3.,
-            )),
+        match (icon, self.parent.upgrade()) {
+            (Some(icon), Some(parent)) => {
+                let parent = parent.read(cx);
+                // A media's icon arrives with the media: the library has already read it.
+                let previews = match icon {
+                    IconReference::Local { asset } if !self.icon_previews.contains_key(asset) => {
+                        &parent.icon_previews
+                    }
+                    IconReference::Local { .. } | IconReference::Yoto { .. } => &self.icon_previews,
+                };
+                theme::icon_frame(seed, 48., 14.)
+                    .child(pixelart::icon_image(icon, previews, parent, 32., cx))
+            }
+            (Some(_), None) | (None, _) => theme::empty_icon_slot(48., 14., true),
         }
     }
     /// Round icon button opening the icon picker for a chapter or one of its tracks.
@@ -1254,12 +1253,17 @@ impl PlaylistEditor {
             .rounded(ButtonRounded::Size(px(14.)))
             .size(px(48.))
             .p(px(0.))
-            .accessibility_label(if track.is_some() {
-                tr!("Changer l’icône de la piste")
-            } else {
-                tr!("Changer l’icône du chapitre")
+            .accessibility_label(match (track.is_some(), icon.is_some()) {
+                (true, true) => tr!("Changer l’icône de la piste"),
+                (false, true) => tr!("Changer l’icône du chapitre"),
+                (true, false) => tr!("Choisir une icône pour la piste"),
+                (false, false) => tr!("Choisir une icône pour le chapitre"),
             })
-            .tooltip(tr!("Changer l’icône"))
+            .tooltip(if icon.is_some() {
+                tr!("Changer l’icône")
+            } else {
+                tr!("Choisir une icône")
+            })
             .child(self.icon_tile(icon, seed, cx))
             .on_click(
                 cx.listener(move |v, _, window, cx| v.open_icon_picker(chapter, track, window, cx)),
@@ -1761,7 +1765,16 @@ impl PlaylistEditor {
         };
         let editor = cx.entity();
         let picker = cx.new(|cx| {
-            pixelart::IconPicker::new(editor.clone(), parent, account.clone(), chapter, track, cx)
+            pixelart::IconPicker::new(
+                pixelart::IconTarget::Playlist {
+                    editor: editor.downgrade(),
+                    chapter,
+                    track,
+                },
+                parent,
+                Some(account.clone()),
+                cx,
+            )
         });
         self.picker_window = Some(window.window_handle());
         let weak = editor.downgrade();
@@ -2014,28 +2027,6 @@ impl PlaylistEditor {
                 cx.notify();
             });
         }));
-    }
-    fn preview_icon(&self, icon: &Option<IconReference>, cx: &App) -> Option<AnyElement> {
-        match icon {
-            Some(IconReference::Local { asset }) => self
-                .icon_previews
-                .get(asset)
-                .map(|art| pixelart::thumbnail(art, 2., cx)),
-            Some(IconReference::Yoto { account, media }) => {
-                self.parent.upgrade().and_then(|parent| {
-                    let parent = parent.read(cx);
-                    if parent.snapshot.active_account.as_ref() != Some(account) {
-                        return None;
-                    }
-                    // Until Yoto's icon list names its picture, the tile keeps its glyph.
-                    parent
-                        .playlist_icon_choices
-                        .url(media)
-                        .map(|url| pixelart::crisp_icon(url.clone(), 32.).into_any_element())
-                })
-            }
-            None => None,
-        }
     }
     pub(super) fn assign_icon(
         &mut self,
