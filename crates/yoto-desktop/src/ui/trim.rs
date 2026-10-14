@@ -148,9 +148,14 @@ impl TrimPanel {
         subscriptions.push(
             cx.subscribe_in(&cursor, window, |v, _, event, _, cx| match event {
                 gpui_kit::component::slider::SliderEvent::Release(value) => {
+                    // Releasing the cursor only moves it; playback continues from there
+                    // when it was already playing, and « Écouter » starts it otherwise.
                     v.cursor_seconds = v.playback_range().start().seconds()
                         + value.start() as f64 * v.playback_range().duration().seconds();
-                    v.play_from_cursor(cx);
+                    if v.playing {
+                        v.play_from_cursor(cx);
+                    }
+                    cx.notify();
                 }
                 gpui_kit::component::slider::SliderEvent::Change(value) => {
                     v.cursor_seconds = v.playback_range().start().seconds()
@@ -483,9 +488,12 @@ impl TrimPanel {
         if self.preview_pending.is_some() {
             return;
         }
+        let from_start = self.cursor_seconds <= self.playback_range().start().seconds() + 0.5;
         if self.playing {
             self.stop(cx);
-        } else if let Some(recipe) = self.prepared {
+        } else if let Some(recipe) = self.prepared
+            && from_start
+        {
             self.send(Command::Preview(recipe), cx);
         } else {
             self.play_from_cursor(cx);
@@ -604,7 +612,10 @@ impl TrimPanel {
                 })
                 .on_close(move |_, window, cx| {
                     let _ = close.update(cx, |v, cx| {
-                        v.stop(cx);
+                        // Only the trim dialog plays its own selection.
+                        if matches!(kind, AudioEditor::Trim) {
+                            v.stop(cx);
+                        }
                         v.editor_window = None;
                         if let Some(draft) = v.editing.take() {
                             match draft.preparation {
@@ -725,11 +736,11 @@ impl TrimPanel {
                 for (index, (lo, hi)) in peaks.iter().enumerate() {
                     let position = (index as f32 + 0.5) / count;
                     let color = if position < start || position > end {
-                        0xE8DCCD
+                        theme::WAVE_IDLE
                     } else if cursor.is_some_and(|c| position <= c) {
                         theme::SKY.accent
                     } else {
-                        0xA9C8F7
+                        theme::WAVE_SELECTED
                     };
                     bars = bars.child(
                         div()
@@ -1064,7 +1075,7 @@ impl Render for AudioEditorView {
 impl TrimPanel {
     fn export_original(&mut self, cx: &mut Context<Self>) {
         let media = self.media.id;
-        let name = self.media.title.clone();
+        let name = export_name(&self.media);
         self.tasks.push(cx.spawn(async move |weak, cx| {
             if let Some(file) = rfd::AsyncFileDialog::new()
                 .set_file_name(name)
@@ -1172,16 +1183,6 @@ impl Render for TrimPanel {
                     Button::new("export-original")
                         .label("Exporter l’original")
                         .on_click(cx.listener(|v, _, _, cx| v.export_original(cx))),
-                    Look::Ghost,
-                    Height::Small,
-                    false,
-                    cx,
-                ))
-                .child(theme::pill(
-                    Button::new("collect-garbage")
-                        .label("Nettoyer le cache audio")
-                        .tooltip("Supprime les fichiers audio préparés que plus rien n’utilise.")
-                        .on_click(cx.listener(|v, _, _, cx| v.send(Command::CollectGarbage, cx))),
                     Look::Ghost,
                     Height::Small,
                     false,
@@ -1301,6 +1302,32 @@ impl Render for TrimPanel {
             )
     }
 }
+/// File name offered when exporting the original: its title, with the original file's
+/// extension when known (the service adds it otherwise). Path separators are replaced.
+fn export_name(media: &MediaItem) -> String {
+    let title: String = media
+        .title
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let extension = match &media.provenance {
+        Provenance::LocalFile { name } => std::path::Path::new(name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_owned),
+        Provenance::Youtube { .. } => None,
+    };
+    match extension {
+        Some(extension) => format!("{title}.{extension}"),
+        None => title,
+    }
+}
 /// A trim bound as a parent reads it: « 1:05 », or « 1:05,4 » when it falls between seconds.
 fn trim_text(seconds: f64) -> String {
     let tenths = (seconds.max(0.) * 10.).round() as u64;
@@ -1362,6 +1389,32 @@ mod tests {
         assert_eq!(trim.end(), duration);
         assert_eq!(trim.start(), MediaTime::from_seconds(4.5).unwrap());
         assert!(bounded_slider_range(5., 5., duration).is_err());
+    }
+    #[core::prelude::v1::test]
+    fn export_keeps_the_original_extension() {
+        let mut media = MediaItem {
+            id: MediaId::new(),
+            title: "Contes / Soir".into(),
+            author: String::new(),
+            tags: vec![],
+            original: AssetId::new(),
+            info: AudioInfo {
+                duration: MediaTime::from_seconds(1.).unwrap(),
+                bytes: 1,
+                codec: "mp3".into(),
+                sample_rate: 44_100,
+                channels: 2,
+            },
+            provenance: Provenance::LocalFile {
+                name: "conte.M4A".into(),
+            },
+            recipes: vec![],
+        };
+        assert_eq!(export_name(&media), "Contes - Soir.M4A");
+        media.provenance = Provenance::LocalFile {
+            name: "sans-extension".into(),
+        };
+        assert_eq!(export_name(&media), "Contes - Soir");
     }
     #[core::prelude::v1::test]
     fn trim_bounds_read_as_minutes_and_seconds() {

@@ -182,7 +182,13 @@ impl AssetStore {
             .write(true)
             .create_new(true)
             .open(destination)
-            .map_err(storage)?;
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    Failure::Validation(messages::EXPORT_EXISTS.into())
+                } else {
+                    storage(error)
+                }
+            })?;
         std::io::copy(&mut File::open(lease.path()).map_err(storage)?, &mut dest)
             .map_err(storage)?;
         dest.sync_all().map_err(storage)

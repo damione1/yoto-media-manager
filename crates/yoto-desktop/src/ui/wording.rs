@@ -155,6 +155,9 @@ fn known_message(message: &str) -> Option<&'static str> {
             "La sortie audio ne répond pas. Vérifiez le son de votre ordinateur."
         }
         m::RECOVERY_KEY_FORMAT | m::RECOVERY_KEY_LENGTH => INVALID_RECOVERY_KEY,
+        m::EXPORT_EXISTS => {
+            "Un fichier de ce nom existe déjà à cet endroit. Choisissez un autre nom."
+        }
         m::BACKUP_AUTH_FAILED => {
             "La clé de récupération ne correspond pas à cette sauvegarde, ou la sauvegarde a été modifiée."
         }

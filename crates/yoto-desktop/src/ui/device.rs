@@ -505,7 +505,7 @@ fn light_hex([r, g, b]: [u8; 3]) -> String {
 /// The swatch color drawn for a light; « off » is shown dark rather than pure black.
 fn swatch_color([r, g, b]: [u8; 3]) -> u32 {
     if (r, g, b) == (0, 0, 0) {
-        0x3A3A3A
+        theme::SWATCH_OFF
     } else {
         u32::from_be_bytes([0, r, g, b])
     }

@@ -48,9 +48,15 @@ pub const BROWN: u32 = 0x6B4A2B;
 /// Text on the peach primary button.
 pub const ON_PRIMARY: u32 = 0x2A1A12;
 /// Track numbers in the playlist editor.
-pub const NUMBER: u32 = 0x9A8B7A;
+pub const NUMBER: u32 = 0x7A6B5A;
 /// Offline dot.
 pub const OFFLINE: u32 = 0xB9AC9C;
+/// Waveform bars outside the kept selection.
+pub const WAVE_IDLE: u32 = 0xE8DCCD;
+/// Waveform bars inside the kept selection, ahead of the play cursor.
+pub const WAVE_SELECTED: u32 = 0xA9C8F7;
+/// The « off » light swatch, dark rather than pure black.
+pub const SWATCH_OFF: u32 = 0x3A3A3A;
 
 /// One pastel family: a soft tile, a saturated accent, a readable ink and the darker
 /// « step » drawn under raised buttons.
@@ -100,7 +106,7 @@ pub const LILAC: Family = Family {
     accent: 0x8B6CF0,
     ink: 0x4B3399,
     icon: 0x6A4FD6,
-    step: 0xD9CBFA,
+    step: 0x6F52D6,
 };
 /// Destructive actions and failures.
 pub const ROSE: Family = Family {

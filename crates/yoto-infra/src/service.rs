@@ -1690,9 +1690,16 @@ impl Service {
                 self.stop_preview()?;
                 Ok(Reply::Updated)
             }
-            Command::Export { media, destination } => {
+            Command::Export {
+                media,
+                mut destination,
+            } => {
                 let m = self.media(media)?;
                 let a = self.asset(m.original)?;
+                // A name typed without extension still opens as audio.
+                if destination.extension().is_none() && !a.extension.is_empty() {
+                    destination.set_extension(&a.extension);
+                }
                 self.store.export(&a, &destination)?;
                 Ok(Reply::Updated)
             }

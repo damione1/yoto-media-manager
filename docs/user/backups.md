@@ -33,7 +33,7 @@ Restoring creates a new folder and leaves the original library open. `Ouvrir une
 
 ## Export an original
 
-To recover one file, open its player and choose `Exporter l’original` in the `⋯` menu. Export produces a playable audio file in the location you choose.
+To recover one file, select it in `Médiathèque` and choose `Exporter l’original` under `Plus d’options`. Export produces a playable audio file, with its original extension, in the location you choose; an existing file is never overwritten.
 
 ## Clean up unused files
 
