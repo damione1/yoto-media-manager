@@ -252,6 +252,9 @@ impl AppView {
             .is_some_and(|id| !media_ids.contains(&id))
         {
             self.selected_media = None;
+            for panel in self.trims.values() {
+                panel.update(cx, |p, cx| p.set_active(false, cx));
+            }
         }
         self.selected_media_set.retain(|id| media_ids.contains(id));
         self.trims.retain(|id, _| media_ids.contains(id));
@@ -745,6 +748,10 @@ impl AppView {
             self.send(Command::StopPreview, cx);
         }
         self.selected_media = Some(id);
+        for (media, panel) in &self.trims {
+            let active = *media == id;
+            panel.update(cx, |p, cx| p.set_active(active, cx));
+        }
         if !self.trims.contains_key(&id)
             && let Some(media) = self.snapshot.media.iter().find(|m| m.id == id)
         {

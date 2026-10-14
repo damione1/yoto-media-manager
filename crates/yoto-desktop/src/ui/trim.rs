@@ -65,6 +65,8 @@ pub struct TrimPanel {
     tasks: Vec<Task<()>>,
     status: String,
     more_open: bool,
+    /// Only the open media follows the player; the others stay quiet.
+    active: bool,
     selection: TrimRange,
     _subscriptions: Vec<Subscription>,
 }
@@ -183,6 +185,7 @@ impl TrimPanel {
             tasks: vec![],
             status: String::new(),
             more_open: false,
+            active: true,
         };
         let service = view.service.clone();
         let rt = view.runtime.clone();
@@ -192,6 +195,11 @@ impl TrimPanel {
                 cx.background_executor()
                     .timer(Duration::from_millis(250))
                     .await;
+                match weak.read_with(cx, |v, _| v.active) {
+                    Ok(true) => {}
+                    Ok(false) => continue,
+                    Err(_) => break,
+                }
                 let service = service.clone();
                 let result = rt
                     .spawn(async move { service.execute(Command::PreviewStatus).await })
@@ -454,6 +462,18 @@ impl TrimPanel {
         self.playing = false;
         self.preview_pending = None;
         self.send(Command::StopPreview, cx);
+    }
+    /// Called when the open media changes: a panel that is not shown stops asking the
+    /// player for its position, and forgets a playback it no longer follows.
+    pub fn set_active(&mut self, active: bool, cx: &mut Context<Self>) {
+        if self.active != active {
+            self.active = active;
+            if !active {
+                self.playing = false;
+                self.preview_pending = None;
+            }
+            cx.notify();
+        }
     }
     pub fn is_playing(&self) -> bool {
         self.playing
