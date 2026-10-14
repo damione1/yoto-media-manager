@@ -594,9 +594,9 @@ impl PlaylistEditor {
             if let Some(failure) = failure {
                 let _ = weak.update(cx, |v, cx| {
                     if v.preview_generation == generation {
+                        eprintln!("Track preview failed: {failure:?}");
                         v.previewing = None;
-                        v.status = failure_text(&failure);
-                        cx.notify();
+                        v.refuse(&failure, cx);
                     }
                 });
                 return;

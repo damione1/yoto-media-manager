@@ -3252,6 +3252,7 @@ fn preview_loop(
                     if stream.is_none() {
                         stream =
                             Some(rodio::DeviceSinkBuilder::open_default_sink().map_err(|e| {
+                                eprintln!("Audio output unavailable: {e:?}");
                                 Failure::Media(format!("Audio output unavailable: {e}"))
                             })?);
                     }
