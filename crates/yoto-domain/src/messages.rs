@@ -12,6 +12,8 @@ pub const CHAPTER_EMPTY: &str = "A chapter needs at least one track.";
 pub const SHUFFLE_RANGE_INVALID: &str = "Invalid chapter shuffle range.";
 pub const DUPLICATE_CHAPTER_KEY: &str = "Duplicate chapter key";
 pub const DUPLICATE_TRACK_KEY: &str = "Duplicate track key";
+pub const YOTO_VERSION_UNKNOWN: &str = "This upload does not name a Yoto playlist to keep.";
+pub const WIRE_KEY_LENGTH: &str = "Chapter and track keys must contain at most 20 characters.";
 pub const UNPARSED_EVENTS: &str =
     "Unparsed interactive events must be reviewed before structural edits.";
 pub const REFERENCE_EVENTS: &str =
@@ -88,6 +90,7 @@ pub const PUBLICATION_DURABLE: &str =
     "This publication has a durable remote effect; reconcile it rather than retrying";
 pub const TASK_NEEDS_RESOLUTION: &str = "This task requires a separate resolution";
 pub const TASK_COMPLETED: &str = "This task is already completed";
+pub const TASK_STILL_ACTIVE: &str = "This task is still in progress";
 pub const RESTART_BUSY: &str =
     "Finish imports, audio processing and Yoto uploads before restarting";
 pub const RESTART_PENDING: &str = "An application restart is already pending";
@@ -101,6 +104,28 @@ pub const BROWSER_FAILED: &str = "Could not open the browser";
 pub const AUTHORIZATION_DECLINED: &str = "Authorization was declined";
 pub const YOTO_DENIED: &str = "Yoto denied this operation";
 pub const YOTO_NOT_FOUND: &str = "Yoto rejected the request (404)";
+/// Start of a refusal Yoto did not explain in terms the app recognises; the HTTP status and,
+/// after [`YOTO_SAID`], what Yoto answered follow it.
+pub const YOTO_REJECTED: &str = "Yoto rejected the request";
+pub const YOTO_SAID: &str = " Yoto said: ";
+/// A refusal Yoto did not explain in terms the app recognises, keeping what it answered.
+pub fn yoto_rejected(status: u16, said: Option<&str>) -> String {
+    match said {
+        Some(said) => format!("{YOTO_REJECTED} ({status}).{YOTO_SAID}{said}"),
+        None => format!("{YOTO_REJECTED} ({status})."),
+    }
+}
+/// The HTTP status and Yoto's answer from a message made by [`yoto_rejected`].
+pub fn parse_yoto_rejected(message: &str) -> Option<(u16, Option<&str>)> {
+    let rest = message.strip_prefix(YOTO_REJECTED)?.strip_prefix(" (")?;
+    let (status, rest) = rest.split_once(')')?;
+    let status = status.parse().ok()?;
+    let rest = rest.strip_prefix('.')?;
+    match rest {
+        "" => Some((status, None)),
+        rest => Some((status, Some(rest.strip_prefix(YOTO_SAID)?))),
+    }
+}
 pub const SELECT_PLAYER: &str = "Select a player";
 pub const PLAYER_NAME_EMPTY: &str = "Enter a player name";
 pub const GROUP_NAME_LENGTH: &str = "Group name must contain 1–100 characters";
@@ -111,6 +136,7 @@ pub const IMAGE_DIMENSIONS_TOO_LARGE: &str = "Image dimensions too large";
 pub const PIXEL_ICON_SIZE: &str = "A pixel icon must be 16×16";
 pub const PIXEL_IMAGE_INVALID: &str = "Pixel image invalid";
 pub const ICON_NOT_UPLOADED: &str = "Icon has not been uploaded";
+pub const ICON_ABSENT: &str = "Icon image is not in the library";
 pub const AUDIO_OUTPUT_SILENT: &str = "Audio output did not respond";
 pub const RECOVERY_KEY_FORMAT: &str =
     "Recovery key must contain 64 hexadecimal characters (256 random bits)";
@@ -140,6 +166,8 @@ pub const ALL: &[&str] = &[
     SHUFFLE_RANGE_INVALID,
     DUPLICATE_CHAPTER_KEY,
     DUPLICATE_TRACK_KEY,
+    WIRE_KEY_LENGTH,
+    YOTO_VERSION_UNKNOWN,
     UNPARSED_EVENTS,
     REFERENCE_EVENTS,
     SHUFFLE_INVALID,
@@ -205,6 +233,7 @@ pub const ALL: &[&str] = &[
     PUBLICATION_DURABLE,
     TASK_NEEDS_RESOLUTION,
     TASK_COMPLETED,
+    TASK_STILL_ACTIVE,
     RESTART_BUSY,
     RESTART_PENDING,
     RESTARTING,
@@ -225,6 +254,7 @@ pub const ALL: &[&str] = &[
     PIXEL_ICON_SIZE,
     PIXEL_IMAGE_INVALID,
     ICON_NOT_UPLOADED,
+    ICON_ABSENT,
     AUDIO_OUTPUT_SILENT,
     RECOVERY_KEY_FORMAT,
     RECOVERY_KEY_LENGTH,

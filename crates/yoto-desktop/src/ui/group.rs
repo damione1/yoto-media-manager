@@ -145,6 +145,7 @@ impl GroupEditor {
                         | Reply::Prepared(_)
                         | Reply::Asset(_)
                         | Reply::PixelArt(_)
+                        | Reply::Picture(_)
                         | Reply::Player(_),
                     )) => v.status = tr!("Réponse inattendue.").into(),
                     Ok(Err(e)) => {

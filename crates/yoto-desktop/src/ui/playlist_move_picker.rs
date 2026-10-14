@@ -1,5 +1,5 @@
 use super::*;
-use gpui_kit::component::{dialog::DialogClose, spinner::Spinner};
+use gpui_kit::component::spinner::Spinner;
 pub(super) struct MovePicker {
     owner: WeakEntity<PlaylistEditor>,
     rows: Arc<Vec<media_picker::ChapterChoice>>,
@@ -96,7 +96,7 @@ impl Render for MovePicker {
             .gap_2()
             .items_center()
             .child(div().flex_1())
-            .child(DialogClose::new().child(theme::pill(
+            .child(theme::dialog_close(theme::pill(
                 Button::new("cancel-move").label(tr!("Annuler")),
                 Look::Ghost,
                 Height::Medium,

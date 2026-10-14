@@ -96,6 +96,19 @@ impl AppView {
             });
         }
     }
+    /// Remove finished activities from the list. An older page is a copy taken when it
+    /// was opened, so it is updated here as well.
+    fn dismiss_jobs(&mut self, ids: Vec<JobId>, cx: &mut Context<Self>) {
+        if let Some(page) = self.job_page.as_mut() {
+            for job in Arc::make_mut(page).iter_mut() {
+                if ids.contains(&job.id) {
+                    job.dismissed = true;
+                }
+            }
+        }
+        self.send(Command::DismissJobs(ids), cx);
+        cx.notify();
+    }
 }
 pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> AnyElement {
     use theme::{Height, Look};
@@ -388,10 +401,16 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
 /// The right column: every import, preparation and sending, newest first.
 fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
     use theme::{Height, Look};
-    let jobs = view
+    let page = view
         .job_page
         .as_ref()
         .map_or(&view.snapshot.jobs, |v| v.as_ref());
+    let jobs: Vec<&Job> = page.iter().filter(|job| !job.dismissed).collect();
+    let finished: Vec<JobId> = jobs
+        .iter()
+        .filter(|job| dismissable(&job.state))
+        .map(|job| job.id)
+        .collect();
     let mut aside = div()
         .w(px(380.))
         .flex_shrink_0()
@@ -406,16 +425,37 @@ fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                 .px(px(22.))
                 .pb(px(12.))
                 .flex()
-                .items_end()
+                .items_center()
                 .justify_between()
+                .gap(px(10.))
                 .child(theme::heading(tr!("Activités"), 22.))
-                .children((!jobs.is_empty()).then(|| {
-                    theme::meta(format!(
-                        "{}–{}",
-                        view.job_offset + 1,
-                        view.job_offset + jobs.len()
-                    ))
-                })),
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .children((!jobs.is_empty()).then(|| {
+                            theme::meta(format!(
+                                "{}–{}",
+                                view.job_offset + 1,
+                                view.job_offset + jobs.len()
+                            ))
+                        }))
+                        .children((finished.len() > 1).then(|| {
+                            theme::pill(
+                                Button::new("dismiss-finished-jobs")
+                                    .label(tr!("Tout effacer"))
+                                    .tooltip(tr!("Retirer de la liste les activités terminées"))
+                                    .on_click(cx.listener(move |v, _, _, cx| {
+                                        v.dismiss_jobs(finished.clone(), cx)
+                                    })),
+                                Look::Ghost,
+                                Height::Tiny,
+                                false,
+                                cx,
+                            )
+                        })),
+                ),
         );
     if jobs.is_empty() {
         return aside
@@ -434,11 +474,11 @@ fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
         .flex()
         .flex_col()
         .gap(px(12.));
-    for job in jobs.iter() {
+    for job in jobs {
         list = list.child(job_card(view, job, cx));
     }
     aside = aside.child(list);
-    if view.job_offset > 0 || jobs.len() >= 200 {
+    if view.job_offset > 0 || page.len() >= 200 {
         aside = aside.child(
             div()
                 .px(px(22.))
@@ -464,7 +504,7 @@ fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                         ),
                     Look::Soft(&theme::LIGHT_SAND),
                     Height::Small,
-                    jobs.len() < 200,
+                    page.len() < 200,
                     cx,
                 )),
         );
@@ -727,19 +767,39 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
             vec![details.into_any_element()],
         ),
     };
+    // Running tasks keep their « Annuler »; only what is over can leave the list.
+    let dismiss = dismissable(&job.state).then(|| {
+        theme::round(
+            Button::new(element_id("dismiss-job", id))
+                .icon(IconName::X)
+                .accessibility_label(tr!("Retirer de la liste"))
+                .tooltip(tr!("Retirer de la liste"))
+                .on_click(cx.listener(move |v, _, _, cx| v.dismiss_jobs(vec![id], cx))),
+            Look::Ghost,
+            28.,
+            false,
+            cx,
+        )
+    });
     let mut card = theme::card()
         .p(px(14.))
         .gap(px(8.))
         .rounded(px(18.))
         .child(
-            div().flex().items_center().gap(px(10.)).child(mark).child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .font_weight(FontWeight::EXTRA_BOLD)
-                    .truncate()
-                    .child(title),
-            ),
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .child(mark)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .truncate()
+                        .child(title),
+                )
+                .children(dismiss),
         )
         .child(
             div()
@@ -752,6 +812,19 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
         card = card.child(div().flex().flex_wrap().gap(px(6.)).children(actions));
     }
     card.into_any_element()
+}
+/// Finished, failed and cancelled tasks can be removed from the list; the others are
+/// still waiting on something and keep their own actions.
+fn dismissable(state: &JobState) -> bool {
+    match state {
+        JobState::Completed { .. } | JobState::Failed { .. } | JobState::Cancelled => true,
+        JobState::Queued
+        | JobState::Running { .. }
+        | JobState::Retry { .. }
+        | JobState::WaitingForAuthentication
+        | JobState::Conflict { .. }
+        | JobState::Reconciling => false,
+    }
 }
 fn job_title(job: &Job, snapshot: &Snapshot, youtube_titles: &BTreeMap<String, String>) -> String {
     if let JobState::Completed {
@@ -826,7 +899,6 @@ fn conflict_label(choice: ConflictChoice) -> &'static str {
     }
 }
 fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement {
-    use gpui_kit::component::dialog::DialogClose;
     use theme::{Height, Look};
     let id = job.id;
     let state_family = match &job.state {
@@ -942,6 +1014,21 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
                     Height::Medium,
                     false,
                     cx,
+                )))
+                .child(theme::note(
+                    tr!("Vous avez regardé dans l’application Yoto et la playlist vous convient ? Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour ici."),
+                ))
+                .child(actions().child(theme::pill(
+                    Button::new(element_id("keep-yoto", id))
+                        .label(tr!("Garder la version de Yoto"))
+                        .on_click(cx.listener(move |v, _, window, cx| {
+                            v.send(Command::KeepYotoVersion(id), cx);
+                            window.close_dialog(cx);
+                        })),
+                    Look::Outline,
+                    Height::Medium,
+                    false,
+                    cx,
                 )));
             if view.advanced {
                 body = body.child(
@@ -1001,7 +1088,7 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
         div()
             .flex()
             .justify_end()
-            .child(DialogClose::new().child(theme::pill(
+            .child(theme::dialog_close(theme::pill(
                 Button::new(element_id("close-job-details", id)).label(tr!("Fermer")),
                 Look::Outline,
                 Height::Medium,
@@ -1023,6 +1110,7 @@ mod tests {
             attempts: 0,
             created: 0,
             checkpoint: None,
+            dismissed: false,
         }
     }
     #[core::prelude::v1::test]

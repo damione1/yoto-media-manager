@@ -1,0 +1,56 @@
+{#
+  Two icon families, both inline SVG so they inherit colour and cost no
+  request:
+  · pixel(): the 8×7 pixel motifs the app uses for media and chapters,
+    drawn with crispEdges so every "pixel" stays a hard square at any size;
+  · icon(): round-cap line icons from the app's sidebar and buttons.
+  Both are decorative (aria-hidden); the text next to them carries meaning.
+#}
+{% set PIXELS = {
+  heart: "M1 0h2v1h-2z M5 0h2v1h-2z M0 1h8v3h-8z M1 4h6v1h-6z M2 5h4v1h-4z M3 6h2v1h-2z",
+  star: "M3 0h1v2h-1z M0 2h7v1h-7z M1 3h5v1h-5z M2 4h3v1h-3z M1 5h2v1h-2z M4 5h2v1h-2z M0 6h2v1h-2z M5 6h2v1h-2z",
+  moon: "M2 0h3v1h-3z M1 1h2v1h-2z M0 2h2v3h-2z M1 5h3v1h-3z M2 6h4v1h-4z",
+  note: "M2 0h5v1h-5z M2 1h1v4h-1z M6 1h1v3h-1z M0 4h3v2h-3z M4 3h3v2h-3z",
+  sun: "M3 0h2v1h-2z M1 1h6v1h-6z M0 2h8v3h-8z M1 5h6v1h-6z M3 6h2v1h-2z",
+  tree: "M3 0h2v1h-2z M2 1h4v1h-4z M1 2h6v1h-6z M2 3h4v1h-4z M0 4h8v1h-8z M3 5h2v2h-2z"
+} %}
+
+{% macro pixel(name, w = 24, cls = "") -%}
+<svg class="px{% if cls %} {{ cls }}{% endif %}" width="{{ w }}" height="{{ (w * 7 / 8) | round }}" viewBox="0 0 8 7" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true" focusable="false"><path d="{{ PIXELS[name] }}"/></svg>
+{%- endmacro %}
+
+{% set LINES = {
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  library: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  playlists: '<path d="M21 15V6"/><circle cx="18.5" cy="15.5" r="2.5"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/>',
+  imports: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  players: '<rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><path d="M12 6h.01"/>',
+  account: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  scissors: '<circle cx="6" cy="6" r="3"/><path d="M8.1 8.1 12 12"/><path d="M20 4 8.1 15.9"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
+  arrowLeft: '<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>',
+  arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5V21h16"/>'
+} %}
+
+{% macro icon(name, size = 18, stroke = 2.4) -%}
+<svg class="ic" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ stroke }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{{ LINES[name] | safe }}</svg>
+{%- endmacro %}
+
+{% macro play(size = 16) -%}
+<svg class="ic" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><polygon points="7 4 20 12 7 20 7 4"/></svg>
+{%- endmacro %}
+
+{% macro dots(size = 16) -%}
+<svg class="ic" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+{%- endmacro %}
+
+{% macro logo(size = 44) -%}
+<img class="logo" src="/img/logo-96.webp" width="{{ size }}" height="{{ size }}" alt="" decoding="async">
+{%- endmacro %}

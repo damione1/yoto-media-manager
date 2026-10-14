@@ -100,14 +100,12 @@ fn rekey_created_group<T>(
 }
 
 pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView>) -> AnyElement {
-    let mut header = div()
-        .flex()
-        .items_center()
-        .gap(px(12.))
-        .child(div().flex_1().child(theme::screen_header(
+    let title = || {
+        theme::screen_header(
             tr!("Lecteurs"),
             tr!("Choisissez un lecteur, lancez une playlist, réglez le volume et la lumière."),
-        )));
+        )
+    };
     let mut body = div()
         .id("players-scroll")
         .size_full()
@@ -119,7 +117,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         .gap(px(16.));
     let Some(account) = view.snapshot.active_account.clone() else {
         return body
-            .child(header)
+            .child(title())
             .child(
                 theme::card()
                     .items_start()
@@ -157,7 +155,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
     };
     let syncing = remote_syncing(&view.snapshot);
     let sync_account = account.clone();
-    header = header.child(theme::pill(
+    let sync = theme::pill(
         Button::new("sync-yoto")
             .icon(IconName::RefreshCw)
             .label(if syncing {
@@ -172,8 +170,8 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         Height::Large,
         syncing,
         cx,
-    ));
-    body = body.child(header);
+    );
+    body = body.child(theme::header_row(title(), vec![sync.into_any_element()]));
     if let Some(RemoteSyncState::Failed { .. }) =
         view.snapshot.remote_sync.get(&RemoteCollection::Devices)
     {

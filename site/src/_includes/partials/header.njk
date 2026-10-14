@@ -1,0 +1,22 @@
+{% from "icons.njk" import icon, logo %}
+{% set home = "/" + loc.dir %}
+{% set guide = "/" + loc.dir + "docs/" %}
+{% set onHome = not isDocs and not is404 %}
+<header class="site-head">
+  <div class="wrap head-row">
+    <a class="brand" href="{{ home }}" aria-label="{{ t.nav.home }}">{{ logo(40) }}<span>{{ site.name }}</span></a>
+    <nav class="head-nav" aria-label="{{ t.nav.main }}">
+      {%- if onHome %}
+      <a class="nav-link hide-sm" href="#how">{{ t.nav.how }}</a>
+      <a class="nav-link hide-sm" href="#faq">{{ t.nav.faq }}</a>
+      {%- endif %}
+      <a class="nav-link" href="{{ guide }}"{% if isDocs %} aria-current="true"{% endif %}>{{ icon("book", 17) }}<span>{{ t.nav.guide }}</span></a>
+      <div class="langs" role="group" aria-label="{{ t.nav.language }}">
+        {%- for alt in locales %}
+        <a href="{{ page.url | localeUrl(alt.code) if not is404 else '/' + alt.dir }}" hreflang="{{ alt.htmlLang }}" lang="{{ alt.htmlLang }}"{% if alt.code == loc.code %} aria-current="true"{% endif %}><abbr title="{{ alt.name }}">{{ alt.label }}</abbr></a>
+        {%- endfor %}
+      </div>
+      <a class="btn btn-ink btn-sm hide-xs" href="{{ '#download' if onHome else site.latest }}">{{ t.nav.download }}</a>
+    </nav>
+  </div>
+</header>

@@ -26,6 +26,11 @@ fn main() {
                     "La mise à jour n’a pas pu être installée.\n\n{detail}",
                     detail = detail
                 )
+            } else if e.downcast_ref::<MissingTools>().is_some() {
+                tr!(
+                    "L’application n’a pas pu démarrer : certains de ses composants sont manquants ou abîmés.\n\nRéinstallez l’application pour les remettre en place."
+                )
+                .to_owned()
             } else {
                 tr!(
                     "L’application n’a pas pu démarrer.\n\n{detail}\n\nSi le problème persiste, réinstallez l’application depuis GitHub Releases.",
@@ -37,6 +42,16 @@ fn main() {
         std::process::exit(1);
     }
 }
+/// The audio tools installed with the application are missing or do not match their
+/// manifest: only a reinstall puts them back, so the parent is told so plainly.
+#[derive(Debug)]
+struct MissingTools(yoto_domain::Failure);
+impl std::fmt::Display for MissingTools {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Bundled tools unavailable: {}", self.0)
+    }
+}
+impl std::error::Error for MissingTools {}
 /// The interface language, before anything is shown: the one saved in the profile's
 /// settings, or else the operating system's.
 fn choose_language() {
@@ -58,7 +73,7 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
             .build()?,
     );
     let profile = yoto_infra::default_profile()?;
-    let tools = Tools::bundled()?;
+    let tools = Tools::bundled().map_err(MissingTools)?;
     let service = runtime.block_on(Session::connect(
         profile,
         tools,

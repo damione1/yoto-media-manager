@@ -280,6 +280,7 @@ impl TokenBroker {
                     .requested_scopes
                     .iter()
                     .map(|s| s.wire())
+                    .chain(PROFILE_SCOPES.iter().copied())
                     .collect::<Vec<_>>()
                     .join(" "),
             ),
@@ -336,6 +337,7 @@ impl TokenBroker {
                 verifier: &verifier,
             })
             .await?;
+        let id_token = response.id_token.clone();
         let grant = Self::grant(response)?;
         // The subject is only a namespace extracted from an authority-issued token. It is
         // never trusted for scopes or authentication; scopes come from the token response.
@@ -359,13 +361,60 @@ impl TokenBroker {
             .clone();
         let _guard = gate.lock().await;
         self.save(&id, &grant)?;
-        let label = format!("Yoto {}", &id.as_str()[..8]);
+        // The name the person gave their Yoto account, read from the identity token Yoto
+        // returns for the profile scopes, else from the access token; only shown, never
+        // trusted for anything else.
+        let label = [id_token.as_deref(), Some(grant.access.as_str())]
+            .into_iter()
+            .flatten()
+            .find_map(|token| jwt_claims(token).as_ref().and_then(display_name))
+            .unwrap_or_else(|| fallback_label(&id));
         Ok(Account {
             id,
             label,
             scopes: grant.scopes.clone(),
         })
     }
+}
+/// OpenID scopes asked for beside Yoto's permissions, so the token response carries an
+/// identity token with the name the person gave their Yoto account.
+const PROFILE_SCOPES: &[&str] = &["openid", "profile"];
+/// Name shown for an account whose name Yoto did not give.
+pub fn fallback_label(id: &AccountId) -> String {
+    format!("Yoto {}", &id.as_str()[..8])
+}
+/// The claims of a JWT, decoded without checking its signature: used for display only.
+fn jwt_claims(token: &str) -> Option<serde_json::Value> {
+    let payload = token.split('.').nth(1)?;
+    serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload).ok()?).ok()
+}
+/// The account's name among standard profile claims: its full name, else its first name,
+/// else its nickname; an address standing in for a name comes last. Control characters are
+/// dropped and the result is at most 60 characters.
+pub fn display_name(claims: &serde_json::Value) -> Option<String> {
+    let claim = |key: &str| {
+        claims
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(|v| {
+                v.chars()
+                    .filter(|c| !c.is_control())
+                    .collect::<String>()
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .filter(|v| !v.is_empty())
+    };
+    let candidates = ["name", "given_name", "nickname"]
+        .into_iter()
+        .filter_map(claim)
+        .collect::<Vec<_>>();
+    let name = candidates
+        .iter()
+        .find(|v| !v.contains('@'))
+        .or(candidates.first())?;
+    Some(name.chars().take(60).collect())
 }
 pub fn validate_callback(path: &str, state: &str) -> Result<String> {
     let u =
@@ -402,6 +451,38 @@ mod tests {
             validate_callback("/callback?state=expected&code=hello%20world", "expected").unwrap(),
             "hello world"
         );
+    }
+    #[test]
+    fn the_account_takes_the_name_given_on_yoto() {
+        use serde_json::json;
+        assert_eq!(
+            display_name(&json!({"name":"Famille  Martin\n","nickname":"fm"})),
+            Some("Famille Martin".into())
+        );
+        // A name that is only the e-mail address gives way to a real first name or nickname.
+        assert_eq!(
+            display_name(&json!({"name":"parent@example.test","nickname":"Camille"})),
+            Some("Camille".into())
+        );
+        assert_eq!(
+            display_name(&json!({"name":"parent@example.test"})),
+            Some("parent@example.test".into())
+        );
+        assert_eq!(display_name(&json!({"name":"  ","sub":"auth0|x"})), None);
+        assert_eq!(display_name(&json!({})), None);
+        assert_eq!(
+            display_name(&json!({"name":"x".repeat(80)})).map(|n| n.len()),
+            Some(60)
+        );
+        let token = format!(
+            "h.{}.s",
+            URL_SAFE_NO_PAD.encode(json!({"sub":"auth0|1","name":"Camille"}).to_string())
+        );
+        assert_eq!(
+            jwt_claims(&token).as_ref().and_then(display_name),
+            Some("Camille".into())
+        );
+        assert_eq!(jwt_claims("not-a-token"), None);
     }
     #[test]
     fn pkce_rfc7636_vector() {

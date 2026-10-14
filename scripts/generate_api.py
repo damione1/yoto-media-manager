@@ -111,10 +111,5 @@ operations={item['operation'] for item in inventory}
 if operations != set(policy):raise SystemExit('Coverage policy must classify every effective OpenAPI operation exactly once')
 for item in inventory:item.update(policy[item['operation']])
 (ROOT/'api/coverage.json').write_text(json.dumps(inventory,indent=2,ensure_ascii=False)+'\n')
-report=['# Couverture des opérations Yoto', '', 'Généré depuis le contrat effectif et `api/coverage-policy.json`. Toutes les commandes citées sont découvrables dans le schéma Rust de `yoto_execute`; `yoto_snapshot` lit catalogue, tâches et associations. « implemented » signifie raccordé, pas validé sur un compte réel.', '', '| Opération | Service / commande | UI | Statut | Preuve ou gate |', '| --- | --- | --- | --- | --- |']
-for item in inventory:
- report.append('| '+item['method'].upper()+' `'+item['path']+'` | '+item['service']+' / '+', '.join(item['commands'])+' | '+item['ui']+' | '+item['status']+' | '+item['evidence_or_gate']+' |')
-report += ['', 'Les commandes locales (import/tri/sélection, inspection YouTube, recettes et suppression avec références/GC, waveform/zoom/seek/playhead, preview/stop, export original, backup/restore complet, édition/duplication/suppression/remplacement audio de playlist, pixelart, comptes, jobs paginés/retry/cancel/résolution) ne correspondent pas à un endpoint Yoto. Elles sont exposées par la même union `Command`, sans dispatcher métier séparé dans MCP.', '']
-(ROOT/'docs/api-coverage.md').write_text('\n'.join(report))
 
 subprocess.run(['cargo','fmt','-p','yoto-contracts','-p','yoto-api-generated','-p','yoto-auth-generated'],cwd=ROOT,check=True)

@@ -91,6 +91,12 @@ pub enum Command {
         media: MediaId,
         metadata: MediaMetadata,
     },
+    /// Give a media the icon its chapter and tracks get when it is added to a playlist,
+    /// or remove it with `None`. Playlists already holding the media keep their icons.
+    SetMediaIcon {
+        media: MediaId,
+        icon: Option<IconReference>,
+    },
     Prepare {
         media: MediaId,
         trim: TrimRange,
@@ -172,12 +178,18 @@ pub enum Command {
     },
     Retry(JobId),
     Reconcile(JobId),
+    /// Close an uncertain publication by taking the playlist Yoto currently holds as the
+    /// confirmed version. Nothing is sent to Yoto; the parent checked it there.
+    KeepYotoVersion(JobId),
     /// After logout purged a private checkpoint, explicitly select its remote receipt; never re-POST.
     AttachPublicationReceipt {
         job: JobId,
         card: CardId,
     },
     Cancel(JobId),
+    /// Remove finished, failed or cancelled tasks from the activity list. They stay
+    /// recorded; a task still in progress is refused and nothing is changed.
+    DismissJobs(Vec<JobId>),
     Player {
         account: AccountId,
         device: DeviceId,
@@ -216,6 +228,8 @@ pub enum Command {
     SavePixelArt(Box<PixelArt>),
     ReadPixelArt(AssetId),
     Thumbnail(AssetId),
+    /// A playlist cover small enough to draw on screen, as PNG bytes.
+    CoverPreview(AssetId),
     StoreImage {
         path: PathBuf,
         pixel_art: bool,
@@ -248,12 +262,17 @@ pub enum Reply {
     Updated,
     Saved(Revision),
     OpenedPlaylist(PlaylistId),
-    PlaylistOperation { playlist: PlaylistId, job: JobId },
+    PlaylistOperation {
+        playlist: PlaylistId,
+        job: JobId,
+    },
     Entries(SourceInspection),
     Waveform(Waveform),
     Prepared(RecipeId),
     Asset(AssetId),
     PixelArt(Box<PixelArt>),
+    /// An encoded picture to draw, such as a cover preview.
+    Picture(Vec<u8>),
     Image(FamilyImageId),
     Images(Vec<FamilyImageId>),
     Player(crate::players::CommandResult),
@@ -289,6 +308,13 @@ impl Reply {
     pub fn into_pixel_art(self) -> Result<PixelArt> {
         if let Self::PixelArt(art) = self {
             Ok(*art)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_picture(self) -> Result<Vec<u8>> {
+        if let Self::Picture(bytes) = self {
+            Ok(bytes)
         } else {
             Err(Self::unexpected())
         }
@@ -781,6 +807,7 @@ impl Service {
             | Command::UploadFamilyImage { account, .. } => Some(account.clone()),
             Command::Retry(id)
             | Command::Reconcile(id)
+            | Command::KeepYotoVersion(id)
             | Command::Cancel(id)
             | Command::Resolve { job: id, .. }
             | Command::AttachPublicationReceipt { job: id, .. } => match self.job(*id)?.request {
@@ -798,12 +825,14 @@ impl Service {
             | Command::DeletePlaylist(_)
             | Command::AddMedia { .. }
             | Command::UpdateMedia { .. }
+            | Command::SetMediaIcon { .. }
             | Command::DeleteMedia { .. }
             | Command::DeleteRecipe { .. }
             | Command::DeleteMediaBatch { .. }
             | Command::CollectGarbage
             | Command::ReleaseAsset(_)
             | Command::JobsPage { .. }
+            | Command::DismissJobs(_)
             | Command::Backup { .. }
             | Command::Restore { .. }
             | Command::Prepare { .. }
@@ -819,6 +848,7 @@ impl Service {
             | Command::SavePixelArt(_)
             | Command::ReadPixelArt(_)
             | Command::Thumbnail(_)
+            | Command::CoverPreview(_)
             | Command::StoreImage { .. }
             | Command::ImportIcon { .. }
             | Command::SetCover { .. } => None,
@@ -907,7 +937,15 @@ impl Service {
             .insert(account.clone(), Arc::new(AccountSession::new()));
         Ok(())
     }
-    async fn connected_account(&self, account: Account) -> Result<()> {
+    async fn connected_account(&self, mut account: Account) -> Result<()> {
+        // Reconnecting without a name from Yoto keeps the one read before.
+        if account.label == crate::auth::fallback_label(&account.id)
+            && let Some(known) = self
+                .db
+                .get::<Account>(Table::Account, account.id.as_str())?
+        {
+            account.label = known.label;
+        }
         self.db.put(Table::Account, account.id.as_str(), &account)?;
         self.activate_account_session(&account.id).await?;
         self.select_account(account.id)?;
@@ -1248,6 +1286,58 @@ impl Service {
                 self.save_job(&job)?;
                 Ok(Reply::Updated)
             }
+            Command::KeepYotoVersion(id) => {
+                let mut job = self.job(id)?;
+                if !matches!(job.state, JobState::Reconciling) {
+                    return Err(Failure::Validation(
+                        "Only an uncertain publication can keep Yoto's version".into(),
+                    ));
+                }
+                let JobRequest::Publish { account, snapshot } = &job.request else {
+                    return Err(Failure::Validation("Publication required".into()));
+                };
+                let key = format!("{account}:commit:{id}");
+                let mut pending: PendingPublication = self
+                    .db
+                    .get(Table::Remote, &key)?
+                    .ok_or(Failure::Ambiguous)?;
+                let bound: Option<PublicationBinding> = self
+                    .db
+                    .get(Table::Binding, &format!("{account}:{}", snapshot.id))?;
+                let card = pending
+                    .outcome
+                    .card()
+                    .cloned()
+                    .or_else(|| match &snapshot.origin {
+                        DraftOrigin::Existing { base } => Some(base.card.clone()),
+                        DraftOrigin::New => None,
+                    })
+                    .or_else(|| bound.map(|b| b.card))
+                    .ok_or_else(|| Failure::Validation(messages::YOTO_VERSION_UNKNOWN.into()))?;
+                let token = self.auth.access(account, Scope::UserContentView).await?;
+                let document = self.api.card(&token, &card).await?;
+                let revision = self
+                    .db
+                    .get::<Playlist>(Table::Playlist, &snapshot.id.to_string())?
+                    .map_or(snapshot.revision, |p| p.revision);
+                pending.outcome = PublicationOutcome::Accepted { card: card.clone() };
+                self.db.put(Table::Remote, &key, &pending)?;
+                let binding = PublicationBinding {
+                    account: account.clone(),
+                    playlist: snapshot.id,
+                    card: card.clone(),
+                    revision,
+                    document,
+                };
+                self.db.confirm_publication(&job, &pending, &binding)?;
+                self.install_confirmed_card(&binding.account)?;
+                job.checkpoint = None;
+                job.state = JobState::Completed {
+                    output: JobOutput::Published { card, revision },
+                };
+                self.save_job(&job)?;
+                Ok(Reply::Updated)
+            }
             Command::Reconcile(id) => {
                 let mut job = self.job(id)?;
                 if !matches!(job.state, JobState::Reconciling) {
@@ -1524,9 +1614,11 @@ impl Service {
             | Command::CollectGarbage
             | Command::ReleaseAsset(_)
             | Command::JobsPage { .. }
+            | Command::DismissJobs(_)
             | Command::Backup { .. }
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
+            | Command::SetMediaIcon { .. }
             | Command::Prepare { .. }
             | Command::Waveform(_)
             | Command::Preview(_)
@@ -1539,6 +1631,7 @@ impl Service {
             | Command::Cancel(_)
             | Command::SavePixelArt(_)
             | Command::Thumbnail(_)
+            | Command::CoverPreview(_)
             | Command::ReadPixelArt(_)
             | Command::StoreImage { .. }
             | Command::ImportIcon { .. }
@@ -1588,8 +1681,10 @@ impl Service {
             | Command::SavePixelArt(_)
             | Command::ReadPixelArt(_)
             | Command::Thumbnail(_)
+            | Command::CoverPreview(_)
             | Command::StoreImage { .. }
             | Command::ImportIcon { .. }
+            | Command::SetMediaIcon { .. }
             | Command::SetCover { .. } => Some(self.protect_assets()?),
             Command::Import(_)
             | Command::InspectYoutube(_)
@@ -1601,6 +1696,7 @@ impl Service {
             | Command::CollectGarbage
             | Command::ReleaseAsset(_)
             | Command::JobsPage { .. }
+            | Command::DismissJobs(_)
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
             | Command::StopPreview
@@ -1622,6 +1718,7 @@ impl Service {
             | Command::DeleteRemote { .. }
             | Command::Reconcile(_)
             | Command::AttachPublicationReceipt { .. }
+            | Command::KeepYotoVersion(_)
             | Command::Player { .. }
             | Command::DeviceConfig { .. }
             | Command::DeviceStatus { .. }
@@ -1736,6 +1833,10 @@ impl Service {
                         .map_err(storage)?,
                 ))
             }
+            Command::DismissJobs(ids) => {
+                self.db.dismiss_jobs(&ids)?;
+                Ok(Reply::Updated)
+            }
             Command::ReleaseAsset(asset) => {
                 self.db.release_draft_asset(asset)?;
                 Ok(Reply::Updated)
@@ -1746,6 +1847,18 @@ impl Service {
             }
             Command::UpdateMedia { media, metadata } => {
                 self.db.update_media_metadata(media, &metadata)?;
+                Ok(Reply::Updated)
+            }
+            Command::SetMediaIcon { media, icon } => {
+                if let Some(IconReference::Local { asset }) = &icon
+                    && self
+                        .db
+                        .get::<Asset>(Table::Asset, &asset.to_string())?
+                        .is_none()
+                {
+                    return Err(Failure::Validation(messages::ICON_ABSENT.into()));
+                }
+                self.db.update_media_icon(media, icon)?;
                 Ok(Reply::Updated)
             }
             Command::Prepare {
@@ -1845,6 +1958,7 @@ impl Service {
                         },
                     };
                 }
+                p.fit_wire_keys();
                 p.validate()?;
                 self.enqueue(JobRequest::Publish {
                     account,
@@ -1868,6 +1982,7 @@ impl Service {
                     | JobState::Retry { .. }
                     | JobState::Cancelled => {
                         job.state = JobState::Queued;
+                        job.dismissed = false;
                         self.db.admit_job(&job)?;
                         self.notify.notify_one();
                         Ok(Reply::Updated)
@@ -1929,6 +2044,7 @@ impl Service {
                 self.pixel_art(id, false).map(Box::new).map(Reply::PixelArt)
             }
             Command::Thumbnail(id) => self.pixel_art(id, true).map(Box::new).map(Reply::PixelArt),
+            Command::CoverPreview(id) => self.cover_preview(id).map(Reply::Picture),
             Command::StoreImage { path, pixel_art } => {
                 let asset = if pixel_art {
                     let lease = self.store.lease("png")?;
@@ -2086,6 +2202,7 @@ impl Service {
             | Command::DeleteRemote { .. }
             | Command::Reconcile(_)
             | Command::AttachPublicationReceipt { .. }
+            | Command::KeepYotoVersion(_)
             | Command::Player { .. }
             | Command::RenameDevice { .. }
             | Command::SaveGroup { .. }
@@ -2102,6 +2219,23 @@ impl Service {
         self.db
             .get(Table::Media, &id.to_string())?
             .ok_or_else(|| Failure::Storage(messages::MEDIA_NOT_FOUND.into()))
+    }
+    /// A cover reduced to at most `COVER_PREVIEW` pixels on its longer side, as PNG.
+    fn cover_preview(&self, id: AssetId) -> Result<Vec<u8>> {
+        const COVER_PREVIEW: u32 = 480;
+        let asset = self.asset(id)?;
+        let lease = self.store.materialize(&asset)?;
+        let image = crate::media::read_image(lease.path())?;
+        let image = if image.width().max(image.height()) > COVER_PREVIEW {
+            image.thumbnail(COVER_PREVIEW, COVER_PREVIEW)
+        } else {
+            image
+        };
+        let mut bytes = std::io::Cursor::new(vec![]);
+        image
+            .write_to(&mut bytes, image::ImageFormat::Png)
+            .map_err(crate::media_error)?;
+        Ok(bytes.into_inner())
     }
     fn pixel_art(&self, id: AssetId, thumbnail: bool) -> Result<PixelArt> {
         let asset = self.asset(id)?;
@@ -2248,6 +2382,7 @@ impl Service {
             attempts: 0,
             created: now(),
             checkpoint: None,
+            dismissed: false,
         };
         self.db.admit_job(&j)?;
         self.notify.notify_one();
@@ -2573,6 +2708,20 @@ impl Service {
         recipe: RecipeId,
         part_title: Option<&str>,
     ) -> Result<()> {
+        // A Yoto icon only works on a card of the account it belongs to.
+        let owner = match &playlist.origin {
+            DraftOrigin::Existing { base } => Some(&base.account),
+            DraftOrigin::New => None,
+        };
+        let media = &match &media.icon {
+            Some(IconReference::Yoto { account, .. }) if owner.is_some_and(|o| o != account) => {
+                MediaItem {
+                    icon: None,
+                    ..media.clone()
+                }
+            }
+            Some(IconReference::Yoto { .. } | IconReference::Local { .. }) | None => media.clone(),
+        };
         let version = self.recipe(recipe)?;
         let ranges = plan_parts(version.trim);
         if ranges.len() == 1 {
@@ -2947,15 +3096,74 @@ fn meaningful(v: &serde_json::Value) -> serde_json::Value {
     v
 }
 fn contains_document(actual: &serde_json::Value, expected: &serde_json::Value) -> bool {
-    match (actual, expected) {
-        (serde_json::Value::Object(a), serde_json::Value::Object(e)) => e
-            .iter()
-            .all(|(k, v)| a.get(k).is_some_and(|a| contains_document(a, v))),
-        (serde_json::Value::Array(a), serde_json::Value::Array(e)) => {
-            a.len() == e.len() && a.iter().zip(e).all(|(a, e)| contains_document(a, e))
+    match document_difference(actual, expected, "") {
+        None => true,
+        Some(difference) => {
+            eprintln!("Yoto document differs from the publication at {difference}");
+            false
         }
-        (a, e) => a == e,
     }
+}
+/// Audio measurements Yoto recomputes from its own transcode: a track sent as 86 s can come
+/// back as 87 s. They describe the audio, not which document was written, so the readback
+/// ignores them; titles, keys, audio references and icons still have to match.
+const MEASURED_BY_YOTO: [&str; 5] = [
+    "duration",
+    "fileSize",
+    "readableFileSize",
+    "format",
+    "channels",
+];
+/// The first place where `actual` lacks or changes something `expected` holds, as a JSON
+/// path with both values. Yoto may add fields and may write a whole number as `87` where
+/// `87.0` was sent, so extra fields and numeric representation are not differences.
+fn document_difference(
+    actual: &serde_json::Value,
+    expected: &serde_json::Value,
+    path: &str,
+) -> Option<String> {
+    use serde_json::Value;
+    match (actual, expected) {
+        (Value::Object(a), Value::Object(e)) => e.iter().find_map(|(k, v)| {
+            if MEASURED_BY_YOTO.contains(&k.as_str()) {
+                return None;
+            }
+            let path = format!("{path}.{k}");
+            match a.get(k) {
+                Some(Value::Null) | None if is_empty(v) => None,
+                Some(a) => document_difference(a, v, &path),
+                None => Some(format!("{path}: missing, expected {}", excerpt(v))),
+            }
+        }),
+        (Value::Array(a), Value::Array(e)) if a.len() != e.len() => {
+            Some(format!("{path}: {} items, expected {}", a.len(), e.len()))
+        }
+        (Value::Array(a), Value::Array(e)) => a
+            .iter()
+            .zip(e)
+            .enumerate()
+            .find_map(|(i, (a, e))| document_difference(a, e, &format!("{path}[{i}]"))),
+        (Value::Number(a), Value::Number(e))
+            if a.as_f64().zip(e.as_f64()).is_some_and(|(a, e)| a == e) =>
+        {
+            None
+        }
+        (a, e) if a == e => None,
+        (a, e) => Some(format!("{path}: {}, expected {}", excerpt(a), excerpt(e))),
+    }
+}
+/// Yoto leaves out fields sent empty, such as an author of `""`.
+fn is_empty(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Null => true,
+        serde_json::Value::String(s) => s.is_empty(),
+        serde_json::Value::Array(a) => a.is_empty(),
+        serde_json::Value::Object(o) => o.values().all(is_empty),
+        serde_json::Value::Bool(_) | serde_json::Value::Number(_) => false,
+    }
+}
+fn excerpt(value: &serde_json::Value) -> String {
+    value.to_string().chars().take(120).collect()
 }
 fn preview_loop(
     receiver: std::sync::mpsc::Receiver<PreviewCommand>,
@@ -3066,6 +3274,23 @@ fn db_account(db: &Database) -> Result<Option<AccountId>> {
 mod tests {
     use super::*;
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    #[test]
+    fn readback_accepts_added_fields_and_whole_numbers_but_reports_changes() {
+        let sent = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"duration": 87.0}]}]}});
+        let echoed = serde_json::json!({"cardId": "c", "content": {"chapters": [{"key": "a", "display": {}, "tracks": [{"duration": 87}]}]}});
+        assert!(contains_document(&echoed, &sent));
+        let sent_empty = serde_json::json!({"metadata": {"author": "", "tags": [], "note": null}});
+        let trimmed = serde_json::json!({"metadata": {"category": "music"}});
+        assert!(contains_document(&trimmed, &sent_empty));
+        let transcoded = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"duration": 88}]}]}});
+        assert!(contains_document(&transcoded, &sent));
+        let sent = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"trackUrl": "yoto:#a"}]}]}});
+        let changed = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"trackUrl": "yoto:#b"}]}]}});
+        assert_eq!(
+            document_difference(&changed, &sent, "").as_deref(),
+            Some(".content.chapters[0].tracks[0].trackUrl: \"yoto:#b\", expected \"yoto:#a\"")
+        );
+    }
     pub(super) fn streaming() -> Playlist {
         let mut p = Playlist::new("Publication test".into()).unwrap();
         p.chapters.push(Chapter {

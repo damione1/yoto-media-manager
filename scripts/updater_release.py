@@ -4,32 +4,38 @@
 The dedicated private key is accepted only from the process environment and
 written to a private temporary file, never printed or retained in artifacts.
 """
-import argparse, base64, json, os, pathlib, re, shutil, subprocess, tarfile, tempfile, tomllib, zipfile
+import argparse, base64, json, os, pathlib, subprocess, sys, tarfile, tempfile, zipfile
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from distribution_utils import app_version
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPOSITORY = 'damione1/yoto-media-manager'
+# Application and archive name; installed clients also accept the former 'Yoto' name.
+APP_NAME = 'YotoMediaManager'
 PLATFORMS = {'aarch64-apple-darwin': ('darwin-aarch64', 'tar.gz'), 'x86_64-apple-darwin': ('darwin-x86_64', 'tar.gz'), 'x86_64-pc-windows-msvc': ('windows-x86_64', 'zip')}
 def version():
-    return tomllib.loads((ROOT / 'Cargo.toml').read_text())['workspace']['package']['version']
+    current = app_version()
+    if current is None: raise SystemExit('Update archives require YOTO_APP_VERSION from the release tag')
+    return current
 def build(target):
     platform, extension = PLATFORMS[target]
     current = version()
     output = ROOT / 'dist' / target
     output.mkdir(parents=True, exist_ok=True)
-    archive = output / f'Yoto-{current}-{platform}.{extension}'
+    archive = output / f'{APP_NAME}-{current}-{platform}.{extension}'
     if extension == 'tar.gz':
-        application = output / 'Yoto.app'
-        if not application.is_dir(): raise SystemExit('Missing signed, notarized Yoto.app')
+        application = output / f'{APP_NAME}.app'
+        if not application.is_dir(): raise SystemExit(f'Missing signed, notarized {APP_NAME}.app')
         with tarfile.open(archive, 'w:gz', dereference=False) as writer:
-            writer.add(application, arcname='Yoto.app')
+            writer.add(application, arcname=application.name)
     else:
         with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as writer:
             binaries = ROOT / 'target' / target / 'release'
             for name in ['yoto-desktop.exe', 'yoto-mcp.exe']:
-                writer.write(binaries / name, 'Yoto/' + name)
+                writer.write(binaries / name, f'{APP_NAME}/{name}')
             tools = ROOT / 'tools' / target
             for path in sorted(tools.rglob('*')):
-                if path.is_file(): writer.write(path, 'Yoto/tools/' + path.relative_to(tools).as_posix())
-            writer.write(ROOT / 'distribution' / 'THIRD-PARTY-NOTICES.md', 'Yoto/THIRD-PARTY-NOTICES.md')
+                if path.is_file(): writer.write(path, f'{APP_NAME}/tools/' + path.relative_to(tools).as_posix())
+            writer.write(ROOT / 'distribution' / 'THIRD-PARTY-NOTICES.md', f'{APP_NAME}/THIRD-PARTY-NOTICES.md')
     private_b64 = os.environ.get('YOTO_UPDATER_PRIVATE_KEY')
     if not private_b64: raise SystemExit('Missing required secret: YOTO_UPDATER_PRIVATE_KEY')
     signature = archive.with_name(archive.name + '.minisig')
@@ -47,7 +53,7 @@ def assemble(folder):
     for platform, extension in PLATFORMS.values():
         metadata = json.loads((folder / (platform + '.json')).read_text())
         if metadata.pop('version') != current or metadata.pop('platform') != platform: raise SystemExit('Mismatched release metadata')
-        filename = f'Yoto-{current}-{platform}.{extension}'
+        filename = f'{APP_NAME}-{current}-{platform}.{extension}'
         archive = folder / filename
         if metadata['url'] != f'https://github.com/{REPOSITORY}/releases/download/v{current}/{filename}' or metadata['size'] != archive.stat().st_size: raise SystemExit('Mismatched release artifact')
         signature = archive.with_name(archive.name + '.minisig')

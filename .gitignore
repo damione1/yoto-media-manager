@@ -9,15 +9,9 @@
 __pycache__/
 *.pyc
 
-docs-site/node_modules/
-docs-site/build/
-docs-site/.docusaurus/
-docs-site/static/img/
-
 # Local architecture, engineering notes and validation evidence.
 /docs/*.md
 /docs/validation/
-/docs-site/README.md
 
 # Local secrets for builds (see .env.example).
 .env

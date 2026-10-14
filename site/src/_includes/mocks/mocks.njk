@@ -1,0 +1,205 @@
+{% from "icons.njk" import icon, pixel, play, dots, logo %}
+{#
+  The app screens on the landing page are not screenshots. They are HTML and
+  CSS modelled on the app's Pastel design (the Médiathèque, Imports, trim
+  dialog and playlist editor boards), and js/mocks.js plays the app's own
+  steps through them. Each one renders its finished state without script,
+  so the page reads the same with JavaScript off or reduced motion on.
+
+  Everything inside a .mock is decorative (aria-hidden); the figure around
+  it carries a caption and a text description of what the scene shows.
+#}
+
+{# Window chrome + the app's sidebar. `active` names the highlighted entry. #}
+{% macro side(t, active, libCount = "24") %}
+<div class="m-side">
+  <div class="m-brand">{{ logo(30) }}<div><b>{{ t.mock.brand }}</b><small>{{ t.mock.tagline }}</small></div></div>
+  <ul class="m-nav">
+    {%- for n in [
+      { key: "library", label: t.mock.navLibrary, fam: "peach", count: libCount },
+      { key: "playlists", label: t.mock.navPlaylists, fam: "lilac", count: "6" },
+      { key: "imports", label: t.mock.navImports, fam: "butter", count: "" },
+      { key: "players", label: t.mock.navPlayers, fam: "sky", count: "" },
+      { key: "account", label: t.mock.navAccount, fam: "mint", count: "" }
+    ] %}
+    <li class="m-nav-item f-{{ n.fam }}{% if n.key == active %} is-active{% endif %}" data-nav="{{ n.key }}">
+      <span class="m-nav-ic">{{ icon(n.key, 15, 2.3) }}</span>
+      <span class="m-nav-label">{{ n.label }}</span>
+      {%- if n.count %}<span class="m-count" data-count>{{ n.count }}</span>{% endif %}
+    </li>
+    {%- endfor %}
+  </ul>
+  <div class="m-acct f-mint">
+    <span class="m-avatar">C</span>
+    <span class="m-acct-text"><b>{{ t.mock.account }}</b><small><i></i>{{ t.mock.connected }}</small></span>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro chrome() %}
+<div class="m-bar"><i></i><i></i><i></i></div>
+{% endmacro %}
+
+{% macro cursor() %}
+<svg class="m-cursor" data-cursor width="22" height="22" viewBox="0 0 24 24"><path d="M5 3l13 8.5-6 1.2 3.6 6.8-2.6 1.4-3.6-6.9L5 18z" fill="#23323A" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+{% endmacro %}
+
+{% macro libRow(title, meta, fam, px, tagLabel, tagFam, cls = "") %}
+<div class="m-row{% if cls %} {{ cls }}{% endif %}">
+  <span class="m-check"></span>
+  <span class="tile f-{{ fam }} m-thumb">{{ pixel(px, 20) }}</span>
+  <span class="m-row-text"><b>{{ title }}</b><small>{{ meta }}</small></span>
+  <span class="m-tag f-{{ tagFam }}">{{ tagLabel }}</span>
+  <span class="m-round f-peach">{{ play(13) }}</span>
+</div>
+{% endmacro %}
+
+{# ── 1 · Import: paste a link → download → prepare → in the library ── #}
+{% macro importScene(t) %}
+<div class="mock" data-mock="import" aria-hidden="true">
+  {{ chrome() }}
+  <div class="m-app">
+    {{ side(t, "library", "25") }}
+    <div class="m-main">
+      <div class="m-view m-view-imports">
+        <div class="m-head"><div><h3>{{ t.mock.importTitle }}</h3><small>{{ t.mock.importSub }}</small></div></div>
+        <div class="m-card m-yt">
+          <div class="m-yt-label"><span class="tile f-peach m-yt-ic">{{ icon("link", 15) }}</span>{{ t.mock.ytLabel }}</div>
+          <div class="m-yt-row">
+            <span class="m-field is-focus"><span class="m-typed" data-typed data-text="{{ t.mock.ytUrl }}">{{ t.mock.ytUrl }}</span><span class="m-caret"></span></span>
+            <span class="m-btn m-btn-primary" data-import-btn>{{ t.mock.importBtn }}</span>
+          </div>
+          <small class="m-hint">{{ t.mock.ytHint }}</small>
+        </div>
+        <div class="m-activity" data-activity>
+          <div class="m-act-top">
+            <span class="m-spin f-butter"></span>
+            <span class="m-ok f-mint">{{ icon("check", 12, 3.6) }}</span>
+            <b>{{ t.mock.newSong.title }}</b>
+            <span class="m-btn m-btn-soft f-mint m-act-listen">{{ t.mock.listen }}</span>
+          </div>
+          <small class="m-act-line" data-act-line data-downloading="{{ t.mock.downloading }}" data-preparing="{{ t.mock.preparing }}" data-ready="{{ t.mock.ready }}">{{ t.mock.ready }}</small>
+          <span class="m-progress f-butter"><i data-progress></i></span>
+        </div>
+      </div>
+      <div class="m-view m-view-library">
+        <div class="m-head"><div><h3>{{ t.mock.libraryTitle }}</h3><small data-lib-meta data-before="{{ t.mock.libraryMeta | fill({ n: 24 }) }}" data-after="{{ t.mock.libraryMeta | fill({ n: 25 }) }}">{{ t.mock.libraryMeta | fill({ n: 25 }) }}</small></div>
+          <span class="m-btn m-btn-primary m-hide-xs">{{ icon("plus", 14, 2.8) }}{{ t.mock.addFile }}</span></div>
+        <div class="m-rows">
+          {{ libRow(t.mock.newSong.title, t.mock.newSong.meta, "mint", "heart", t.mock.original, "cream", "is-new") }}
+          {%- for r in t.mock.library %}
+          {{ libRow(r.title, r.meta, r.family, r.pixel, t.mock[r.tag], "sky" if r.tag == "trimmed" else "cream") }}
+          {%- endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {{ cursor() }}
+</div>
+{% endmacro %}
+
+{# ── 2 · Trim: handles move in, the selection plays, Apply ── #}
+{% macro trimScene(t, bars) %}
+<div class="mock mock-dim" data-mock="trim" aria-hidden="true">
+  {{ chrome() }}
+  <div class="m-app m-ghost">
+    <div class="m-side m-side-ghost"></div>
+    <div class="m-main"><i></i><i></i><i></i><i></i></div>
+  </div>
+  <div class="m-dialog">
+    <div class="m-dlg-head">
+      <span class="tile f-sky m-dlg-ic">{{ icon("scissors", 20, 2.3) }}</span>
+      <div><h3>{{ t.mock.trimTitle }}</h3><small>{{ t.mock.trimSub }}</small></div>
+      <span class="m-round m-close">{{ icon("close", 13, 2.8) }}</span>
+    </div>
+    <div class="m-wave" data-wave>
+      <span class="m-wave-in">
+        {%- for b in bars %}<i class="{{ b.cls }} l{{ b.level }}"></i>{% endfor %}
+        <span class="m-sel"></span>
+        <span class="m-handle m-handle-a"></span>
+        <span class="m-handle m-handle-b"></span>
+        <span class="m-playhead"></span>
+      </span>
+    </div>
+    <div class="m-times">
+      <span class="m-time"><small>{{ t.mock.start }}</small><b data-start>0:16</b></span>
+      <span class="m-time"><small>{{ t.mock.end }}</small><b data-end>1:39</b></span>
+      <span class="m-time m-kept"><small>{{ t.mock.kept }}</small><b data-kept>1 min 23</b></span>
+      <span class="m-btn m-btn-mint" data-listen data-listen-label="{{ t.mock.listenSel }}" data-stop-label="{{ t.mock.stop }}">{{ play(13) }}<span data-label>{{ t.mock.listenSel }}</span></span>
+    </div>
+    <div class="m-toggle-row"><span><b>{{ t.mock.level }}</b><small>{{ t.mock.levelHint }}</small></span><span class="m-switch is-on"></span></div>
+    <div class="m-dlg-foot">
+      <span class="m-note"><span class="tile f-mint m-shield">{{ icon("shield", 12, 3) }}</span><span class="m-note-text" data-note data-idle="{{ t.mock.keptNote }}" data-busy="{{ t.mock.preparingTrim }}" data-done="{{ t.mock.trimDone }}">{{ t.mock.keptNote }}</span></span>
+      <span class="m-btn m-btn-ghost m-hide-xs">{{ t.mock.cancel }}</span>
+      <span class="m-btn m-btn-primary" data-apply>{{ t.mock.apply }}</span>
+    </div>
+  </div>
+  {{ cursor() }}
+</div>
+{% endmacro %}
+
+{# ── 3 · Playlist: a song lands, gets its icon, saved on Yoto ── #}
+{% macro trackRow(n, title, meta, fam, px, stateLabel, stateFam, cls = "") %}
+<div class="m-track{% if cls %} {{ cls }}{% endif %}">
+  <svg class="m-grip" width="9" height="14" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.6"/><circle cx="8" cy="2" r="1.6"/><circle cx="2" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="2" cy="14" r="1.6"/><circle cx="8" cy="14" r="1.6"/></svg>
+  <span class="m-num">{{ n }}</span>
+  <span class="tile f-{{ fam }} m-thumb">{{ pixel(px, 20) }}</span>
+  <span class="m-row-text"><b>{{ title }}</b><small>{{ meta }}</small></span>
+  <span class="m-tag f-{{ stateFam }}">{{ stateLabel }}</span>
+  <span class="m-dots m-hide-xs">{{ dots(14) }}</span>
+</div>
+{% endmacro %}
+
+{% macro playlistScene(t) %}
+{% set fams = ["lilac", "butter", "peach", "mint", "sky", "lilac", "butter", "peach", "mint", "sky", "peach", "lilac"] %}
+{% set pxs = ["moon", "star", "heart", "tree", "note", "sun", "heart", "moon", "star", "note", "tree", "sun"] %}
+<div class="mock" data-mock="playlist" aria-hidden="true">
+  {{ chrome() }}
+  <div class="m-app">
+    {{ side(t, "playlists") }}
+    <div class="m-main">
+      <div class="m-pl-head">
+        <span class="tile f-lilac m-cover">{{ pixel("moon", 44) }}</span>
+        <div class="m-pl-title">
+          <div class="m-tags">
+            <span class="m-tag f-lilac m-hide-xs">{{ t.mock.music }}</span>
+            <span class="m-tag f-mint m-status" data-status data-saving="{{ t.mock.saving }}" data-saved="{{ t.mock.saved }}"><span class="m-status-ic">{{ icon("check", 11, 3.4) }}</span><span class="m-mini-spin"></span><span data-label>{{ t.mock.saved }}</span></span>
+          </div>
+          <h3>{{ t.mock.playlistTitle }}</h3>
+          <small data-pl-meta data-before="{{ t.mock.playlistMetaBefore }}" data-after="{{ t.mock.playlistMetaAfter }}">{{ t.mock.playlistMetaAfter }}</small>
+        </div>
+        <span class="m-btn m-btn-primary m-hide-sm">{{ icon("plus", 14, 2.8) }}{{ t.mock.addMedia }}</span>
+      </div>
+      <div class="m-tracks">
+        {%- for r in t.mock.tracks %}
+        {{ trackRow(loop.index, r.title, r.meta, r.family, r.pixel, t.mock.onYoto, "mint") }}
+        {%- endfor %}
+        <div class="m-slot" data-slot><div class="m-slot-in">
+          <div class="m-track is-new">
+            <svg class="m-grip" width="9" height="14" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.6"/><circle cx="8" cy="2" r="1.6"/><circle cx="2" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="2" cy="14" r="1.6"/><circle cx="8" cy="14" r="1.6"/></svg>
+            <span class="m-num">4</span>
+            <span class="tile f-lilac m-thumb m-swap" data-track-icon>{{ pixel("star", 20, "is-before") }}{{ pixel("moon", 20, "is-after") }}</span>
+            <span class="m-row-text"><b>{{ t.mock.incoming.title }}</b><small>{{ t.mock.incoming.meta }}</small></span>
+            <span class="m-tag f-mint" data-state data-sending="{{ t.mock.sending }}" data-done="{{ t.mock.onYoto }}">{{ t.mock.onYoto }}</span>
+            <span class="m-dots m-hide-xs">{{ dots(14) }}</span>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="m-drag" data-drag>
+    <span class="tile f-cream m-thumb">{{ pixel("star", 20) }}</span>
+    <span class="m-row-text"><b>{{ t.mock.incoming.title }}</b><small>{{ t.mock.incoming.meta }}</small></span>
+  </div>
+  <div class="m-pop" data-pop>
+    <div class="m-pop-head"><b>{{ t.mock.chooseIcon }}</b><span class="m-seg"><span class="is-on">{{ t.mock.iconsYoto }}</span><span>{{ t.mock.iconsMine }}</span></span></div>
+    <div class="m-icons">
+      {%- for i in range(0, 12) %}
+      <span class="m-icon f-{{ fams[i] }}{% if i == 0 %} is-picked{% endif %}" data-icon="{{ i }}">{{ pixel(pxs[i], 20) }}</span>
+      {%- endfor %}
+    </div>
+    <div class="m-pop-foot"><span class="m-btn m-btn-primary m-btn-xs" data-use>{{ t.mock.useIcon }}</span></div>
+  </div>
+  {{ cursor() }}
+</div>
+{% endmacro %}

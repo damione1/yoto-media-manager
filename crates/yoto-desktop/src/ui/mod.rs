@@ -27,6 +27,8 @@ use wording::{confirm_destructive, duration_text};
 use yoto_domain::*;
 use yoto_infra::{Command, Reply, Session as Service, Snapshot};
 pub struct AppView {
+    /// The window itself, focused when a click lands outside the text field being edited.
+    focus_handle: FocusHandle,
     updater: Entity<update::UpdatePanel>,
     pub service: Arc<Service>,
     pub runtime: Arc<tokio::runtime::Runtime>,
@@ -47,6 +49,13 @@ pub struct AppView {
     pub library_rows: Vec<usize>,
     playlist_media_choices: Arc<editor::MediaChoices>,
     playlist_icon_choices: Arc<pixelart::IconChoices>,
+    /// Pixels of local media icons, read once and shared by every view of the library.
+    pub icon_previews: BTreeMap<AssetId, PixelArt>,
+    icon_requests: std::collections::BTreeSet<AssetId>,
+    /// Playlist covers kept on this computer, decoded once for every view that shows them.
+    /// `None` marks a cover that could not be read, so it is not asked again.
+    pub cover_previews: BTreeMap<AssetId, Option<Arc<Image>>>,
+    cover_requests: std::collections::BTreeSet<AssetId>,
     pub playlist_rows: Arc<Vec<editor::PlaylistRow>>,
     pub selected_playlist: Option<PlaylistId>,
     pub opening_playlist: Option<(AccountId, CardId)>,
@@ -181,6 +190,7 @@ impl AppView {
         let settings = yoto_infra::settings::Settings::load(service.profile());
         subscriptions.push(cx.observe(&updater, |_, _, cx| cx.notify()));
         let mut view = Self {
+            focus_handle: cx.focus_handle(),
             updater,
             service,
             runtime,
@@ -201,6 +211,10 @@ impl AppView {
             library_rows,
             playlist_media_choices,
             playlist_icon_choices,
+            icon_previews: BTreeMap::new(),
+            icon_requests: Default::default(),
+            cover_previews: BTreeMap::new(),
+            cover_requests: Default::default(),
             playlist_rows,
             selected_playlist: None,
             opening_playlist: None,
@@ -232,6 +246,7 @@ impl AppView {
             quitting: false,
         };
         view.refresh_playlists(cx);
+        view.load_media_icons(cx);
         if view.advanced {
             view.youtube_tool(yoto_infra::youtube_tool::YoutubeToolAction::State, cx);
         }
@@ -282,6 +297,7 @@ impl AppView {
         self.snapshot = snapshot;
         self.revisions = revisions;
         self.search_index = index;
+        self.load_media_icons(cx);
         if let Some(id) = self.selected_playlist
             && !self.editors.contains_key(&id)
             && self
@@ -423,6 +439,7 @@ impl AppView {
         let rt = self.runtime.clone();
         let window = cx.windows().first().copied();
         let connecting = matches!(&command, Command::Connect);
+        let reconciling = matches!(&command, Command::Reconcile(_));
         if connecting {
             self.connecting = true;
         }
@@ -539,6 +556,17 @@ impl AppView {
                                 );
                                 return;
                             }
+                            Err(Failure::Ambiguous) if reconciling => {
+                                // Already on the activity list: say what Yoto shows instead
+                                // of pointing back to where the parent already is.
+                                view.report_error(
+                                    Failure::Validation(
+                                        tr!("Yoto ne montre pas exactement cet envoi. Si la playlist vous convient dans l’application Yoto, choisissez « Garder la version de Yoto » dans « Vérifier la publication ».").into(),
+                                    ),
+                                    cx,
+                                );
+                                return;
+                            }
                             Err(error) => {
                                 view.report_error(error, cx);
                                 return;
@@ -552,6 +580,7 @@ impl AppView {
                             | Reply::Prepared(_)
                             | Reply::Asset(_)
                             | Reply::PixelArt(_)
+                            | Reply::Picture(_)
                             | Reply::Image(_)
                             | Reply::Images(_) => {}
                             Reply::OpenedPlaylist(id) => {
@@ -751,6 +780,30 @@ impl AppView {
         })
         .detach();
     }
+    /// A click outside the text field being edited ends the editing, as on a web page:
+    /// the window takes the focus, so the field's blur runs (and with it the playlist
+    /// autosave). This runs after the clicked element: a click in another field has
+    /// already focused it, and a click in the edited field itself keeps it.
+    fn blur_input_outside(
+        &mut self,
+        event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use gpui_kit::component::{WindowExt, input::AnyInputState};
+        let Some(input) = window.focused_input(cx) else {
+            return;
+        };
+        let bounds = match &input {
+            AnyInputState::Input(state) => Some(state.read(cx).input_bounds()),
+            AnyInputState::Textarea(state) => Some(state.read(cx).input_bounds()),
+            AnyInputState::Editor(state) => Some(state.read(cx).input_bounds()),
+            AnyInputState::Otp(_) => None,
+        };
+        if bounds.is_some_and(|bounds| !bounds.contains(&event.position)) {
+            window.focus(&self.focus_handle, cx);
+        }
+    }
     pub fn select_media(&mut self, id: MediaId, window: &mut Window, cx: &mut Context<Self>) {
         self.open_media(id, false, window, cx);
     }
@@ -774,9 +827,11 @@ impl AppView {
         if !self.trims.contains_key(&id)
             && let Some(media) = self.snapshot.media.iter().find(|m| m.id == id)
         {
+            let parent = cx.entity().downgrade();
             let panel = cx.new(|cx| {
                 trim::TrimPanel::new(
                     media.clone(),
+                    parent.clone(),
                     self.service.clone(),
                     self.runtime.clone(),
                     window,
@@ -813,10 +868,37 @@ impl AppView {
                 )
             });
             let advanced = self.advanced;
-            editor.update(cx, |e, _| e.advanced = advanced);
+            let snapshot = &self.snapshot;
+            editor.update(cx, |e, _| {
+                e.advanced = advanced;
+                e.restore_failure(snapshot);
+            });
             self.editors.insert(id, editor);
+            if let Some(account) = self.icons_missing(p) {
+                self.send(Command::RefreshIcons(account), cx);
+            }
         }
         cx.notify();
+    }
+    /// The account whose Yoto icon list must be read again to draw this playlist: one of
+    /// its icons is not in the list the app holds, and no reading of it is under way.
+    fn icons_missing(&self, playlist: &Playlist) -> Option<AccountId> {
+        let active = self.snapshot.active_account.as_ref()?;
+        let missing = playlist
+            .chapters
+            .iter()
+            .flat_map(|c| std::iter::once(&c.icon).chain(c.tracks.iter().map(|t| &t.icon)))
+            .any(|icon| match icon {
+                Some(IconReference::Yoto { account, media }) => {
+                    account == active && self.playlist_icon_choices.url(media).is_none()
+                }
+                Some(IconReference::Local { .. }) | None => false,
+            });
+        let reading = matches!(
+            self.snapshot.remote_sync.get(&RemoteCollection::Icons),
+            Some(RemoteSyncState::Syncing)
+        );
+        (missing && !reading).then(|| active.clone())
     }
     /// Write the playlists' pending changes now: the parent is leaving them. A write that
     /// fails is reported in a toast naming the playlist.
@@ -1116,6 +1198,8 @@ impl Render for AppView {
         let nav = sidebar(self, cx);
         div()
             .size_full()
+            .track_focus(&self.focus_handle)
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::blur_input_outside))
             .on_drop(cx.listener(|view, files: &ExternalPaths, _, cx| {
                 view.import_dropped(files.paths(), cx);
             }))
@@ -1133,19 +1217,29 @@ impl Render for AppView {
             )
             .child(
                 div()
-                    .px(px(20.))
-                    .py(px(6.))
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .pl(px(20.))
+                    .pr(px(12.))
+                    .py(px(3.))
                     .border_t_2()
                     .border_color(theme::c(theme::DIVIDER))
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme::c(if self.error.is_some() {
-                        theme::ROSE.ink
-                    } else {
-                        theme::MUTED
-                    }))
-                    .truncate()
-                    .child(self.status.clone()),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme::c(if self.error.is_some() {
+                                theme::ROSE.ink
+                            } else {
+                                theme::MUTED
+                            }))
+                            .truncate()
+                            .child(self.status.clone()),
+                    )
+                    .child(updates_control(self, cx)),
             )
     }
 }
@@ -1392,22 +1486,44 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
         .child(brand)
         .children(items)
         .child(div().flex_1())
-        .child(theme::pill(
-            Button::new("updates-sidebar")
-                .label(view.updater.read(cx).sidebar_label())
-                .on_click(cx.listener(|view, _, window, cx| {
-                    let updater = view.updater.clone();
-                    // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
-                    window.defer(cx, move |window, cx| {
-                        update::UpdatePanel::open(updater, window, cx)
-                    });
-                })),
-            theme::Look::Ghost,
-            theme::Height::Small,
-            false,
-            cx,
-        ))
         .child(account_card)
+}
+
+/// Right end of the status bar: opens the update dialog, with a dot when a new
+/// version is waiting.
+fn updates_control(view: &AppView, cx: &mut Context<AppView>) -> Div {
+    let updater = view.updater.read(cx);
+    let (available, label) = (updater.update_available(), updater.status_label());
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap(px(6.))
+        .children(available.then(|| theme::dot(theme::PEACH.accent)))
+        .child(
+            theme::pill(
+                Button::new("updates-status")
+                    .label(label)
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        let updater = view.updater.clone();
+                        // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
+                        window.defer(cx, move |window, cx| {
+                            update::UpdatePanel::open(updater, window, cx)
+                        });
+                    })),
+                if available {
+                    theme::Look::Link(&theme::PEACH)
+                } else {
+                    theme::Look::Ghost
+                },
+                theme::Height::Tiny,
+                false,
+                cx,
+            )
+            .h(px(24.))
+            .px(px(8.))
+            .text_size(px(13.)),
+        )
 }
 
 /// « Annuler » beside a connect button while the browser sign-in runs: a sign-in that
@@ -1469,9 +1585,15 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         Command::CollectGarbage => (tr!("Nettoyage…"), tr!("Fichiers inutilisés supprimés.")),
         Command::Retry(_) => (tr!("Relance de la tâche…"), tr!("Tâche relancée.")),
         Command::Cancel(_) => (tr!("Annulation…"), tr!("Tâche annulée.")),
-        Command::Resolve { .. }
-        | Command::Reconcile(_)
-        | Command::AttachPublicationReceipt { .. } => (
+        Command::KeepYotoVersion(_) => (
+            tr!("Lecture de la playlist sur Yoto…"),
+            tr!("Version de Yoto gardée : la playlist est à jour."),
+        ),
+        Command::Reconcile(_) => (
+            tr!("Vérification auprès de Yoto…"),
+            tr!("Yoto confirme l’envoi : la playlist est à jour."),
+        ),
+        Command::Resolve { .. } | Command::AttachPublicationReceipt { .. } => (
             tr!("Vérification auprès de Yoto…"),
             tr!("Vérification lancée."),
         ),
@@ -1491,10 +1613,12 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::ReleaseAsset(_)
         | Command::ReadPixelArt(_)
         | Command::Thumbnail(_)
+        | Command::CoverPreview(_)
         | Command::AppUpdate(_)
         | Command::YoutubeTool(_)
         | Command::CancelConnect
-        | Command::JobsPage { .. } => return None,
+        | Command::JobsPage { .. }
+        | Command::DismissJobs(_) => return None,
         Command::InspectYoutube(_)
         | Command::NewPlaylist(_)
         | Command::SavePlaylist { .. }
@@ -1504,6 +1628,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::AddMedia { .. }
         | Command::DeleteRecipe { .. }
         | Command::UpdateMedia { .. }
+        | Command::SetMediaIcon { .. }
         | Command::Prepare { .. }
         | Command::Export { .. }
         | Command::UpdateYotoPlaylist { .. }

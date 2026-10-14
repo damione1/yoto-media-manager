@@ -318,6 +318,52 @@ impl Database {
         self.changed_tables(&[Table::Remote]);
         Ok(())
     }
+    /// Mark finished, failed or cancelled tasks as dismissed from the activity list, all
+    /// or none: a task still in progress is refused. Rows are kept, so publication
+    /// receipts and canonical lookups still see them.
+    pub fn dismiss_jobs(&self, ids: &[JobId]) -> Result<()> {
+        let mut c = self.lock()?;
+        let tx = c.transaction().map_err(storage)?;
+        for id in ids {
+            let json: String = tx
+                .query_row(
+                    "SELECT payload FROM jobs WHERE id=?1",
+                    [id.to_string()],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(storage)?
+                .ok_or_else(|| Failure::Storage(messages::TASK_NOT_FOUND.into()))?;
+            let mut job: Job = decode(&json)?;
+            match job.state {
+                JobState::Completed { .. } | JobState::Failed { .. } | JobState::Cancelled => {}
+                JobState::Queued
+                | JobState::Running { .. }
+                | JobState::Retry { .. }
+                | JobState::WaitingForAuthentication
+                | JobState::Conflict { .. }
+                | JobState::Reconciling => {
+                    return Err(Failure::Validation(messages::TASK_STILL_ACTIVE.into()));
+                }
+            }
+            job.dismissed = true;
+            tx.execute(
+                "UPDATE jobs SET payload=?2 WHERE id=?1",
+                params![
+                    id.to_string(),
+                    serde_json::to_string(&Envelope {
+                        version: 1,
+                        value: job
+                    })
+                    .map_err(storage)?
+                ],
+            )
+            .map_err(storage)?;
+        }
+        tx.commit().map_err(storage)?;
+        self.changed_tables(&[Table::Job]);
+        Ok(())
+    }
     /// Admission and retry use the same durable account/playlist exclusion under one transaction.
     pub fn admit_job(&self, job: &Job) -> Result<()> {
         let mut c = self.lock()?;
@@ -655,6 +701,32 @@ impl Database {
         self.changed();
         Ok(())
     }
+    pub fn update_media_icon(&self, id: MediaId, icon: Option<IconReference>) -> Result<()> {
+        let mut c = self.lock()?;
+        let tx = c.transaction().map_err(storage)?;
+        let json: String = tx
+            .query_row(
+                "SELECT payload FROM media_items WHERE id=?1",
+                [id.to_string()],
+                |r| r.get(0),
+            )
+            .map_err(storage)?;
+        let mut media: MediaItem = decode(&json)?;
+        media.icon = icon;
+        let json = serde_json::to_string(&Envelope {
+            version: 1,
+            value: media,
+        })
+        .map_err(storage)?;
+        tx.execute(
+            "UPDATE media_items SET payload=?2 WHERE id=?1",
+            params![id.to_string(), json],
+        )
+        .map_err(storage)?;
+        tx.commit().map_err(storage)?;
+        self.changed();
+        Ok(())
+    }
     pub fn add_recipe(&self, recipe: &MediaRecipe) -> Result<()> {
         let mut c = self.lock()?;
         let tx = c.transaction().map_err(storage)?;
@@ -893,6 +965,9 @@ impl Database {
         }
         for m in self.list::<MediaItem>(Table::Media)? {
             roots.insert(m.original);
+            if let Some(IconReference::Local { asset }) = m.icon {
+                roots.insert(asset);
+            }
             if let Some(w) = self.get::<AssetId>(Table::Remote, &format!("waveform:{}", m.id))? {
                 roots.insert(w);
             }
@@ -1342,6 +1417,9 @@ fn write_playlist(
     expected: Option<Revision>,
     intent: PlaylistWriteIntent,
 ) -> Result<Revision> {
+    let mut fitted = p.clone();
+    fitted.fit_wire_keys();
+    let p = &fitted;
     Rules::title(&p.title)?;
     if !p.chapters.is_empty() {
         p.validate()?;

@@ -13,7 +13,9 @@ pub const PRODUCT_NAME: &str = "YotoMediaManager";
 pub fn failure_text(failure: &Failure) -> String {
     let known = |message: &str| known_message(message).map(str::to_owned);
     match failure {
-        Failure::Validation(message) => known(message).unwrap_or_else(|| message.clone()),
+        Failure::Validation(message) => known(message)
+            .or_else(|| yoto_rejected_text(message))
+            .unwrap_or_else(|| message.clone()),
         Failure::Media(message) => known(message).unwrap_or_else(|| {
             tr!(
                 "L’audio n’a pas pu être traité. Détail : {message}",
@@ -64,6 +66,19 @@ pub fn failure_text(failure: &Failure) -> String {
             percent,
         } => transcode_text(track, *problem, *percent),
     }
+}
+
+/// A refusal Yoto did not explain in terms the app recognises, with what Yoto answered.
+fn yoto_rejected_text(message: &str) -> Option<String> {
+    let (status, said) = yoto_domain::messages::parse_yoto_rejected(message)?;
+    Some(match said {
+        Some(said) => tr!(
+            "Yoto a refusé la demande (code {status}). Réponse de Yoto : {said}",
+            status = status,
+            said = said
+        ),
+        None => tr!("Yoto a refusé la demande (code {status}).", status = status),
+    })
 }
 
 /// Why Yoto's conversion of a track did not finish, naming the track.
@@ -218,6 +233,10 @@ pub mod autosave {
     /// Tag when the last changes could not be written.
     pub fn unsaved() -> &'static str {
         tr!("Non enregistré")
+    }
+    /// Tag and banner title when the last write to Yoto failed.
+    pub fn send_failed() -> &'static str {
+        tr!("Envoi échoué")
     }
     /// Tag when something needs the parent (uncertain write, newer Yoto version).
     pub fn to_check() -> &'static str {
@@ -685,6 +704,7 @@ fn known_message(message: &str) -> Option<&'static str> {
             tr!("Cette tâche ne peut pas être relancée telle quelle. Ouvrez ses détails.")
         }
         m::TASK_COMPLETED => tr!("Cette tâche est déjà terminée."),
+        m::TASK_STILL_ACTIVE => tr!("Cette tâche est encore en cours. Annulez-la d’abord."),
         m::RESTART_BUSY => {
             tr!(
                 "Terminez les imports, préparations et envois en cours avant d’installer la mise à jour."
@@ -727,6 +747,7 @@ fn known_message(message: &str) -> Option<&'static str> {
             tr!("Cette image ne peut pas servir d’icône.")
         }
         m::ICON_NOT_UPLOADED => tr!("Cette icône n’a pas encore été envoyée à Yoto."),
+        m::ICON_ABSENT => tr!("Cette icône n’est plus disponible. Choisissez-en une autre."),
         m::AUDIO_OUTPUT_SILENT => {
             tr!("La sortie audio ne répond pas. Vérifiez le son de votre ordinateur.")
         }
@@ -774,6 +795,10 @@ fn known_message(message: &str) -> Option<&'static str> {
         }
         m::DUPLICATE_CHAPTER_KEY => tr!("Deux chapitres portent la même clé Yoto."),
         m::DUPLICATE_TRACK_KEY => tr!("Deux pistes portent la même clé Yoto."),
+        m::YOTO_VERSION_UNKNOWN => tr!(
+            "Cet envoi ne dit pas quelle playlist Yoto garder. Ouvrez-la dans « Playlists » pour la recharger depuis Yoto."
+        ),
+        m::WIRE_KEY_LENGTH => tr!("Une clé de chapitre ou de piste est trop longue pour Yoto."),
         m::TRACK_KEY_COLLISION => {
             tr!(
                 "Ces deux pistes portent la même clé Yoto. Déplacez-les dans des chapitres distincts pour conserver leurs références."

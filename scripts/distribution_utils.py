@@ -1,5 +1,19 @@
-"""Deterministic distribution inventory and disposable DMG staging."""
-import hashlib,json,pathlib,shutil,tempfile
+"""Deterministic distribution inventory, disposable DMG staging and the release version."""
+import hashlib,json,os,pathlib,re,shutil,tempfile
+
+# Same rule as crates/yoto-updater/src/version.rs: X.Y.Z, no leading zeros, no suffix.
+RELEASE_VERSION=re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
+NIGHTLY='nightly'
+
+def is_release_version(text):
+    return RELEASE_VERSION.fullmatch(text) is not None
+
+def app_version():
+    """The release version given to this build in YOTO_APP_VERSION, or None for a nightly."""
+    value=os.environ.get('YOTO_APP_VERSION','')
+    if value=='':return None
+    if not is_release_version(value):raise SystemExit('YOTO_APP_VERSION must be a release number such as 1.2.3, got '+repr(value))
+    return value
 
 def manifest(root,target):
     root=pathlib.Path(root)

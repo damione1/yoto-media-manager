@@ -310,14 +310,45 @@ pub fn heading(text: impl Into<SharedString>, size: f32) -> Div {
         .line_height(relative(1.15))
         .child(text.into())
 }
-/// Screen title with its one-line explanation.
+/// Screen title with its one-line explanation. On a narrow window the title ends with
+/// an ellipsis and the explanation wraps, so neither runs under what sits beside them.
 pub fn screen_header(title: impl Into<SharedString>, subtitle: impl Into<SharedString>) -> Div {
     div()
         .flex()
         .flex_col()
         .gap(px(2.))
-        .child(heading(title, 32.).whitespace_nowrap())
-        .child(meta(subtitle).text_size(px(14.)).whitespace_nowrap())
+        .min_w_0()
+        .child(heading(title, 32.).truncate())
+        .child(meta(subtitle).text_size(px(14.)))
+}
+/// Narrowest a screen title is squeezed before its buttons move below it.
+const HEADER_TITLE_MIN: f32 = 240.;
+/// A screen title with its buttons on the right. When the window is too narrow for
+/// both, the buttons wrap together onto a second row instead of covering the title.
+pub fn header_row(title: impl IntoElement, actions: Vec<AnyElement>) -> Div {
+    div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap(px(12.))
+        .child(div().flex_1().min_w(px(HEADER_TITLE_MIN)).child(title))
+        .children((!actions.is_empty()).then(|| {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(8.))
+                .children(actions)
+        }))
+}
+/// A button that closes its dialog, for a row of dialog actions. The kit's close
+/// wrapper fills whatever holds it (`size_full`): dropped straight into a row it
+/// claims the whole width and squeezes its siblings, so it is boxed at the
+/// button's own size.
+pub fn dialog_close(trigger: impl IntoElement) -> impl IntoElement {
+    div()
+        .flex_none()
+        .child(gpui_kit::component::dialog::DialogClose::new().child(trigger))
 }
 /// Secondary information under a title: bold, muted, small.
 pub fn meta(text: impl Into<SharedString>) -> Div {
@@ -501,7 +532,8 @@ pub fn pixel_glyph(glyph: Glyph, color: u32, cell: f32) -> Div {
         },
     )
 }
-/// Thumbnail for something without artwork: a stable pastel tile and pixel glyph.
+/// Decoration for an empty state: a stable pastel tile and pixel glyph. It never stands
+/// for a cover or an icon, which show the real image or an empty slot.
 pub fn thumbnail(seed: &str, size: f32, radius: f32) -> Div {
     let family = family_for(seed);
     div()
@@ -517,6 +549,38 @@ pub fn thumbnail(seed: &str, size: f32, radius: f32) -> Div {
             family.accent,
             (size / 16.).round().max(2.),
         ))
+}
+/// Where a Yoto icon goes but none is chosen: a dashed sand tile, never a decorative
+/// glyph, so nobody takes it for an icon the player will show. `plus` marks a slot that
+/// opens the icon picker.
+pub fn empty_icon_slot(size: f32, radius: f32, plus: bool) -> Div {
+    div()
+        .size(px(size))
+        .flex_shrink_0()
+        .rounded(px(radius))
+        .bg(c(CREAM))
+        .border_2()
+        .border_dashed()
+        .border_color(c(BOX_BORDER))
+        .flex()
+        .items_center()
+        .justify_center()
+        .children(plus.then(|| {
+            gpui_kit::component::Icon::new(IconName::Plus)
+                .size(px((size * 0.4).round()))
+                .text_color(c(MUTED_WARM))
+        }))
+}
+/// The stable pastel tile a chosen Yoto icon is drawn on.
+pub fn icon_frame(seed: &str, size: f32, radius: f32) -> Div {
+    div()
+        .size(px(size))
+        .flex_shrink_0()
+        .rounded(px(radius))
+        .bg(c(family_for(seed).soft))
+        .flex()
+        .items_center()
+        .justify_center()
 }
 
 /// How a pill button is painted.

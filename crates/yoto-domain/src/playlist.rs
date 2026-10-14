@@ -161,12 +161,13 @@ impl Playlist {
         }
         assets
     }
+    /// Add a media version as one chapter holding one track, both with the media's icon.
     pub fn add_media(&mut self, media: &MediaItem, recipe: RecipeId) -> Result<()> {
         let track = Track {
             id: TrackId::new(),
-            key: TrackKey::new(uuid::Uuid::new_v4().simple().to_string())?,
+            key: TrackKey::fresh(),
             title: media.title.clone(),
-            icon: None,
+            icon: media.icon.clone(),
             events: None,
             media: TrackMedia::Local {
                 media: media.id,
@@ -176,9 +177,9 @@ impl Playlist {
         };
         self.chapters.push(Chapter {
             id: ChapterId::new(),
-            key: ChapterKey::new(uuid::Uuid::new_v4().simple().to_string())?,
+            key: ChapterKey::fresh(),
             title: media.title.clone(),
-            icon: None,
+            icon: media.icon.clone(),
             tracks: vec![track],
             extra: Extra::new(),
         });
@@ -186,7 +187,8 @@ impl Playlist {
     }
     /// Add a long audio cut into parts: one chapter titled like the media, holding one
     /// track per part recipe, in order, each titled with [`part_title_with`] from
-    /// `template` ([`PART_TITLE`] when `None`).
+    /// `template` ([`PART_TITLE`] when `None`). The chapter and every part carry the
+    /// media's icon.
     pub fn add_media_parts(
         &mut self,
         media: &MediaItem,
@@ -199,14 +201,14 @@ impl Playlist {
             .map(|(index, recipe)| {
                 Ok(Track {
                     id: TrackId::new(),
-                    key: TrackKey::new(uuid::Uuid::new_v4().simple().to_string())?,
+                    key: TrackKey::fresh(),
                     title: part_title_with(
                         template.unwrap_or(PART_TITLE),
                         &media.title,
                         index + 1,
                         parts.len(),
                     ),
-                    icon: None,
+                    icon: media.icon.clone(),
                     events: None,
                     media: TrackMedia::Local {
                         media: media.id,
@@ -218,13 +220,31 @@ impl Playlist {
             .collect::<Result<Vec<_>>>()?;
         self.chapters.push(Chapter {
             id: ChapterId::new(),
-            key: ChapterKey::new(uuid::Uuid::new_v4().simple().to_string())?,
+            key: ChapterKey::fresh(),
             title: media.title.clone(),
-            icon: None,
+            icon: media.icon.clone(),
             tracks,
             extra: Extra::new(),
         });
         self.touch()
+    }
+    /// Shorten keys that Yoto would reject. Earlier versions gave new chapters and tracks
+    /// 32-character keys; those were never accepted by Yoto, so no remote reference uses them.
+    pub fn fit_wire_keys(&mut self) {
+        for chapter in &mut self.chapters {
+            if chapter.key.as_str().chars().count() > WIRE_KEY_MAX
+                && let Ok(key) = ChapterKey::new(fit_wire_key(chapter.key.as_str()))
+            {
+                chapter.key = key;
+            }
+            for track in &mut chapter.tracks {
+                if track.key.as_str().chars().count() > WIRE_KEY_MAX
+                    && let Ok(key) = TrackKey::new(fit_wire_key(track.key.as_str()))
+                {
+                    track.key = key;
+                }
+            }
+        }
     }
     pub fn validate(&self) -> Result<()> {
         Rules::title(&self.title)?;
@@ -268,6 +288,13 @@ impl Playlist {
         // They are distinct namespaces; local UUID identities remain globally unique.
         let mut chapter_keys = std::collections::HashSet::new();
         for c in &self.chapters {
+            if c.key.as_str().chars().count() > WIRE_KEY_MAX
+                || c.tracks
+                    .iter()
+                    .any(|t| t.key.as_str().chars().count() > WIRE_KEY_MAX)
+            {
+                return Err(Failure::Validation(crate::messages::WIRE_KEY_LENGTH.into()));
+            }
             if !chapter_keys.insert(c.key.as_str()) {
                 return Err(Failure::Validation(
                     crate::messages::DUPLICATE_CHAPTER_KEY.into(),
@@ -297,10 +324,18 @@ impl Playlist {
     pub fn retain_ids_from(&mut self, previous: &Self) {
         self.id = previous.id;
         for chapter in &mut self.chapters {
-            if let Some(old) = previous.chapters.iter().find(|c| c.key == chapter.key) {
+            if let Some(old) = previous
+                .chapters
+                .iter()
+                .find(|c| fit_wire_key(c.key.as_str()) == chapter.key.as_str())
+            {
                 chapter.id = old.id;
                 for track in &mut chapter.tracks {
-                    if let Some(old) = old.tracks.iter().find(|t| t.key == track.key) {
+                    if let Some(old) = old
+                        .tracks
+                        .iter()
+                        .find(|t| fit_wire_key(t.key.as_str()) == track.key.as_str())
+                    {
                         track.id = old.id;
                     }
                 }
@@ -494,7 +529,7 @@ impl Playlist {
         for t in c.tracks {
             chapters.push(Chapter {
                 id: ChapterId::new(),
-                key: ChapterKey::new(uuid::Uuid::new_v4().simple().to_string())?,
+                key: ChapterKey::fresh(),
                 title: t.title.clone(),
                 icon: None,
                 tracks: vec![t],

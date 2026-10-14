@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:14-0400\n"
+"POT-Creation-Date: 2026-10-14 09:45-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -33,6 +33,17 @@ msgstr ""
 "The update could not be installed.\n"
 "\n"
 "{detail}"
+
+#: src/main.rs
+msgid ""
+"L’application n’a pas pu démarrer : certains de ses composants sont "
+"manquants ou abîmés.\n"
+"\n"
+"Réinstallez l’application pour les remettre en place."
+msgstr ""
+"The app could not start: some of its components are missing or damaged.\n"
+"\n"
+"Reinstall the app to put them back."
 
 #: src/main.rs
 #, rust-format
@@ -741,8 +752,20 @@ msgid "Changer l’icône du chapitre"
 msgstr "Change the chapter icon"
 
 #: src/ui/editor.rs
+msgid "Choisir une icône pour la piste"
+msgstr "Choose an icon for the track"
+
+#: src/ui/editor.rs
+msgid "Choisir une icône pour le chapitre"
+msgstr "Choose an icon for the chapter"
+
+#: src/ui/editor.rs src/ui/trim.rs
 msgid "Changer l’icône"
 msgstr "Change the icon"
+
+#: src/ui/editor.rs src/ui/trim.rs
+msgid "Choisir une icône"
+msgstr "Choose an icon"
 
 #: src/ui/editor.rs
 msgid "Options du chapitre"
@@ -776,7 +799,7 @@ msgstr "Track options"
 msgid "Retirer l’icône du chapitre"
 msgstr "Remove the chapter icon"
 
-#: src/ui/editor.rs
+#: src/ui/editor.rs src/ui/trim.rs
 msgid "Retirer l’icône"
 msgstr "Remove the icon"
 
@@ -843,10 +866,6 @@ msgstr ""
 "advanced settings."
 
 #: src/ui/editor.rs
-msgid "Choisir une icône"
-msgstr "Choose an icon"
-
-#: src/ui/editor.rs
 msgid "Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes."
 msgstr "The account or the playlist changed. Open the icon picker again."
 
@@ -871,9 +890,25 @@ msgstr "Deleting on Yoto…"
 msgid "Playlist supprimée sur Yoto."
 msgstr "Playlist deleted on Yoto."
 
+#: src/ui/editor.rs
+msgid "Changer la couverture"
+msgstr "Change the cover"
+
+#: src/ui/editor.rs
+msgid "Choisir une couverture"
+msgstr "Choose a cover"
+
 #: src/ui/editor.rs src/ui/group.rs src/ui/pixelart.rs
 msgid "Image"
 msgstr "Image"
+
+#: src/ui/editor.rs src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
+msgid "Réessayer"
+msgstr "Try again"
+
+#: src/ui/editor.rs
+msgid "Voir les détails"
+msgstr "See details"
 
 #: src/ui/editor.rs
 msgid "Vide"
@@ -885,14 +920,6 @@ msgid "{count} piste · {duration}"
 msgid_plural "{count} pistes · {duration}"
 msgstr[0] "{count} track · {duration}"
 msgstr[1] "{count} tracks · {duration}"
-
-#: src/ui/editor.rs
-msgid "Choisir une couverture"
-msgstr "Choose a cover"
-
-#: src/ui/editor.rs
-msgid "Changer la couverture"
-msgstr "Change the cover"
 
 #: src/ui/editor.rs
 msgid "Plus d’actions"
@@ -1340,6 +1367,14 @@ msgid "Activités"
 msgstr "Activity"
 
 #: src/ui/imports.rs
+msgid "Tout effacer"
+msgstr "Clear all"
+
+#: src/ui/imports.rs
+msgid "Retirer de la liste les activités terminées"
+msgstr "Remove finished activities from the list"
+
+#: src/ui/imports.rs
 msgid "Vos imports apparaîtront ici, avec leur progression."
 msgstr "Your imports will appear here, with their progress."
 
@@ -1363,10 +1398,6 @@ msgstr "Waiting…"
 #, rust-format
 msgid "{phase} · « {title} »"
 msgstr "{phase} · “{title}”"
-
-#: src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
-msgid "Réessayer"
-msgstr "Try again"
 
 #: src/ui/imports.rs
 msgid "Se connecter"
@@ -1409,6 +1440,10 @@ msgstr "Saved on Yoto"
 #: src/ui/imports.rs src/ui/wording.rs
 msgid "Annulé"
 msgstr "Cancelled"
+
+#: src/ui/imports.rs
+msgid "Retirer de la liste"
+msgstr "Remove from list"
 
 #: src/ui/imports.rs
 msgid "Vidéo YouTube"
@@ -1463,6 +1498,19 @@ msgstr ""
 #: src/ui/imports.rs
 msgid "Vérifier auprès de Yoto"
 msgstr "Check with Yoto"
+
+#: src/ui/imports.rs
+msgid ""
+"Vous avez regardé dans l’application Yoto et la playlist vous convient ? "
+"Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour "
+"ici."
+msgstr ""
+"Checked the playlist in the Yoto app and it looks right? Keep it as it is: "
+"nothing is sent again, and the playlist updates here."
+
+#: src/ui/imports.rs
+msgid "Garder la version de Yoto"
+msgstr "Keep Yoto’s version"
 
 #: src/ui/imports.rs
 msgid "La carte existe déjà ?"
@@ -1637,6 +1685,15 @@ msgstr ""
 "finish signing in in your browser, then come back here."
 
 #: src/ui/mod.rs
+msgid ""
+"Yoto ne montre pas exactement cet envoi. Si la playlist vous convient dans "
+"l’application Yoto, choisissez « Garder la version de Yoto » dans « Vérifier "
+"la publication »."
+msgstr ""
+"Yoto does not show exactly this upload. If the playlist looks right in the "
+"Yoto app, choose “Keep Yoto’s version” in “Check the upload”."
+
+#: src/ui/mod.rs
 msgid "Playlist Yoto ouverte."
 msgstr "Yoto playlist opened."
 
@@ -1808,8 +1865,20 @@ msgid "Tâche annulée."
 msgstr "Task cancelled."
 
 #: src/ui/mod.rs
+msgid "Lecture de la playlist sur Yoto…"
+msgstr "Reading the playlist on Yoto…"
+
+#: src/ui/mod.rs
+msgid "Version de Yoto gardée : la playlist est à jour."
+msgstr "Kept Yoto’s version: the playlist is up to date."
+
+#: src/ui/mod.rs
 msgid "Vérification auprès de Yoto…"
 msgstr "Checking with Yoto…"
+
+#: src/ui/mod.rs
+msgid "Yoto confirme l’envoi : la playlist est à jour."
+msgstr "Yoto confirmed the upload: the playlist is up to date."
 
 #: src/ui/mod.rs
 msgid "Vérification lancée."
@@ -1868,8 +1937,28 @@ msgid "Préparation de l’image…"
 msgstr "Preparing the image…"
 
 #: src/ui/pixelart.rs
+msgid "Cet élément n’est plus ouvert. Fermez cette fenêtre et rouvrez-le."
+msgstr "This item is no longer open. Close this window and open it again."
+
+#: src/ui/pixelart.rs
+msgid "Une de vos images"
+msgstr "One of your images"
+
+#: src/ui/pixelart.rs
 msgid "Mes icônes"
 msgstr "My icons"
+
+#: src/ui/pixelart.rs
+msgid "Mes images"
+msgstr "My images"
+
+#: src/ui/pixelart.rs
+msgid ""
+"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez déjà "
+"reprendre une de vos images ou en importer une."
+msgstr ""
+"Connect your Yoto account to choose from its icons. You can already reuse "
+"one of your images or import one."
 
 #: src/ui/pixelart.rs
 msgid "Chargement des icônes…"
@@ -1883,6 +1972,13 @@ msgstr "Could not load: {failure}"
 #: src/ui/pixelart.rs
 msgid "Aucune icône dans cette collection. Vous pouvez importer une image."
 msgstr "No icons in this collection. You can import an image."
+
+#: src/ui/pixelart.rs
+msgid ""
+"Aucune image pour l’instant. Importez-en une : vous pourrez la reprendre "
+"pour d’autres médias."
+msgstr ""
+"No image yet. Import one: you can reuse it for other media."
 
 #: src/ui/pixelart.rs
 msgid ""
@@ -2018,8 +2114,12 @@ msgid "Sélectionnez vos médias et la version à envoyer."
 msgstr "Select your media and the version to send."
 
 #: src/ui/playlist_media_picker.rs
-msgid "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
-msgstr "The audio is sent to Yoto before it appears in your playlist."
+msgid ""
+"L’audio est envoyé à Yoto avant d’apparaître dans votre playlist. Pas "
+"d’icône ? Choisissez-la dans la Médiathèque, ou plus tard dans la playlist."
+msgstr ""
+"The audio is sent to Yoto before it appears in your playlist. No icon? "
+"Choose one in the Library, or later in the playlist."
 
 #: src/ui/playlist_move_picker.rs
 msgid "Déplacer"
@@ -2151,6 +2251,19 @@ msgid "Ce média n’est plus disponible."
 msgstr "This media is no longer available."
 
 #: src/ui/trim.rs
+msgid "Enregistrement de l’icône…"
+msgstr "Saving the icon…"
+
+#: src/ui/trim.rs
+msgid ""
+"Icône enregistrée : elle accompagnera ce média dans vos prochaines playlists."
+msgstr "Icon saved: it will come with this media in your next playlists."
+
+#: src/ui/trim.rs
+msgid "Icône retirée."
+msgstr "Icon removed."
+
+#: src/ui/trim.rs
 #, rust-format
 msgid "Supprimer « {title} » ?"
 msgstr "Delete “{title}”?"
@@ -2203,6 +2316,16 @@ msgstr "Update available"
 #, rust-format
 msgid "Version installée : {version}"
 msgstr "Installed version: {version}"
+
+#: src/ui/update.rs
+msgid ""
+"Version de développement (nightly) : les mises à jour ne sont ni recherchées "
+"ni installées automatiquement. Pour passer à une version publiée, "
+"téléchargez-la depuis GitHub Releases."
+msgstr ""
+"Development build (nightly): updates are neither checked for nor installed "
+"automatically. To switch to a published version, download it from GitHub "
+"Releases."
 
 #: src/ui/update.rs
 #, rust-format
@@ -2316,6 +2439,16 @@ msgstr "This playlist changed on Yoto. Reload it before continuing."
 #: src/ui/wording.rs
 msgid "Opération annulée."
 msgstr "Cancelled."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Yoto a refusé la demande (code {status}). Réponse de Yoto : {said}"
+msgstr "Yoto refused the request (code {status}). Yoto’s answer: {said}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Yoto a refusé la demande (code {status})."
+msgstr "Yoto refused the request (code {status})."
 
 #: src/ui/wording.rs
 #, rust-format
@@ -2539,6 +2672,10 @@ msgstr ""
 #: src/ui/wording.rs
 msgid "Non enregistré"
 msgstr "Not saved"
+
+#: src/ui/wording.rs
+msgid "Envoi échoué"
+msgstr "Upload failed"
 
 #: src/ui/wording.rs
 msgid "À vérifier"
@@ -3170,6 +3307,10 @@ msgid "Cette tâche est déjà terminée."
 msgstr "This task is already finished."
 
 #: src/ui/wording.rs
+msgid "Cette tâche est encore en cours. Annulez-la d’abord."
+msgstr "This task is still in progress. Cancel it first."
+
+#: src/ui/wording.rs
 msgid ""
 "Terminez les imports, préparations et envois en cours avant d’installer la "
 "mise à jour."
@@ -3246,6 +3387,10 @@ msgstr "This image cannot be used as an icon."
 #: src/ui/wording.rs
 msgid "Cette icône n’a pas encore été envoyée à Yoto."
 msgstr "This icon has not been sent to Yoto yet."
+
+#: src/ui/wording.rs
+msgid "Cette icône n’est plus disponible. Choisissez-en une autre."
+msgstr "This icon is no longer available. Choose another one."
 
 #: src/ui/wording.rs
 msgid "La sortie audio ne répond pas. Vérifiez le son de votre ordinateur."
@@ -3331,6 +3476,18 @@ msgstr "Two chapters have the same Yoto key."
 #: src/ui/wording.rs
 msgid "Deux pistes portent la même clé Yoto."
 msgstr "Two tracks have the same Yoto key."
+
+#: src/ui/wording.rs
+msgid ""
+"Cet envoi ne dit pas quelle playlist Yoto garder. Ouvrez-la dans "
+"« Playlists » pour la recharger depuis Yoto."
+msgstr ""
+"This upload does not say which Yoto playlist to keep. Open it in Playlists "
+"to reload it from Yoto."
+
+#: src/ui/wording.rs
+msgid "Une clé de chapitre ou de piste est trop longue pour Yoto."
+msgstr "A chapter or track key is too long for Yoto."
 
 #: src/ui/wording.rs
 msgid ""

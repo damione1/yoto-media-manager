@@ -1,0 +1,17 @@
+---
+permalink: 404.html
+layout: layouts/base.njk
+is404: true
+eleventyExcludeFromCollections: true
+---
+{% from "icons.njk" import pixel %}
+<section class="wrap notfound">
+  <span class="tile f-lilac tile-xl">{{ pixel("star", 56) }}</span>
+  <h1 class="h1">{{ t.notFound.title }}</h1>
+  <p class="lede" lang="en">{{ en.notFound.text }}</p>
+  <p class="lede" lang="fr">{{ fr.notFound.text }}</p>
+  <p class="actions">
+    <a class="btn btn-primary" href="/">{{ en.notFound.home }}</a>
+    <a class="btn btn-ghost" href="/fr/" lang="fr">{{ fr.notFound.home }}</a>
+  </p>
+</section>

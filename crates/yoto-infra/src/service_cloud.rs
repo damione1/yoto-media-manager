@@ -6,6 +6,7 @@ impl Service {
         mut draft: Playlist,
         intent: CloudPlaylistWrite,
     ) -> Result<Reply> {
+        draft.fit_wire_keys();
         draft.validate_remote_write()?;
         draft.revision = match intent {
             CloudPlaylistWrite::Create => Revision(1),
@@ -22,6 +23,7 @@ impl Service {
             attempts: 0,
             created: now(),
             checkpoint: None,
+            dismissed: false,
         };
         self.db.admit_cloud_job(&job, &intent)?;
         self.notify.notify_one();

@@ -42,6 +42,8 @@ enum SyncState {
     Unsaved,
     /// What is shown is what Yoto has.
     OnYoto,
+    /// The last write to Yoto failed; what is shown is still what Yoto has.
+    Failed,
 }
 impl SyncState {
     /// A running save wins over anything to check, which wins over changes left unsaved,
@@ -62,7 +64,8 @@ impl SyncState {
             Self::Sending => text::track_sending(),
             Self::ToCheck => text::to_check(),
             Self::Unsaved => text::unsaved(),
-            Self::OnYoto => text::track_on_yoto(),
+            // A failed write leaves the tracks as Yoto holds them.
+            Self::OnYoto | Self::Failed => text::track_on_yoto(),
         }
     }
     fn playlist_label(self) -> &'static str {
@@ -70,12 +73,13 @@ impl SyncState {
             Self::Sending => text::saving(),
             Self::ToCheck | Self::Unsaved => self.track_label(),
             Self::OnYoto => text::saved(),
+            Self::Failed => text::send_failed(),
         }
     }
     fn family(self) -> &'static theme::Family {
         match self {
             Self::Sending => &theme::BUTTER,
-            Self::ToCheck | Self::Unsaved => &theme::ROSE,
+            Self::ToCheck | Self::Unsaved | Self::Failed => &theme::ROSE,
             Self::OnYoto => &theme::MINT,
         }
     }
@@ -163,6 +167,8 @@ pub struct PlaylistEditor {
     queued_media: Option<Vec<(MediaId, RecipeId)>>,
     /// Why the last changes could not be written, until a later write succeeds.
     unsaved: Option<String>,
+    /// The publication job that failed last, which « Réessayer » sends again.
+    failed_job: Option<(JobId, CommitTarget)>,
     /// Tell the parent in a toast when the next write fails (they are leaving the playlist).
     report_failures: bool,
     /// Yoto's icon list to refresh once a new icon is written.
@@ -170,6 +176,8 @@ pub struct PlaylistEditor {
     /// The playlist is being deleted on Yoto.
     deleting: bool,
     picker_window: Option<AnyWindowHandle>,
+    /// Why the icon chosen in the open icon picker was refused, shown inside the picker.
+    icon_error: Option<String>,
     _subscriptions: Vec<Subscription>,
     options_open: bool,
     advanced_open: bool,
@@ -318,10 +326,12 @@ impl PlaylistEditor {
             sent: None,
             queued_media: None,
             unsaved: None,
+            failed_job: None,
             report_failures: false,
             refresh_icons: None,
             deleting: false,
             picker_window: None,
+            icon_error: None,
             _subscriptions: vec![],
             options_open: false,
             advanced_open: false,
@@ -814,6 +824,10 @@ impl PlaylistEditor {
             Some(PlaylistOperation::Failed(_)) | None => false,
         }
     }
+    /// Why the icon chosen in the open icon picker was refused.
+    pub(super) fn icon_error(&self) -> Option<&str> {
+        self.icon_error.as_deref()
+    }
     /// Media are being added: the media picker waits for them.
     pub(super) fn busy(&self) -> bool {
         let adding = match &self.operation {
@@ -921,6 +935,7 @@ impl PlaylistEditor {
         cx: &mut Context<Self>,
     ) {
         self.operation = Some(PlaylistOperation::Submitting { target });
+        self.failed_job = None;
         self.sent = Some(sent);
         self.save_updates.begin();
         if target != CommitTarget::Editor {
@@ -1019,7 +1034,11 @@ impl PlaylistEditor {
                 Failure::Compatibility(tr!("Résultat de playlist inattendu.").into()),
                 cx,
             ),
-            JobState::Failed { failure } => self.fail_operation(failure.clone(), cx),
+            JobState::Failed { failure } => {
+                let failure = failure.clone();
+                self.fail_operation(failure, cx);
+                self.failed_job = Some((job.id, target));
+            }
             JobState::Cancelled => self.fail_operation(Failure::Cancelled, cx),
             state @ (JobState::Queued
             | JobState::Running { .. }
@@ -1202,24 +1221,23 @@ impl PlaylistEditor {
                 })
         });
     }
-    /// The 48 px tile showing a track or chapter icon, or a stable pastel glyph without one.
+    /// The 48 px tile showing a track or chapter icon, or an empty slot without one: what
+    /// the player will show, never a decoration it will not.
     fn icon_tile(&self, icon: &Option<IconReference>, seed: &str, cx: &App) -> Div {
-        let family = theme::family_for(seed);
-        let tile = div()
-            .size(px(48.))
-            .flex_shrink_0()
-            .rounded(px(14.))
-            .bg(theme::c(family.soft))
-            .flex()
-            .items_center()
-            .justify_center();
-        match self.preview_icon(icon, cx) {
-            Some(icon) => tile.child(icon),
-            None => tile.child(theme::pixel_glyph(
-                theme::Glyph::for_seed(seed),
-                family.accent,
-                3.,
-            )),
+        match (icon, self.parent.upgrade()) {
+            (Some(icon), Some(parent)) => {
+                let parent = parent.read(cx);
+                // A media's icon arrives with the media: the library has already read it.
+                let previews = match icon {
+                    IconReference::Local { asset } if !self.icon_previews.contains_key(asset) => {
+                        &parent.icon_previews
+                    }
+                    IconReference::Local { .. } | IconReference::Yoto { .. } => &self.icon_previews,
+                };
+                theme::icon_frame(seed, 48., 14.)
+                    .child(pixelart::icon_image(icon, previews, parent, 32., cx))
+            }
+            (Some(_), None) | (None, _) => theme::empty_icon_slot(48., 14., true),
         }
     }
     /// Round icon button opening the icon picker for a chapter or one of its tracks.
@@ -1242,12 +1260,17 @@ impl PlaylistEditor {
             .rounded(ButtonRounded::Size(px(14.)))
             .size(px(48.))
             .p(px(0.))
-            .accessibility_label(if track.is_some() {
-                tr!("Changer l’icône de la piste")
-            } else {
-                tr!("Changer l’icône du chapitre")
+            .accessibility_label(match (track.is_some(), icon.is_some()) {
+                (true, true) => tr!("Changer l’icône de la piste"),
+                (false, true) => tr!("Changer l’icône du chapitre"),
+                (true, false) => tr!("Choisir une icône pour la piste"),
+                (false, false) => tr!("Choisir une icône pour le chapitre"),
             })
-            .tooltip(tr!("Changer l’icône"))
+            .tooltip(if icon.is_some() {
+                tr!("Changer l’icône")
+            } else {
+                tr!("Choisir une icône")
+            })
             .child(self.icon_tile(icon, seed, cx))
             .on_click(
                 cx.listener(move |v, _, window, cx| v.open_icon_picker(chapter, track, window, cx)),
@@ -1561,7 +1584,10 @@ impl PlaylistEditor {
                                 )
                                 .child(theme::meta(meta).pl(px(8.))),
                         )
-                        .child(theme::tag(state.track_label(), state.family()))
+                        .child({
+                            let state = self.track_sync(&track.media, snapshot, state);
+                            theme::tag(state.track_label(), state.family())
+                        })
                         .children(playable.map(|(recipe, media)| {
                             let playing = self.previewing == Some(recipe);
                             theme::round(
@@ -1746,9 +1772,19 @@ impl PlaylistEditor {
         };
         let editor = cx.entity();
         let picker = cx.new(|cx| {
-            pixelart::IconPicker::new(editor.clone(), parent, account.clone(), chapter, track, cx)
+            pixelart::IconPicker::new(
+                pixelart::IconTarget::Playlist {
+                    editor: editor.downgrade(),
+                    chapter,
+                    track,
+                },
+                parent,
+                Some(account.clone()),
+                cx,
+            )
         });
         self.picker_window = Some(window.window_handle());
+        self.icon_error = None;
         let weak = editor.downgrade();
         window.open_dialog(cx, move |dialog, _, _| {
             let cancel = picker.downgrade();
@@ -1765,6 +1801,7 @@ impl PlaylistEditor {
                 .on_close(move |_, _, cx| {
                     let _ = close.update(cx, |v, cx| {
                         v.picker_window = None;
+                        v.icon_error = None;
                         cx.notify();
                     });
                 })
@@ -1785,8 +1822,14 @@ impl PlaylistEditor {
                 .owning_remote(cx)
                 .is_ok_and(|(owner, _)| &owner == account)
         {
-            self.status =
+            let refused: String =
                 tr!("Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes.").into();
+            // With the picker open, the parent reads why there rather than behind it.
+            if self.picker_window.is_some() {
+                self.icon_error = Some(refused);
+            } else {
+                self.status = refused;
+            }
             if let IconReference::Local { asset } = icon {
                 self.send(Command::ReleaseAsset(asset), cx);
             }
@@ -1797,6 +1840,7 @@ impl PlaylistEditor {
             self.cache_icon(*asset, cx);
         }
         self.assign_icon(chapter, track, Some(icon));
+        self.icon_error = None;
         self.refresh_icons = Some(account.clone());
         self.close_picker(cx);
         self.changed(Change::Discrete, cx);
@@ -2000,43 +2044,6 @@ impl PlaylistEditor {
             });
         }));
     }
-    fn preview_icon(&self, icon: &Option<IconReference>, cx: &App) -> Option<AnyElement> {
-        match icon {
-            Some(IconReference::Local { asset }) => self
-                .icon_previews
-                .get(asset)
-                .map(|art| pixelart::thumbnail(art, 2., cx)),
-            Some(IconReference::Yoto { account, media }) => {
-                self.parent.upgrade().and_then(|parent| {
-                    let parent = parent.read(cx);
-                    if parent.snapshot.active_account.as_ref() != Some(account) {
-                        return None;
-                    }
-                    parent
-                        .playlist_icon_choices
-                        .url(media)
-                        .map(|url| {
-                            img(url.clone())
-                                .w(px(32.))
-                                .h(px(32.))
-                                .object_fit(ObjectFit::Contain)
-                                .into_any_element()
-                        })
-                        .or_else(|| {
-                            Some(
-                                div()
-                                    .w(px(32.))
-                                    .h(px(32.))
-                                    .text_sm()
-                                    .child("◇")
-                                    .into_any_element(),
-                            )
-                        })
-                })
-            }
-            None => None,
-        }
-    }
     pub(super) fn assign_icon(
         &mut self,
         chapter: ChapterId,
@@ -2068,6 +2075,48 @@ impl PlaylistEditor {
                 }
             }
         }
+    }
+    /// The playlist's real cover, or an empty slot inviting the parent to choose one;
+    /// either way a click opens the cover choice.
+    fn cover_button(&self, blocked: bool, cx: &mut Context<Self>) -> Button {
+        use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
+        let asset = self.draft.metadata.cover;
+        let url = pixelart::cover_url(self.draft.metadata.extra.get("cover"));
+        let label = if asset.is_some() || url.is_some() {
+            tr!("Changer la couverture")
+        } else {
+            tr!("Choisir une couverture")
+        };
+        let picture = match self.parent.upgrade() {
+            Some(parent) => {
+                if let Some(asset) = asset
+                    && !parent.read(cx).cover_previews.contains_key(&asset)
+                {
+                    let reader = parent.downgrade();
+                    cx.defer(move |cx| {
+                        let _ =
+                            reader.update(cx, |parent, cx| parent.load_cover_preview(asset, cx));
+                    });
+                }
+                pixelart::playlist_cover(asset, url, parent.read(cx), 120., 26., true)
+            }
+            None => theme::empty_icon_slot(120., 26., true).into_any_element(),
+        };
+        Button::new("cover")
+            .custom(
+                ButtonCustomVariant::new(cx)
+                    .color(theme::c(theme::SURFACE).opacity(0.))
+                    .hover(theme::c(theme::CREAM))
+                    .active(theme::c(theme::SAND)),
+            )
+            .rounded(ButtonRounded::Size(px(26.)))
+            .size(px(120.))
+            .p(px(0.))
+            .accessibility_label(label)
+            .tooltip(label)
+            .disabled(blocked)
+            .child(picture)
+            .on_click(cx.listener(|v, _, _, cx| v.cover(cx)))
     }
     fn cover(&mut self, cx: &mut Context<Self>) {
         let service = self.service.clone();
@@ -2146,10 +2195,144 @@ impl PlaylistEditor {
     /// The state in the tag by the title: changes waiting for their write count as sending.
     fn sync_state(&self) -> SyncState {
         let waiting = (self.autosave.has_pending() || self.queued_media.is_some()) && !self.held();
-        SyncState::of(
+        let state = SyncState::of(
             self.write_running() || waiting,
             self.blocked() || self.external.is_some() || self.deleted,
             self.unsaved.is_some(),
+        );
+        if matches!(state, SyncState::OnYoto | SyncState::Unsaved) && self.send_failure().is_some()
+        {
+            SyncState::Failed
+        } else {
+            state
+        }
+    }
+    /// Why the last write to Yoto failed, while nothing newer was written. Uncertain or
+    /// conflicting writes have their own panel, and a cancelled one is no failure.
+    fn send_failure(&self) -> Option<&Failure> {
+        match &self.operation {
+            Some(PlaylistOperation::Failed(failure)) => match failure {
+                Failure::Ambiguous | Failure::Conflict | Failure::Cancelled => None,
+                Failure::Validation(_)
+                | Failure::Storage(_)
+                | Failure::Media(_)
+                | Failure::Connection
+                | Failure::Authentication
+                | Failure::Permission(_)
+                | Failure::RateLimit { .. }
+                | Failure::Compatibility(_)
+                | Failure::Tool(_)
+                | Failure::Transcode { .. } => Some(failure),
+            },
+            Some(PlaylistOperation::Submitting { .. } | PlaylistOperation::Pending { .. })
+            | None => None,
+        }
+    }
+    /// On opening: show the failure of this playlist's latest publication, if it failed,
+    /// so it does not only appear in « Imports ».
+    pub fn restore_failure(&mut self, snapshot: &Snapshot) {
+        let DraftOrigin::Existing { base } = &self.base.origin else {
+            return;
+        };
+        let latest = snapshot
+            .jobs
+            .iter()
+            .filter(|job| match &job.request {
+                JobRequest::Publish {
+                    account,
+                    snapshot: draft,
+                } => account == &base.account && draft.id == self.base.id,
+                JobRequest::Import { .. } | JobRequest::Encode { .. } => false,
+            })
+            .max_by_key(|job| publication_job_key(job));
+        if let Some(job) = latest
+            && let JobState::Failed { failure } = &job.state
+            && !matches!(
+                failure,
+                Failure::Ambiguous | Failure::Conflict | Failure::Cancelled
+            )
+        {
+            self.operation = Some(PlaylistOperation::Failed(failure.clone()));
+            self.failed_job = Some((job.id, CommitTarget::Editor));
+        }
+    }
+    /// Send the failed publication again, as it was prepared.
+    fn retry_failed(&mut self, cx: &mut Context<Self>) {
+        let Some((job, target)) = self.failed_job.take() else {
+            return;
+        };
+        self.operation = Some(PlaylistOperation::Submitting { target });
+        self.status = text::writing().into();
+        self.notify_parent(cx);
+        cx.notify();
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        self.tasks.push(cx.spawn(async move |weak, cx| {
+            let result = rt
+                .spawn(async move { service.execute(Command::Retry(job)).await })
+                .await;
+            let _ = weak.update(cx, |v, cx| {
+                match joined(result) {
+                    Ok(_) => {
+                        v.operation = Some(PlaylistOperation::Pending {
+                            job,
+                            state: JobState::Queued,
+                            target,
+                        });
+                        v.status = text::writing_and_checking().into();
+                    }
+                    Err(e) => v.fail_operation(e, cx),
+                }
+                if let Some(parent) = v.parent.upgrade() {
+                    let snapshot = parent.read(cx).snapshot.clone();
+                    v.apply_snapshot(&snapshot, cx);
+                }
+                cx.notify();
+            });
+        }));
+    }
+    /// Under the header when the last write failed: why, and what to do next.
+    fn failure_banner(&self, cx: &mut Context<Self>) -> Option<Div> {
+        use theme::{Height, Look};
+        let failure = self.send_failure()?;
+        let parent = self.parent.clone();
+        let mut actions = div().flex().gap(px(8.)).items_center();
+        if self.failed_job.is_some() {
+            actions = actions.child(theme::pill(
+                Button::new("retry-failed-publication")
+                    .label(tr!("Réessayer"))
+                    .on_click(cx.listener(|v, _, _, cx| v.retry_failed(cx))),
+                Look::Primary,
+                Height::Small,
+                false,
+                cx,
+            ));
+        }
+        actions = actions.child(theme::pill(
+            Button::new("failed-publication-details")
+                .label(tr!("Voir les détails"))
+                .on_click(move |_, _, cx| {
+                    let _ = parent.update(cx, |p, cx| p.navigate(Route::Imports, cx));
+                }),
+            Look::Link(&theme::ROSE),
+            Height::Small,
+            false,
+            cx,
+        ));
+        Some(
+            theme::inset()
+                .bg(theme::c(theme::ROSE.soft))
+                .flex()
+                .flex_col()
+                .gap(px(10.))
+                .child(
+                    div()
+                        .text_color(theme::c(theme::ROSE.ink))
+                        .font_weight(FontWeight::BOLD)
+                        .child(text::send_failed()),
+                )
+                .child(div().child(failure_text(failure)))
+                .child(actions),
         )
     }
     /// The state on every track: only an actual write to Yoto shows there, not typing.
@@ -2160,8 +2343,27 @@ impl PlaylistEditor {
             false,
         )
     }
+    /// One track's tag. A write sends only the audio Yoto does not hold yet: a track
+    /// already on Yoto, or whose audio was sent before to this account, stays « on Yoto »
+    /// while the playlist itself is being written.
+    fn track_sync(&self, media: &TrackMedia, snapshot: &Snapshot, state: SyncState) -> SyncState {
+        if state != SyncState::Sending {
+            return state;
+        }
+        let account = match &self.base.origin {
+            DraftOrigin::Existing { base } => Some(&base.account),
+            DraftOrigin::New => None,
+        };
+        let held = match media {
+            TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => true,
+            TrackMedia::Local { recipe, .. } => snapshot
+                .mappings
+                .iter()
+                .any(|m| m.recipe == *recipe && Some(&m.account) == account),
+        };
+        if held { SyncState::OnYoto } else { state }
+    }
     fn header(&self, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
-        use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
         use theme::{Height, Look};
         let tracks = self
             .draft
@@ -2195,8 +2397,6 @@ impl PlaylistEditor {
         // Duplicating copies what Yoto holds and deleting must not race a write.
         let writing = self.autosave.in_flight() || self.autosave.has_pending();
         let state = self.sync_state();
-        let seed = self.base.id.to_string();
-        let cover_family = theme::family_for(&seed);
         let creating = self
             .parent
             .upgrade()
@@ -2204,30 +2404,7 @@ impl PlaylistEditor {
         let owner = cx.entity().downgrade();
         let duplicate = owner.clone();
         let remove = owner.clone();
-        let cover = Button::new("cover")
-            .custom(
-                ButtonCustomVariant::new(cx)
-                    .color(theme::c(cover_family.soft))
-                    .hover(theme::c(cover_family.soft))
-                    .active(theme::c(cover_family.step)),
-            )
-            .bg(theme::c(cover_family.soft))
-            .rounded(ButtonRounded::Size(px(26.)))
-            .size(px(120.))
-            .shadow(theme::step(cover_family.step, 3.))
-            .accessibility_label(tr!("Choisir une couverture"))
-            .tooltip(if self.draft.metadata.cover.is_some() {
-                tr!("Changer la couverture")
-            } else {
-                tr!("Choisir une couverture")
-            })
-            .disabled(blocked)
-            .child(theme::pixel_glyph(
-                theme::Glyph::for_seed(&seed),
-                cover_family.accent,
-                7.,
-            ))
-            .on_click(cx.listener(|v, _, _, cx| v.cover(cx)));
+        let cover = self.cover_button(blocked, cx);
         let mut tags = div().flex().gap(px(6.));
         if self.draft.metadata.category != Category::None {
             tags = tags.child(theme::tag(
@@ -2236,15 +2413,18 @@ impl PlaylistEditor {
             ));
         }
         tags = tags.child(theme::tag(state.playlist_label(), state.family()));
+        // On a narrow window the actions move under the title rather than squeezing it.
         div()
             .flex()
-            .gap(px(20.))
+            .flex_wrap()
+            .gap_x(px(20.))
+            .gap_y(px(12.))
             .items_end()
             .child(cover)
             .child(
                 div()
                     .flex_1()
-                    .min_w_0()
+                    .min_w(px(220.))
                     .flex()
                     .flex_col()
                     .gap(px(6.))
@@ -2570,7 +2750,7 @@ impl PlaylistEditor {
             let track = Track {
                 events: None,
                 id: TrackId::new(),
-                key: TrackKey::new(uuid_string()).expect("uuid"),
+                key: TrackKey::fresh(),
                 title: tr!("Streaming").into(),
                 icon: None,
                 media: TrackMedia::Stream {
@@ -2581,7 +2761,7 @@ impl PlaylistEditor {
             };
             p.chapters.push(Chapter {
                 id: ChapterId::new(),
-                key: ChapterKey::new(uuid_string()).expect("uuid"),
+                key: ChapterKey::fresh(),
                 title: tr!("Streaming").into(),
                 icon: None,
                 tracks: vec![track],
@@ -2634,6 +2814,9 @@ impl Render for PlaylistEditor {
             .flex_col()
             .gap(px(18.))
             .child(self.header(&snapshot, cx));
+        let banner = self.failure_banner(cx);
+        let banner_shown = banner.is_some();
+        body = body.children(banner);
         if self.blocked() {
             let mut pending = theme::inset().child(
                 div()
@@ -2694,7 +2877,10 @@ impl Render for PlaylistEditor {
                                     .child(format!("{}", index + 1)),
                             )
                             .child(theme::heading(track.title.clone(), 17.).flex_1().truncate())
-                            .child(theme::tag(state.track_label(), state.family())),
+                            .child({
+                                let state = self.track_sync(&track.media, &snapshot, state);
+                                theme::tag(state.track_label(), state.family())
+                            }),
                     );
                 }
             }
@@ -2771,7 +2957,10 @@ impl Render for PlaylistEditor {
                     ),
             )
             .children(
-                (!self.status.is_empty() && self.external.is_none() && !self.deleted)
+                (!self.status.is_empty()
+                    && self.external.is_none()
+                    && !self.deleted
+                    && !banner_shown)
                     .then(|| theme::note(self.status.clone())),
             );
         body.into_any_element()
@@ -2794,9 +2983,6 @@ impl Drop for PlaylistEditor {
             });
         }
     }
-}
-fn uuid_string() -> String {
-    TrackId::new().to_string().replace('-', "")
 }
 impl PlaylistEditor {
     fn refresh_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2831,6 +3017,10 @@ pub struct PlaylistRow {
     pub state: PlaylistSyncState,
     /// Track count read from the remote card, when its document has one.
     pub tracks: Option<usize>,
+    /// The cover chosen on this computer for the playlist, if any.
+    pub cover_asset: Option<AssetId>,
+    /// The cover Yoto shows for the card, if any.
+    pub cover: Option<SharedString>,
 }
 /// Build the catalog once on the snapshot worker, never while rendering/scrolling.
 fn publication_job_key(job: &Job) -> (u64, Revision, u8) {
@@ -2910,6 +3100,14 @@ pub fn playlist_rows(snapshot: &Snapshot) -> Vec<PlaylistRow> {
                             .map(Vec::len)
                             .sum()
                     }),
+                cover_asset: playlist.and_then(|id| {
+                    snapshot
+                        .playlists
+                        .iter()
+                        .find(|p| p.id == *id)
+                        .and_then(|p| p.metadata.cover)
+                }),
+                cover: pixelart::cover_url(card.document.pointer("/metadata/cover")),
             }
         })
         .collect::<Vec<_>>();
@@ -3049,6 +3247,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
                     range
                         .map(|index| {
+                            if let Some(asset) = view.playlist_rows[index].cover_asset {
+                                view.load_cover_preview(asset, cx);
+                            }
                             let row = &view.playlist_rows[index];
                             let target = row.target.clone();
                             let key = format!("{}:{}", target.account, target.card);
@@ -3097,7 +3298,14 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                         .flex()
                                         .items_center()
                                         .gap(px(12.))
-                                        .child(theme::thumbnail(&key, 44., 12.))
+                                        .child(pixelart::playlist_cover(
+                                            row.cover_asset,
+                                            row.cover.clone(),
+                                            view,
+                                            44.,
+                                            12.,
+                                            false,
+                                        ))
                                         .child(
                                             div()
                                                 .flex_1()

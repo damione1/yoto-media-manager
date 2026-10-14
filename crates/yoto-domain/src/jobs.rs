@@ -89,6 +89,10 @@ pub struct Job {
     pub attempts: u32,
     pub created: u64,
     pub checkpoint: Option<JobPhase>,
+    /// Removed from the activity list by the user. The task stays recorded, so a
+    /// publication keeps its history; only finished, failed or cancelled tasks are dismissed.
+    #[serde(default)]
+    pub dismissed: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PublicationMapping {

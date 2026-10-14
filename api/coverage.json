@@ -318,7 +318,7 @@
     "ui": "Éditeur → Publier / tâches",
     "mcp": "yoto_execute Command schema",
     "status": "mock-tested",
-    "evidence_or_gate": "SHA256 base64url query tested, null uploadUrl skips PUT; exact server hash encoding still needs an authorized live fixture."
+    "evidence_or_gate": "Lowercase hexadecimal SHA256 query tested, as Yoto's upload documentation computes it; null uploadUrl skips PUT."
   },
   {
     "method": "post",

@@ -133,6 +133,43 @@ fn opus_preview_uses_exact_transient_pcm_and_validates_cancel_and_duration() {
     drop(lease);
     assert!(!path.exists());
 }
+#[test]
+fn whole_webm_opus_preview_accepts_the_shorter_decoded_tail() {
+    // WebM announces a millisecond-rounded duration that counts Opus pre-skip and padding,
+    // so the decoded audio ends a few milliseconds early, as with YouTube downloads.
+    let root = tempfile::tempdir().unwrap();
+    let tools = tools();
+    let input = root.path().join("fixture.webm");
+    let mut generate = crate::media::command(&tools.ffmpeg);
+    generate
+        .args([
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=6.01",
+            "-ac",
+            "2",
+            "-c:a",
+            "libopus",
+            "-y",
+        ])
+        .arg(&input);
+    assert!(
+        crate::process::output(generate, 100_000, std::time::Duration::from_secs(30))
+            .unwrap()
+            .status
+            .success()
+    );
+    let source = tools.probe(&input).unwrap();
+    let whole = TrimRange::new(MediaTime::ZERO, source.duration, source.duration).unwrap();
+    let store = AssetStore::new(root.path().join("catalogue"), [80; 32]).unwrap();
+    let lease = store.lease("wav").unwrap();
+    let decoded = tools.preview(&input, lease.path(), whole).unwrap();
+    assert!(decoded.duration <= source.duration);
+    assert!(source.duration.seconds() - decoded.duration.seconds() < 0.1);
+}
 #[tokio::test]
 async fn device_contract_requires_online_and_preserves_unmanaged_settings() {
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
@@ -363,6 +400,7 @@ fn commit_recovery_never_requeues_post() {
         attempts: 1,
         created: 1,
         checkpoint: Some(JobPhase::Committing),
+        dismissed: false,
     };
     service.db.put(Table::Job, &j.id.to_string(), &j).unwrap();
     j.id = JobId::new();
@@ -415,6 +453,27 @@ fn rich_card_preserves_extensions_and_removes_icons() {
     assert_eq!(channels, AudioChannels::Stereo);
 }
 #[tokio::test]
+async fn upload_reservation_sends_the_digest_as_lowercase_hexadecimal() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    let digest = "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08";
+    Mock::given(method("GET"))
+        .and(path("/media/transcode/audio/uploadUrl"))
+        .and(query_param("sha256", digest.to_lowercase()))
+        .and(query_param("filename", "Chanson"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"upload":{"uploadId":"upload1","uploadUrl":"https://storage.test/put"}}),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let reservation = api.reserve("API-TOKEN", digest, "Chanson").await.unwrap();
+    assert_eq!(reservation.url.as_deref(), Some("https://storage.test/put"));
+    assert!(api.reserve("API-TOKEN", "abcd", "Chanson").await.is_err());
+}
+#[tokio::test]
 async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
     let server = MockServer::start().await;
@@ -423,7 +482,7 @@ async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
     Mock::given(method("GET"))
         .and(path("/media/transcode/audio/uploadUrl"))
         .and(header("authorization", "Bearer API-TOKEN"))
-        .and(query_param("sha256", base64url_zero()))
+        .and(query_param("sha256", "0".repeat(64)))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(
                 serde_json::json!({"upload":{"uploadId":"upload1","uploadUrl":null}}),
@@ -539,10 +598,19 @@ fn yoto_limit_refusals_become_plain_messages() {
             "Playlist total size is larger than 500 MB",
             Some(messages::YOTO_PLAYLIST_TOO_LARGE),
         ),
+        // Naming a limit without its value, or mentioning sizes, maxima and numbers in an
+        // unrelated way, does not say which limit was broken.
+        ("Track exceeds the maximum duration and file size", None),
         (
-            "Track exceeds the maximum duration and file size",
-            Some(messages::TRACK_EXCEEDS_LIMITS),
+            r#"{"error":{"code":"bad-request","message":"\"sha256\" must be a valid hash"}}"#,
+            None,
         ),
+        ("Invalid file: size limit check failed for upload 100", None),
+        ("Request body exceeds the limit of 1100 MB", None),
+        ("Rate limit: max 100 requests per minute", None),
+        ("filename length must be at most 100 characters", None),
+        ("Track title exceeds maximum length", None),
+        ("Card exceeds 100 tracks and 500 MB", None),
         ("Invalid cardId", None),
         ("title is required", None),
         ("", None),
@@ -572,6 +640,72 @@ async fn a_refused_card_names_the_limit_it_broke() {
         .await
         .unwrap_err();
     assert!(matches!(failure, Failure::Validation(m) if m == messages::YOTO_PLAYLIST_TOO_LONG));
+}
+#[tokio::test]
+async fn an_unexplained_refusal_keeps_what_yoto_said() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("GET"))
+        .and(path("/media/transcode/audio/uploadUrl"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error":{"code":"bad-request","message":"Invalid upload: max file size check failed, see https://storage.test/x?X-Amz-Signature=secret"}
+        })))
+        .mount(&server)
+        .await;
+    let failure = api
+        .reserve("API-TOKEN", &"ab".repeat(32), "Chanson")
+        .await
+        .unwrap_err();
+    let Failure::Validation(message) = failure else {
+        panic!("{failure:?}")
+    };
+    assert_eq!(
+        messages::parse_yoto_rejected(&message),
+        Some((
+            400,
+            Some("Invalid upload: max file size check failed, see https://storage.test/x?…")
+        ))
+    );
+    assert!(!message.contains("secret"));
+}
+#[test]
+fn refusal_excerpts_are_bounded_and_plain() {
+    use crate::api::response_excerpt as excerpt;
+    assert_eq!(excerpt(""), None);
+    assert_eq!(excerpt("  plain\n text "), Some("plain text".into()));
+    assert_eq!(
+        excerpt(r#"{"message":"Bad title"}"#),
+        Some("Bad title".into())
+    );
+    let long = excerpt(&"x ".repeat(400)).unwrap();
+    assert_eq!(long.chars().count(), 300);
+    assert!(long.ends_with('…'));
+    assert_eq!(
+        messages::parse_yoto_rejected(&messages::yoto_rejected(422, None)),
+        Some((422, None))
+    );
+}
+#[test]
+fn players_are_shown_under_their_given_name() {
+    use crate::api::device_name;
+    let device = |value: serde_json::Value| -> yoto_api_generated::models::DeviceInfo {
+        serde_json::from_value(value).unwrap()
+    };
+    let base = |name: &str| serde_json::json!({"deviceId":"t2iumaiU2bEmyQJ4JSXZQZPh","name":name,"online":true,"description":"late.smoke"});
+    assert_eq!(
+        device_name(&device(base("Chambre  de Léa"))),
+        "Chambre de Léa"
+    );
+    assert_eq!(device_name(&device(base(""))), "t2iumaiU2bEmyQJ4JSXZQZPh");
+    assert_eq!(
+        device_name(&device(base("t2iumaiU2bEmyQJ4JSXZQZPh"))),
+        "t2iumaiU2bEmyQJ4JSXZQZPh"
+    );
+    let mut named = base("t2iumaiU2bEmyQJ4JSXZQZPh");
+    named["displayName"] = serde_json::json!("Salon");
+    assert_eq!(device_name(&device(named)), "Salon");
 }
 #[test]
 fn retry_after_accepts_seconds_and_dates_within_bounds() {
@@ -618,10 +752,6 @@ fn upload_time_grows_with_the_file_within_bounds() {
     assert_eq!(upload_timeout(40_000_000), Duration::from_secs(800));
     assert_eq!(upload_timeout(100_000_000), Duration::from_secs(2000));
     assert_eq!(upload_timeout(u64::MAX), Duration::from_secs(45 * 60));
-}
-fn base64url_zero() -> String {
-    use base64::Engine;
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([0; 32])
 }
 #[test]
 fn mcp_redacts_capabilities() {
@@ -674,6 +804,7 @@ pub(crate) fn catalogue_fixture(
             name: "fixture.mp3".into(),
         },
         recipes: vec![],
+        icon: None,
     };
     service
         .db
@@ -819,6 +950,7 @@ async fn ten_thousand_catalogue_rows_page_across_bounded_ipc_and_aliases_share_o
                 name: "fixture.mp3".into(),
             },
             recipes: vec![],
+            icon: None,
         };
         service
             .db
@@ -837,6 +969,7 @@ async fn ten_thousand_catalogue_rows_page_across_bounded_ipc_and_aliases_share_o
             attempts: 1,
             created: 0,
             checkpoint: None,
+            dismissed: false,
         };
         service
             .db
@@ -997,6 +1130,7 @@ fn migration_failure_keeps_v1_and_recoverable_encrypted_snapshot() {
             name: "original.mp3".into(),
         },
         recipes: vec![RecipeId::new()],
+        icon: None,
     };
     let recipe = MediaRecipe {
         id: media.recipes[0],
@@ -1318,4 +1452,243 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
         .unwrap();
     assert!(service.playlist(playlist.id).unwrap().chapters.is_empty());
     assert!(first.iter().all(|id| service.recipe(*id).is_err()));
+}
+#[tokio::test]
+async fn finished_tasks_leave_the_activity_list_but_stay_recorded() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [5; 32]).unwrap();
+    let job = |state| Job {
+        id: JobId::new(),
+        request: JobRequest::Import {
+            selection: ImportSelection::LocalFile {
+                path: "missing.mp3".into(),
+            },
+        },
+        state,
+        attempts: 1,
+        created: 0,
+        checkpoint: None,
+        dismissed: false,
+    };
+    let failed = job(JobState::Failed {
+        failure: Failure::Connection,
+    });
+    let running = job(JobState::Running {
+        phase: JobPhase::Acquiring,
+    });
+    for j in [&failed, &running] {
+        service.db.put(Table::Job, &j.id.to_string(), j).unwrap();
+    }
+    let stored = |id: JobId| {
+        service
+            .db
+            .get::<Job>(Table::Job, &id.to_string())
+            .unwrap()
+            .unwrap()
+    };
+    // A task still in progress is refused, and the whole request with it.
+    assert!(matches!(
+        service
+            .execute(Command::DismissJobs(vec![failed.id, running.id]))
+            .await,
+        Err(Failure::Validation(_))
+    ));
+    assert!(!stored(failed.id).dismissed);
+    assert!(!stored(running.id).dismissed);
+    service
+        .execute(Command::DismissJobs(vec![failed.id]))
+        .await
+        .unwrap();
+    assert!(stored(failed.id).dismissed);
+    assert_eq!(service.db.jobs_page(0, 200).unwrap().len(), 2);
+    // Trying it again brings it back to the list.
+    service.execute(Command::Retry(failed.id)).await.unwrap();
+    assert!(!stored(failed.id).dismissed);
+}
+#[tokio::test]
+async fn a_media_icon_survives_garbage_collection_and_reaches_new_chapters() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [13; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"encrypted source fixture").unwrap();
+    let audio = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &audio.id.to_string(), &audio)
+        .unwrap();
+    let (media, recipe) = catalogue_fixture(&service, audio.id, "Berceuse");
+    let Reply::Asset(icon) = service
+        .execute(Command::SavePixelArt(Box::new(PixelArt::blank())))
+        .await
+        .unwrap()
+    else {
+        panic!("saving pixel art returns its asset");
+    };
+    service
+        .execute(Command::SetMediaIcon {
+            media: media.id,
+            icon: Some(IconReference::Local { asset: icon }),
+        })
+        .await
+        .unwrap();
+    // The picker's short lease is gone: only the media keeps the icon now.
+    service
+        .db
+        .put(
+            Table::Remote,
+            &format!("draft-asset:{icon}"),
+            &DraftAssetLease {
+                asset: icon,
+                account: None,
+                expires: 0,
+            },
+        )
+        .unwrap();
+    service.execute(Command::CollectGarbage).await.unwrap();
+    assert!(service.asset(icon).is_ok());
+    let playlist = Playlist::new("Dodo".into()).unwrap();
+    service.db.save_playlist(&playlist).unwrap();
+    service
+        .execute(Command::AddMedia {
+            playlist: playlist.id,
+            media: vec![(media.id, recipe.id)],
+            part_title: None,
+        })
+        .await
+        .unwrap();
+    let chapter = &service.playlist(playlist.id).unwrap().chapters[0];
+    for reference in std::iter::once(&chapter.icon).chain(chapter.tracks.iter().map(|t| &t.icon)) {
+        assert!(matches!(reference, Some(IconReference::Local { asset }) if *asset == icon));
+    }
+    // An icon missing from the library is refused rather than stored.
+    assert!(
+        service
+            .execute(Command::SetMediaIcon {
+                media: media.id,
+                icon: Some(IconReference::Local {
+                    asset: AssetId::new()
+                }),
+            })
+            .await
+            .is_err()
+    );
+    // Removing it from the media leaves the playlist's copy, which still roots the image.
+    service
+        .execute(Command::SetMediaIcon {
+            media: media.id,
+            icon: None,
+        })
+        .await
+        .unwrap();
+    service.execute(Command::CollectGarbage).await.unwrap();
+    assert!(service.asset(icon).is_ok());
+    service
+        .execute(Command::DeletePlaylist(playlist.id))
+        .await
+        .unwrap();
+    service.execute(Command::CollectGarbage).await.unwrap();
+    assert!(service.asset(icon).is_err());
+}
+#[tokio::test]
+async fn a_yoto_icon_of_another_account_is_not_copied_into_a_playlist() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [14; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"encrypted source fixture").unwrap();
+    let audio = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &audio.id.to_string(), &audio)
+        .unwrap();
+    let owner = AccountId::new("owner").unwrap();
+    let other = AccountId::new("other").unwrap();
+    let Reply::Asset(local) = service
+        .execute(Command::SavePixelArt(Box::new(PixelArt::blank())))
+        .await
+        .unwrap()
+    else {
+        panic!("saving pixel art returns its asset");
+    };
+    let yoto = |account: &AccountId| IconReference::Yoto {
+        account: account.clone(),
+        media: YotoMediaId::new("icon").unwrap(),
+    };
+    let same = |a: Option<&IconReference>, b: Option<&IconReference>| {
+        serde_json::to_value(a).unwrap() == serde_json::to_value(b).unwrap()
+    };
+    // Each media goes into its own playlist of the owner's account.
+    for (title, icon, kept) in [
+        ("Autre compte", yoto(&other), false),
+        ("Même compte", yoto(&owner), true),
+        ("Image locale", IconReference::Local { asset: local }, true),
+    ] {
+        let (media, recipe) = catalogue_fixture(&service, audio.id, title);
+        service
+            .execute(Command::SetMediaIcon {
+                media: media.id,
+                icon: Some(icon.clone()),
+            })
+            .await
+            .unwrap();
+        let mut playlist = Playlist::new(title.into()).unwrap();
+        playlist.origin = DraftOrigin::Existing {
+            base: RemoteBase {
+                account: owner.clone(),
+                card: CardId::new("card").unwrap(),
+                document: serde_json::json!({}),
+            },
+        };
+        service.db.save_playlist(&playlist).unwrap();
+        service
+            .execute(Command::AddMedia {
+                playlist: playlist.id,
+                media: vec![(media.id, recipe.id)],
+                part_title: None,
+            })
+            .await
+            .unwrap();
+        let chapter = &service.playlist(playlist.id).unwrap().chapters[0];
+        assert!(!chapter.tracks.is_empty());
+        let expected = kept.then_some(&icon);
+        assert!(same(chapter.icon.as_ref(), expected), "{title}");
+        for track in &chapter.tracks {
+            assert!(same(track.icon.as_ref(), expected), "{title}");
+        }
+        // The media keeps its own icon, whatever the playlist took.
+        let stored = service.media(media.id).unwrap().icon;
+        assert!(same(stored.as_ref(), Some(&icon)), "{title}");
+    }
+}
+#[tokio::test]
+async fn a_cover_preview_is_a_small_png_of_the_cover() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [15; 32]).unwrap();
+    let file = root.path().join("cover.png");
+    image::RgbaImage::from_pixel(960, 1520, image::Rgba([200, 40, 90, 255]))
+        .save(&file)
+        .unwrap();
+    let asset = service
+        .execute(Command::StoreImage {
+            path: file,
+            pixel_art: false,
+        })
+        .await
+        .unwrap()
+        .into_asset()
+        .unwrap();
+    let bytes = service
+        .execute(Command::CoverPreview(asset))
+        .await
+        .unwrap()
+        .into_picture()
+        .unwrap();
+    let preview = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png).unwrap();
+    assert_eq!((preview.width(), preview.height()), (303, 480));
+    assert_eq!(preview.to_rgba8().get_pixel(150, 240).0, [200, 40, 90, 255]);
+    assert!(
+        service
+            .execute(Command::CoverPreview(AssetId::new()))
+            .await
+            .is_err()
+    );
 }
