@@ -187,24 +187,19 @@ impl Playlist {
     pub fn validate(&self) -> Result<()> {
         Rules::title(&self.title)?;
         if self.chapters.is_empty() {
-            return Err(Failure::Validation(
-                "Ajoutez au moins un média à la playlist.".into(),
-            ));
+            return Err(Failure::Validation(crate::messages::PLAYLIST_EMPTY.into()));
         }
         let tracks: usize = self.chapters.iter().map(|c| c.tracks.len()).sum();
         if tracks > Rules::TRACKS_MAX {
-            return Err(Failure::Validation(format!(
-                "Une playlist Yoto accepte au plus {} pistes.",
-                Rules::TRACKS_MAX
-            )));
+            return Err(Failure::Validation(
+                crate::messages::PLAYLIST_TRACKS_MAX.into(),
+            ));
         }
         self.validate_draft()?;
         for c in &self.chapters {
             Rules::title(&c.title)?;
             if c.tracks.is_empty() {
-                return Err(Failure::Validation(
-                    "Un chapitre doit contenir au moins une piste.".into(),
-                ));
+                return Err(Failure::Validation(crate::messages::CHAPTER_EMPTY.into()));
             }
             for t in &c.tracks {
                 Rules::title(&t.title)?;
@@ -217,7 +212,7 @@ impl Playlist {
                 || group.limit > group.end - group.start + 1
             {
                 return Err(Failure::Validation(
-                    "La plage de lecture aléatoire est invalide.".into(),
+                    crate::messages::SHUFFLE_RANGE_INVALID.into(),
                 ));
             }
         }
@@ -233,14 +228,14 @@ impl Playlist {
         for c in &self.chapters {
             if !chapter_keys.insert(c.key.as_str()) {
                 return Err(Failure::Validation(
-                    "Deux chapitres portent la même clé Yoto.".into(),
+                    crate::messages::DUPLICATE_CHAPTER_KEY.into(),
                 ));
             }
             let mut track_keys = std::collections::HashSet::new();
             for t in &c.tracks {
                 if !track_keys.insert(t.key.as_str()) {
                     return Err(Failure::Validation(
-                        "Deux pistes portent la même clé Yoto.".into(),
+                        crate::messages::DUPLICATE_TRACK_KEY.into(),
                     ));
                 }
             }
@@ -305,7 +300,7 @@ impl Playlist {
         for t in old.chapters.iter().flat_map(|c| &c.tracks) {
             if t.extra.contains_key("events") {
                 return Err(Failure::Compatibility(
-                    "Cette playlist contient des événements interactifs non reconnus. Vérifiez-les avant de réorganiser les pistes.".into(),
+                    crate::messages::UNPARSED_EVENTS.into(),
                 ));
             }
             if let Some(events) = &t.events {
@@ -316,7 +311,9 @@ impl Playlist {
                     if event.cmd == EventCommand::Goto
                         || event.params.as_ref().is_some_and(|p| !p.is_empty())
                     {
-                        return Err(Failure::Compatibility("Retirez d’abord les événements interactifs qui renvoient à une piste (réglages avancés) avant de réorganiser la playlist.".into()));
+                        return Err(Failure::Compatibility(
+                            crate::messages::REFERENCE_EVENTS.into(),
+                        ));
                     }
                 }
             }
@@ -325,7 +322,7 @@ impl Playlist {
             let before = old
                 .chapters
                 .get(group.start..=group.end)
-                .ok_or_else(|| Failure::Validation("Plage de lecture aléatoire invalide.".into()))?
+                .ok_or_else(|| Failure::Validation(crate::messages::SHUFFLE_INVALID.into()))?
                 .iter()
                 .map(|c| c.key.clone())
                 .collect::<std::collections::BTreeSet<_>>();
@@ -335,12 +332,14 @@ impl Playlist {
             let after = self
                 .chapters
                 .get(new.start..=new.end)
-                .ok_or_else(|| Failure::Validation("Plage de lecture aléatoire invalide.".into()))?
+                .ok_or_else(|| Failure::Validation(crate::messages::SHUFFLE_INVALID.into()))?
                 .iter()
                 .map(|c| c.key.clone())
                 .collect::<std::collections::BTreeSet<_>>();
             if before != after {
-                return Err(Failure::Compatibility("Ce déplacement modifie une plage de lecture aléatoire. Retirez d’abord cette plage dans les options de la playlist.".into()));
+                return Err(Failure::Compatibility(
+                    crate::messages::SHUFFLE_TARGETS_CHANGED.into(),
+                ));
             }
         }
         Ok(())
@@ -350,17 +349,24 @@ impl Playlist {
             let targets = old
                 .chapters
                 .get(previous.start..=previous.end)
-                .ok_or_else(|| {
-                    Failure::Validation("Plage de lecture aléatoire invalide.".into())
-                })?;
-            let mut positions=targets.iter().map(|c|self.chapters.iter().position(|new|new.key==c.key).ok_or_else(||Failure::Compatibility("Ce chapitre fait partie d’une plage de lecture aléatoire. Retirez d’abord cette plage dans les options de la playlist.".into()))).collect::<Result<Vec<_>>>()?;
+                .ok_or_else(|| Failure::Validation(crate::messages::SHUFFLE_INVALID.into()))?;
+            let mut positions = targets
+                .iter()
+                .map(|c| {
+                    self.chapters
+                        .iter()
+                        .position(|new| new.key == c.key)
+                        .ok_or_else(|| {
+                            Failure::Compatibility(crate::messages::SHUFFLE_CHAPTER_REMOVED.into())
+                        })
+                })
+                .collect::<Result<Vec<_>>>()?;
             positions.sort_unstable();
             let start = *positions.first().ok_or(Failure::Conflict)?;
             let end = *positions.last().ok_or(Failure::Conflict)?;
             if end - start + 1 != positions.len() {
                 return Err(Failure::Compatibility(
-                    "Les chapitres d’une plage de lecture aléatoire doivent rester côte à côte."
-                        .into(),
+                    crate::messages::SHUFFLE_NOT_CONTIGUOUS.into(),
                 ));
             }
             group.start = start;
@@ -385,11 +391,11 @@ impl Playlist {
             .chapters
             .iter()
             .position(|c| c.id == id)
-            .ok_or_else(|| Failure::Validation("Ce chapitre n’existe plus.".into()))?;
+            .ok_or_else(|| Failure::Validation(crate::messages::CHAPTER_ABSENT.into()))?;
         let j = i
             .checked_add_signed(delta)
             .filter(|j| *j < self.chapters.len())
-            .ok_or_else(|| Failure::Validation("Ce chapitre est déjà en bout de liste.".into()))?;
+            .ok_or_else(|| Failure::Validation(crate::messages::CHAPTER_BOUNDARY.into()))?;
         let old = self.clone();
         self.chapters.swap(i, j);
         if let Err(error) = self.remap_shuffle(&old) {
@@ -404,19 +410,15 @@ impl Playlist {
             .iter()
             .enumerate()
             .find_map(|(ci, c)| c.tracks.iter().position(|t| t.id == id).map(|ti| (ci, ti)))
-            .ok_or_else(|| Failure::Validation("Cette piste n’existe plus.".into()))?;
+            .ok_or_else(|| Failure::Validation(crate::messages::TRACK_ABSENT.into()))?;
         let di = self
             .chapters
             .iter()
             .position(|c| c.id == destination)
-            .ok_or_else(|| {
-                Failure::Validation("Le chapitre de destination n’existe plus.".into())
-            })?;
+            .ok_or_else(|| Failure::Validation(crate::messages::DESTINATION_ABSENT.into()))?;
         let max = self.chapters[di].tracks.len() - usize::from(ci == di);
         if index > max {
-            return Err(Failure::Validation(
-                "Cette piste est déjà en bout de chapitre.".into(),
-            ));
+            return Err(Failure::Validation(crate::messages::TRACK_BOUNDARY.into()));
         }
         if ci != di
             && self.chapters[di]
@@ -424,7 +426,9 @@ impl Playlist {
                 .iter()
                 .any(|t| t.key == self.chapters[ci].tracks[ti].key)
         {
-            return Err(Failure::Compatibility("Ces deux pistes portent la même clé Yoto. Déplacez-les dans des chapitres distincts pour conserver leurs références.".into()));
+            return Err(Failure::Compatibility(
+                crate::messages::TRACK_KEY_COLLISION.into(),
+            ));
         }
         let old = self.clone();
         let t = self.chapters[ci].tracks.remove(ti);
@@ -441,7 +445,7 @@ impl Playlist {
             .chapters
             .iter()
             .position(|c| c.id == id)
-            .ok_or_else(|| Failure::Validation("Ce chapitre n’existe plus.".into()))?;
+            .ok_or_else(|| Failure::Validation(crate::messages::CHAPTER_ABSENT.into()))?;
         let old = self.clone();
         let c = self.chapters.remove(i);
         let mut chapters = vec![];

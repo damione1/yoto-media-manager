@@ -94,7 +94,7 @@ pub struct Volume(u8);
 impl Volume {
     pub fn new(v: u8) -> Result<Self> {
         if v > 100 {
-            return Err(Failure::Validation("Volume must be 0–100".into()));
+            return Err(Failure::Validation(crate::messages::VOLUME_RANGE.into()));
         }
         Ok(Self(v))
     }

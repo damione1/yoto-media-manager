@@ -567,9 +567,7 @@ impl Service {
             .update_shutdown
             .load(std::sync::atomic::Ordering::SeqCst)
         {
-            return Err(Failure::Validation(
-                "An application restart is already pending".into(),
-            ));
+            return Err(Failure::Validation(messages::RESTART_PENDING.into()));
         }
         for job in self.db.list::<Job>(Table::Job)? {
             match job.state {
@@ -577,10 +575,7 @@ impl Service {
                 | JobState::Running { .. }
                 | JobState::Retry { .. }
                 | JobState::Reconciling => {
-                    return Err(Failure::Validation(
-                        "Finish imports, audio processing and Yoto uploads before restarting"
-                            .into(),
-                    ));
+                    return Err(Failure::Validation(messages::RESTART_BUSY.into()));
                 }
                 JobState::WaitingForAuthentication
                 | JobState::Conflict { .. }
@@ -729,9 +724,7 @@ impl Service {
             .update_shutdown
             .load(std::sync::atomic::Ordering::SeqCst)
         {
-            return Err(Failure::Validation(
-                "The application is restarting for an update".into(),
-            ));
+            return Err(Failure::Validation(messages::RESTARTING.into()));
         }
         if matches!(&command, Command::StopPreview) {
             self.stop_preview()?;
@@ -1226,7 +1219,7 @@ impl Service {
                     .iter()
                     .find(|d| d.id == device)
                     .cloned()
-                    .ok_or_else(|| Failure::Validation("Select a player".into()))?;
+                    .ok_or_else(|| Failure::Validation(messages::SELECT_PLAYER.into()))?;
                 Ok(Reply::Player({
                     let owner = self
                         .players
@@ -1304,7 +1297,7 @@ impl Service {
                 name,
             } => {
                 if name.trim().is_empty() {
-                    return Err(Failure::Validation("Enter a player name".into()));
+                    return Err(Failure::Validation(messages::PLAYER_NAME_EMPTY.into()));
                 }
                 let token = self
                     .auth
@@ -1575,9 +1568,12 @@ impl Service {
                 Ok(Reply::Updated)
             }
             Command::DeleteMediaBatch { media, policy } => {
-                self.db.delete_media_batch(&media, policy)?;
+                let kept = self.db.delete_media_batch(&media, policy)?;
                 self.collect_garbage()?;
-                Ok(Reply::Updated)
+                Ok(Reply::Data(serde_json::json!({
+                    "deleted": media.len() - kept.len(),
+                    "kept": kept.len(),
+                })))
             }
             Command::DeleteMedia { media, policy } => {
                 self.db.delete_media(media, None, policy)?;
@@ -1734,7 +1730,7 @@ impl Service {
                     | PublicationOutcome::Confirmed { .. } => true,
                     PublicationOutcome::Prepared | PublicationOutcome::Rejected => false,
                 }) {
-                    return Err(Failure::Validation("This publication has a durable remote effect; reconcile it rather than retrying".into()));
+                    return Err(Failure::Validation(messages::PUBLICATION_DURABLE.into()));
                 }
                 match &job.state {
                     JobState::Failed { .. }
@@ -1750,9 +1746,9 @@ impl Service {
                     | JobState::Running { .. }
                     | JobState::Conflict { .. }
                     | JobState::Reconciling
-                    | JobState::Completed { .. } => Err(Failure::Validation(
-                        "This task requires a separate resolution".into(),
-                    )),
+                    | JobState::Completed { .. } => {
+                        Err(Failure::Validation(messages::TASK_NEEDS_RESOLUTION.into()))
+                    }
                 }
             }
             Command::Cancel(id) => {
@@ -1762,7 +1758,7 @@ impl Service {
                 let mut job = self.job(id)?;
                 match &job.state {
                     JobState::Completed { .. } => {
-                        return Err(Failure::Validation("This task is already completed".into()));
+                        return Err(Failure::Validation(messages::TASK_COMPLETED.into()));
                     }
                     JobState::Reconciling => return Err(Failure::Ambiguous),
                     JobState::Queued
@@ -1792,7 +1788,7 @@ impl Service {
                     .flat_map(|row| row.iter().flat_map(|pixel| pixel.iter().copied()))
                     .collect::<Vec<_>>();
                 let image = image::RgbaImage::from_raw(16, 16, bytes)
-                    .ok_or_else(|| Failure::Media("Pixel image invalid".into()))?;
+                    .ok_or_else(|| Failure::Media(messages::PIXEL_IMAGE_INVALID.into()))?;
                 let lease = self.store.lease("png")?;
                 image.save(lease.path()).map_err(crate::media_error)?;
                 let asset = self.store.put(lease.path(), "png")?;
@@ -1811,12 +1807,12 @@ impl Service {
                 } else {
                     let metadata = std::fs::metadata(&path).map_err(storage)?;
                     if metadata.len() > 8_000_000 {
-                        return Err(Failure::Validation("Image exceeds 8 MB".into()));
+                        return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
                     }
                     let decoded = crate::media::read_image(&path)?;
                     if decoded.width() > 8192 || decoded.height() > 8192 {
                         return Err(Failure::Validation(
-                            "Image dimensions exceed 8192 pixels".into(),
+                            messages::IMAGE_DIMENSIONS_EXCEED.into(),
                         ));
                     }
                     let lease = self.store.lease("png")?;
@@ -1842,13 +1838,13 @@ impl Service {
                     .chapters
                     .iter_mut()
                     .find(|c| c.id == chapter)
-                    .ok_or_else(|| Failure::Validation("Chapter absent".into()))?;
+                    .ok_or_else(|| Failure::Validation(messages::CHAPTER_ABSENT.into()))?;
                 match track {
                     Some(id) => {
                         c.tracks
                             .iter_mut()
                             .find(|t| t.id == id)
-                            .ok_or_else(|| Failure::Validation("Track absent".into()))?
+                            .ok_or_else(|| Failure::Validation(messages::TRACK_ABSENT.into()))?
                             .icon = Some(IconReference::Local { asset: asset.id })
                     }
                     None => c.icon = Some(IconReference::Local { asset: asset.id }),
@@ -1974,7 +1970,7 @@ impl Service {
     pub fn media(&self, id: MediaId) -> Result<MediaItem> {
         self.db
             .get(Table::Media, &id.to_string())?
-            .ok_or_else(|| Failure::Storage("Media not found".into()))
+            .ok_or_else(|| Failure::Storage(messages::MEDIA_NOT_FOUND.into()))
     }
     fn pixel_art(&self, id: AssetId, thumbnail: bool) -> Result<PixelArt> {
         let asset = self.asset(id)?;
@@ -1984,7 +1980,7 @@ impl Service {
             image = image::imageops::resize(&image, 16, 16, image::imageops::FilterType::Triangle);
         }
         if image.width() != 16 || image.height() != 16 {
-            return Err(Failure::Validation("A pixel icon must be 16×16".into()));
+            return Err(Failure::Validation(messages::PIXEL_ICON_SIZE.into()));
         }
         let mut art = PixelArt::blank();
         for (y, row) in art.pixels.iter_mut().enumerate() {
@@ -2044,7 +2040,7 @@ impl Service {
             Ok(result) => result,
             Err(_) => {
                 cancel.store(true, std::sync::atomic::Ordering::SeqCst);
-                Err(Failure::Media("Audio output did not respond".into()))
+                Err(Failure::Media(messages::AUDIO_OUTPUT_SILENT.into()))
             }
         }
     }
@@ -2093,7 +2089,7 @@ impl Service {
     pub fn recipe(&self, id: RecipeId) -> Result<MediaRecipe> {
         self.db
             .get(Table::Recipe, &id.to_string())?
-            .ok_or_else(|| Failure::Storage("Recipe not found".into()))
+            .ok_or_else(|| Failure::Storage(messages::RECIPE_NOT_FOUND.into()))
     }
     pub fn asset(&self, id: AssetId) -> Result<Asset> {
         self.db
@@ -2103,12 +2099,12 @@ impl Service {
     pub fn playlist(&self, id: PlaylistId) -> Result<Playlist> {
         self.db
             .get(Table::Playlist, &id.to_string())?
-            .ok_or_else(|| Failure::Storage("Playlist not found".into()))
+            .ok_or_else(|| Failure::Storage(messages::PLAYLIST_NOT_FOUND.into()))
     }
     fn job(&self, id: JobId) -> Result<Job> {
         self.db
             .get(Table::Job, &id.to_string())?
-            .ok_or_else(|| Failure::Storage("Task not found".into()))
+            .ok_or_else(|| Failure::Storage(messages::TASK_NOT_FOUND.into()))
     }
     fn save_job(&self, job: &Job) -> Result<()> {
         self.db.put(Table::Job, &job.id.to_string(), job)

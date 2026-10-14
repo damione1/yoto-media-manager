@@ -114,7 +114,7 @@ impl YotoGateway {
     pub async fn card(&self, token: &str, id: &CardId) -> Result<Value> {
         self.card_if_present(token, id)
             .await?
-            .ok_or_else(|| Failure::Validation("Yoto rejected the request (404)".into()))
+            .ok_or_else(|| Failure::Validation(messages::YOTO_NOT_FOUND.into()))
     }
     pub async fn card_if_present(&self, token: &str, id: &CardId) -> Result<Option<Value>> {
         match content_api::get_content(&self.configuration(token), id.as_str(), None, None, None)
@@ -376,9 +376,7 @@ impl YotoGateway {
         image: Option<&str>,
     ) -> Result<Value> {
         if name.is_empty() || name.chars().count() > 100 {
-            return Err(Failure::Validation(
-                "Group name must contain 1–100 characters".into(),
-            ));
+            return Err(Failure::Validation(messages::GROUP_NAME_LENGTH.into()));
         }
         let config = self.configuration(token);
         match id {
@@ -457,7 +455,7 @@ impl YotoGateway {
     }
     pub async fn upload_family_image(&self, token: &str, path: &Path) -> Result<FamilyImageId> {
         if std::fs::metadata(path).map_err(storage)?.len() > 8_000_000 {
-            return Err(Failure::Validation("Family image exceeds 8 MB".into()));
+            return Err(Failure::Validation(messages::FAMILY_IMAGE_TOO_LARGE.into()));
         }
         let r = family_api::upload_a_family_image(&self.configuration(token), path.to_owned())
             .await
@@ -496,12 +494,12 @@ impl YotoGateway {
             return Err(Failure::Connection);
         }
         if response.content_length().is_some_and(|n| n > 8_000_000) {
-            return Err(Failure::Validation("Image exceeds 8 MB".into()));
+            return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
         }
         let mut bytes = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(|_| Failure::Connection)? {
             if bytes.len() + chunk.len() > 8_000_000 {
-                return Err(Failure::Validation("Image exceeds 8 MB".into()));
+                return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
             }
             bytes.extend_from_slice(&chunk);
         }
@@ -515,7 +513,7 @@ pub fn classify<T>(e: apis::Error<T>) -> Failure {
         apis::Error::Io(e) => storage(e),
         apis::Error::ResponseError(e) => match e.status.as_u16() {
             401 => Failure::Authentication,
-            403 => Failure::Permission("Yoto denied this operation".into()),
+            403 => Failure::Permission(messages::YOTO_DENIED.into()),
             409 => Failure::Conflict,
             429 => Failure::RateLimit {
                 retry_after_seconds: 30,
@@ -766,11 +764,11 @@ pub fn write_playlist(
                 }
                 TrackMedia::Stream { url, format } => {
                     if url::Url::parse(url)
-                        .map_err(|_| Failure::Validation("Invalid stream URL".into()))?
+                        .map_err(|_| Failure::Validation(messages::STREAM_URL_INVALID.into()))?
                         .scheme()
                         != "https"
                     {
-                        return Err(Failure::Validation("Streaming requires HTTPS".into()));
+                        return Err(Failure::Validation(messages::STREAM_HTTPS_ONLY.into()));
                     }
                     (url.clone(), None, TrackType::Stream, Some(*format))
                 }
@@ -779,7 +777,7 @@ pub fn write_playlist(
                 if info.bytes > Rules::TRACK_BYTES_MAX
                     || info.duration.micros() > Rules::TRACK_MICROS_MAX
                 {
-                    return Err(Failure::Validation("Track exceeds Yoto limits".into()));
+                    return Err(Failure::Validation(messages::TRACK_EXCEEDS_LIMITS.into()));
                 }
                 bytes = bytes
                     .checked_add(info.bytes)
@@ -835,7 +833,9 @@ pub fn write_playlist(
         chapters.push(chapter);
     }
     if bytes > Rules::CARD_BYTES_MAX || duration > Rules::CARD_MICROS_MAX {
-        return Err(Failure::Validation("Playlist exceeds Yoto limits".into()));
+        return Err(Failure::Validation(
+            messages::PLAYLIST_EXCEEDS_LIMITS.into(),
+        ));
     }
     let mut config = preserve(wire::PlaybackConfig::new(), &p.playback.extra)?;
     config.autoadvance = Some(p.playback.autoadvance);
@@ -905,7 +905,7 @@ fn apply_icon(
         Some(IconReference::Local { asset }) => Some(
             icons
                 .get(asset)
-                .ok_or_else(|| Failure::Validation("Icon has not been uploaded".into()))?,
+                .ok_or_else(|| Failure::Validation(messages::ICON_NOT_UPLOADED.into()))?,
         ),
         Some(IconReference::Yoto {
             account: owner,

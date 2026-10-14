@@ -420,7 +420,7 @@ fn selection_bar(view: &AppView, cx: &mut Context<AppView>) -> Option<AnyElement
                             window,
                             cx,
                             format!("Supprimer {count} média(s) de la médiathèque ?"),
-                            "Les fichiers audio et leurs versions préparées seront effacés de cet ordinateur. Les médias déjà utilisés dans une playlist seront conservés. Cette action est irréversible.",
+                            "Les fichiers audio et leurs versions préparées seront effacés de cet ordinateur. Les médias encore utilisés dans une playlist ou par une tâche en cours seront conservés. Cette action est irréversible.",
                             "Supprimer",
                             move |_, cx| {
                                 let _ = owner.update(cx, |v, cx| {

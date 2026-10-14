@@ -600,6 +600,45 @@ async fn deletion_reference_policy_shared_original_and_failed_import_orphans() {
     assert!(service.store.materialize(&asset).is_err());
 }
 #[tokio::test]
+async fn batch_deletion_keeps_referenced_media_and_deletes_the_rest() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [12; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"encrypted source fixture").unwrap();
+    let asset = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &asset.id.to_string(), &asset)
+        .unwrap();
+    let (used, recipe) = catalogue_fixture(&service, asset.id, "In a playlist");
+    let (free, _) = catalogue_fixture(&service, asset.id, "Unused");
+    let mut p = Playlist::new("Keeps one".into()).unwrap();
+    p.add_media(&used, recipe.id).unwrap();
+    service.db.save_playlist(&p).unwrap();
+    let reply = service
+        .execute(Command::DeleteMediaBatch {
+            media: vec![used.id, free.id],
+            policy: ReferencePolicy::RejectReferenced,
+        })
+        .await
+        .unwrap();
+    let Reply::Data(counts) = reply else {
+        panic!("batch deletion reports its counts");
+    };
+    assert_eq!(counts["deleted"], 1);
+    assert_eq!(counts["kept"], 1);
+    let exists = |id: MediaId| {
+        service
+            .db
+            .get::<MediaItem>(Table::Media, &id.to_string())
+            .unwrap()
+            .is_some()
+    };
+    assert!(exists(used.id));
+    assert!(!exists(free.id));
+    assert_eq!(service.playlist(p.id).unwrap().chapters.len(), 1);
+}
+#[tokio::test]
 async fn ten_thousand_catalogue_rows_page_across_bounded_ipc_and_aliases_share_owner() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");

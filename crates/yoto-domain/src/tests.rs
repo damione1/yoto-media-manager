@@ -97,7 +97,7 @@ fn wire_key_namespaces_are_chapter_scoped_and_colliding_moves_are_atomic() {
     duplicate.id = TrackId::new();
     p.chapters[0].tracks.push(duplicate);
     assert!(
-        matches!(p.validate(),Err(Failure::Validation(message)) if message=="Deux pistes portent la même clé Yoto.")
+        matches!(p.validate(),Err(Failure::Validation(message)) if message=="Duplicate track key")
     );
 }
 #[test]
@@ -188,4 +188,16 @@ fn shuffle_targets_and_wire_keys_survive_safe_moves_and_copy_and_gate_unsafe_edi
         p.chapters[0].tracks[0].events
     );
     assert!(p.move_chapter(z, -1).is_err());
+}
+
+#[test]
+fn messages_quote_the_current_limits() {
+    assert_eq!(
+        messages::TITLE_LENGTH,
+        format!("Title must contain 1–{} characters.", Rules::TITLE_MAX)
+    );
+    assert_eq!(
+        messages::PLAYLIST_TRACKS_MAX,
+        format!("A playlist supports at most {} tracks.", Rules::TRACKS_MAX)
+    );
 }

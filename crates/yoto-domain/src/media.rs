@@ -73,7 +73,7 @@ impl TrimRange {
     pub fn new(start: MediaTime, end: MediaTime, duration: MediaTime) -> Result<Self> {
         if start >= end || end > duration {
             return Err(Failure::Validation(
-                "Le début doit précéder la fin, et les deux doivent rester dans la durée de l’audio.".into(),
+                crate::messages::TRIM_RANGE_INVALID.into(),
             ));
         }
         Ok(Self { start, end })

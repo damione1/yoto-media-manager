@@ -24,7 +24,7 @@ impl SourceProvider for LocalFileSource {
         match selection {
             ImportSelection::LocalFile { path } => {
                 if !path.is_file() {
-                    return Err(Failure::Validation("Select an existing audio file".into()));
+                    return Err(Failure::Validation(messages::AUDIO_FILE_MISSING.into()));
                 }
                 Ok(Acquired {
                     path: path.clone(),
@@ -51,10 +51,10 @@ impl SourceProvider for LocalFileSource {
 }
 fn youtube_url(raw: &str) -> Result<url::Url> {
     let u = url::Url::parse(raw)
-        .map_err(|_| Failure::Validation("Enter a valid YouTube URL".into()))?;
+        .map_err(|_| Failure::Validation(messages::YOUTUBE_URL_INVALID.into()))?;
     let host = u
         .host_str()
-        .ok_or_else(|| Failure::Validation("URL has no host".into()))?;
+        .ok_or_else(|| Failure::Validation(messages::URL_NO_HOST.into()))?;
     if u.scheme() != "https"
         || !matches!(
             host,
@@ -63,9 +63,7 @@ fn youtube_url(raw: &str) -> Result<url::Url> {
         || !u.username().is_empty()
         || u.password().is_some()
     {
-        return Err(Failure::Validation(
-            "Only HTTPS YouTube URLs are supported".into(),
-        ));
+        return Err(Failure::Validation(messages::YOUTUBE_HTTPS_ONLY.into()));
     }
     Ok(u)
 }
@@ -85,7 +83,7 @@ fn setup(tools: &Tools) -> std::process::Command {
 fn bounded_output(command: std::process::Command, limit: usize) -> Result<Vec<u8>> {
     let output = crate::process::output(command, limit, std::time::Duration::from_secs(600))?;
     if !output.status.success() {
-        return Err(Failure::Media("YouTube acquisition failed or timed out. The video may be unavailable or require authorization.".into()));
+        return Err(Failure::Media(messages::YOUTUBE_FAILED.into()));
     }
     Ok(output.stdout)
 }
@@ -148,7 +146,7 @@ impl SourceProvider for YoutubeSource<'_> {
                 let u = youtube_url(url)?;
                 if u.query_pairs().any(|(k, _)| k == "list") && entry.is_none() {
                     return Err(Failure::Validation(
-                        "Inspect the playlist and select entries explicitly.".into(),
+                        messages::YOUTUBE_PLAYLIST_SELECT.into(),
                     ));
                 }
                 let chosen = match entry {
@@ -157,7 +155,7 @@ impl SourceProvider for YoutubeSource<'_> {
                             .chars()
                             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
                         {
-                            return Err(Failure::Validation("Invalid video id".into()));
+                            return Err(Failure::Validation(messages::VIDEO_ID_INVALID.into()));
                         }
                         format!("https://www.youtube.com/watch?v={id}")
                     }
@@ -171,9 +169,7 @@ impl SourceProvider for YoutubeSource<'_> {
                     serde_json::from_slice(&bounded_output(metadata, 1_000_000)?)
                         .map_err(media_error)?;
                 if info.duration.unwrap_or(0.0) > 7200.0 {
-                    return Err(Failure::Validation(
-                        "Video duration exceeds the 2-hour import limit.".into(),
-                    ));
+                    return Err(Failure::Validation(messages::VIDEO_TOO_LONG.into()));
                 }
                 let workspace = store.workspace()?;
                 let output = workspace.path().join("source.audio");

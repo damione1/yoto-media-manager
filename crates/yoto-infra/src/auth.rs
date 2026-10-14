@@ -245,7 +245,14 @@ impl TokenBroker {
     pub async fn login(&self) -> Result<Account> {
         let config = &self.config.oauth;
         let callback = url::Url::parse(&config.redirect_uri).map_err(storage)?;
-        let listener=TcpListener::bind(("127.0.0.1",callback.port().ok_or_else(||Failure::Validation("No callback port".into()))?)).await.map_err(|_|Failure::Validation("OAuth callback port 8787 is occupied. Close the other connection attempt and retry.".into()))?;
+        let listener = TcpListener::bind((
+            "127.0.0.1",
+            callback
+                .port()
+                .ok_or_else(|| Failure::Validation("No callback port".into()))?,
+        ))
+        .await
+        .map_err(|_| Failure::Validation(messages::OAUTH_PORT_BUSY.into()))?;
         let mut random = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut random);
         let verifier = Zeroizing::new(URL_SAFE_NO_PAD.encode(random));
@@ -273,7 +280,7 @@ impl TokenBroker {
             ("code_challenge_method", "S256"),
         ]);
         webbrowser::open(authorize.as_str())
-            .map_err(|_| Failure::Validation("Could not open the browser".into()))?;
+            .map_err(|_| Failure::Validation(messages::BROWSER_FAILED.into()))?;
         let deadline = Instant::now() + Duration::from_secs(300);
         let code = loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
@@ -360,7 +367,7 @@ pub fn validate_callback(path: &str, state: &str) -> Result<String> {
         return Err(Failure::Authentication);
     }
     if q.contains_key("error") {
-        return Err(Failure::Permission("Authorization was declined".into()));
+        return Err(Failure::Permission(messages::AUTHORIZATION_DECLINED.into()));
     }
     q.get("code")
         .filter(|s| !s.is_empty() && s.len() < 4096)

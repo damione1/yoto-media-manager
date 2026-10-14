@@ -48,104 +48,215 @@ pub fn failure_text(failure: &Failure) -> String {
     }
 }
 
-/// Messages emitted by the service crate that a parent can actually run into.
+/// Plain French for each service and domain message a parent can run into. Keys are the
+/// shared constants, so a renamed message breaks the build instead of showing English.
 fn known_message(message: &str) -> Option<&'static str> {
+    use yoto_domain::messages as m;
     Some(match message {
-        "Enter a valid YouTube URL" | "URL has no host" => {
+        m::YOUTUBE_URL_INVALID | m::URL_NO_HOST => {
             "Ce lien n’est pas une adresse valide. Collez un lien YouTube complet (https://…)."
         }
-        "Only HTTPS YouTube URLs are supported" => {
-            "Seuls les liens YouTube (youtube.com ou youtu.be) sont acceptés."
-        }
-        "Video duration exceeds the 2-hour import limit." => {
-            "Cette vidéo dure plus de 2 heures ; l’import est limité à 2 heures."
-        }
-        "YouTube acquisition failed or timed out. The video may be unavailable or require authorization." => {
+        m::YOUTUBE_HTTPS_ONLY => "Seuls les liens YouTube (youtube.com ou youtu.be) sont acceptés.",
+        m::VIDEO_TOO_LONG => "Cette vidéo dure plus de 2 heures ; l’import est limité à 2 heures.",
+        m::YOUTUBE_FAILED => {
             "Le téléchargement YouTube a échoué. La vidéo est peut-être privée, supprimée ou indisponible dans votre pays."
         }
-        "Inspect the playlist and select entries explicitly." => {
+        m::YOUTUBE_PLAYLIST_SELECT => {
             "Ce lien est une playlist YouTube : choisissez les vidéos à importer."
         }
-        "Invalid video id" => "Cette vidéo n’est pas reconnue. Vérifiez le lien.",
-        "Select an existing audio file" => {
+        m::VIDEO_ID_INVALID => "Cette vidéo n’est pas reconnue. Vérifiez le lien.",
+        m::AUDIO_FILE_MISSING => {
             "Ce fichier est introuvable. Il a peut-être été déplacé ou supprimé."
         }
-        "This file cannot be decoded as audio." | "No audio stream" | "No decoded audio stream" => {
+        m::AUDIO_UNDECODABLE | m::NO_AUDIO_STREAM | m::NO_DECODED_AUDIO_STREAM => {
             "Ce fichier n’est pas un fichier audio lisible."
         }
-        "Empty audio" | "No duration" => "Ce fichier audio est vide.",
-        "Local MP3 encoding failed." | "Waveform decoding failed" => {
+        m::AUDIO_EMPTY | m::NO_DURATION => "Ce fichier audio est vide.",
+        m::ENCODING_FAILED | m::WAVEFORM_FAILED => {
             "La préparation de l’audio a échoué. Réessayez ; si le problème persiste, réimportez le fichier."
         }
-        "This prepared track exceeds Yoto’s size or duration limit."
-        | "Track exceeds Yoto limits" => {
+        m::PREPARED_TRACK_TOO_LARGE | m::TRACK_EXCEEDS_LIMITS => {
             "Cet extrait dépasse ce que Yoto accepte (1 h ou 100 Mo par piste). Raccourcissez-le."
         }
-        "Playlist exceeds Yoto limits" => {
+        m::PREVIEW_TOO_LONG => {
+            "Cet audio est trop long pour être écouté ici. Découpez-le en parties plus courtes."
+        }
+        m::PLAYLIST_EXCEEDS_LIMITS => {
             "Cette playlist dépasse ce que Yoto accepte (100 pistes, 5 h ou 500 Mo)."
         }
-        "A playlist references this media/version" => {
+        m::STREAM_URL_INVALID => {
+            "Ce lien de flux n’est pas une adresse valide. Collez une adresse complète qui commence par https://."
+        }
+        m::STREAM_HTTPS_ONLY => {
+            "Seuls les liens de flux qui commencent par https:// sont acceptés."
+        }
+        m::MEDIA_IN_PLAYLIST => {
             "Ce média est utilisé dans une playlist. Retirez-le de la playlist avant de le supprimer."
         }
-        "Cancel/resolve the referencing job before removing media" => {
+        m::MEDIA_IN_JOB => {
             "Une tâche utilise encore ce média. Attendez qu’elle se termine ou annulez-la dans « Imports »."
         }
-        "Reconcile the durable remote effect before removing referenced media" => {
+        m::MEDIA_AWAITS_RECONCILE => {
             "Un envoi vers Yoto doit d’abord être vérifié dans « Imports » avant de supprimer ce média."
         }
-        "Media/version absent" | "Media not found" | "Recipe not found" => {
+        m::MEDIA_ABSENT | m::MEDIA_NOT_FOUND | m::RECIPE_NOT_FOUND => {
             "Ce média n’existe plus dans votre médiathèque."
         }
-        "Playlist not found" => "Cette playlist n’existe plus.",
-        "Task not found" => "Cette tâche n’existe plus.",
-        "Finish imports, audio processing and Yoto uploads before restarting" => {
-            "Terminez les imports, préparations et envois en cours avant d’installer la mise à jour."
+        m::PLAYLIST_NOT_FOUND => "Cette playlist n’existe plus.",
+        m::TASK_NOT_FOUND => "Cette tâche n’existe plus.",
+        m::PUBLICATION_PENDING => {
+            "Un envoi précédent de cette playlist vers Yoto attend encore une vérification. Ouvrez « Imports » pour le vérifier, puis enregistrez de nouveau."
         }
-        "An application restart is already pending"
-        | "The application is restarting for an update" => {
-            "L’application redémarre pour installer une mise à jour."
-        }
-        "Close the other Yoto instance or MCP owner before installing an update" => {
-            "Fermez l’autre fenêtre de l’application avant d’installer la mise à jour."
-        }
-        "The update helper could not start" => {
-            "La mise à jour n’a pas pu démarrer. Téléchargez la nouvelle version depuis GitHub Releases."
-        }
-        "OAuth callback port 8787 is occupied. Close the other connection attempt and retry." => {
-            "Une autre tentative de connexion est encore ouverte. Fermez-la puis réessayez."
-        }
-        "Could not open the browser" => {
-            "Le navigateur n’a pas pu s’ouvrir. Ouvrez-le vous-même puis réessayez."
-        }
-        "Authorization was declined" => {
-            "Vous avez refusé l’accès dans le navigateur. Réessayez et acceptez les autorisations demandées."
-        }
-        "Yoto denied this operation" => "Yoto refuse cette action pour ce compte.",
-        "Yoto rejected the request (404)" => {
-            "Yoto ne trouve plus cet élément. Actualisez depuis Yoto puis réessayez."
-        }
-        "Select a player" => "Choisissez un lecteur.",
-        "Enter a player name" => "Entrez un nom pour le lecteur.",
-        "Image exceeds 8 MB" | "Family image exceeds 8 MB" => "L’image dépasse 8 Mo.",
-        "Image dimensions exceed 8192 pixels" | "Image dimensions too large" => {
-            "L’image est trop grande (8192 pixels maximum)."
-        }
-        "A pixel icon must be 16×16" | "Pixel image invalid" => {
-            "Cette image ne peut pas servir d’icône."
-        }
-        "This publication has a durable remote effect; reconcile it rather than retrying" => {
+        m::PUBLICATION_DURABLE => {
             "Cet envoi a peut-être déjà abouti sur Yoto. Choisissez « Vérifier la publication » plutôt que « Réessayer »."
         }
-        "This task requires a separate resolution" => {
+        m::TASK_NEEDS_RESOLUTION => {
             "Cette tâche ne peut pas être relancée telle quelle. Ouvrez ses détails."
         }
-        "This task is already completed" => "Cette tâche est déjà terminée.",
-        "Icon has not been uploaded" => "Cette icône n’a pas encore été envoyée à Yoto.",
-        "Audio output did not respond" => {
+        m::TASK_COMPLETED => "Cette tâche est déjà terminée.",
+        m::RESTART_BUSY => {
+            "Terminez les imports, préparations et envois en cours avant d’installer la mise à jour."
+        }
+        m::RESTART_PENDING | m::RESTARTING => {
+            "L’application redémarre pour installer une mise à jour."
+        }
+        m::UPDATE_OTHER_INSTANCE => {
+            "Fermez l’autre fenêtre de l’application avant d’installer la mise à jour."
+        }
+        m::UPDATE_HELPER_FAILED => {
+            "La mise à jour n’a pas pu démarrer. Téléchargez la nouvelle version depuis GitHub Releases."
+        }
+        m::OAUTH_PORT_BUSY => {
+            "Une autre tentative de connexion est encore ouverte. Fermez-la puis réessayez."
+        }
+        m::BROWSER_FAILED => {
+            "Le navigateur n’a pas pu s’ouvrir. Ouvrez-le vous-même puis réessayez."
+        }
+        m::AUTHORIZATION_DECLINED => {
+            "Vous avez refusé l’accès dans le navigateur. Réessayez et acceptez les autorisations demandées."
+        }
+        m::YOTO_DENIED => "Yoto refuse cette action pour ce compte.",
+        m::YOTO_NOT_FOUND => {
+            "Yoto ne trouve plus cet élément. Actualisez depuis Yoto puis réessayez."
+        }
+        m::SELECT_PLAYER => "Choisissez un lecteur.",
+        m::PLAYER_NAME_EMPTY | m::DEVICE_NAME_EMPTY => "Entrez un nom pour le lecteur.",
+        m::GROUP_NAME_LENGTH => "Le nom du groupe doit contenir entre 1 et 100 caractères.",
+        m::IMAGE_TOO_LARGE | m::FAMILY_IMAGE_TOO_LARGE => "L’image dépasse 8 Mo.",
+        m::IMAGE_DIMENSIONS_EXCEED | m::IMAGE_DIMENSIONS_TOO_LARGE => {
+            "L’image est trop grande (8192 pixels maximum)."
+        }
+        m::PIXEL_ICON_SIZE | m::PIXEL_IMAGE_INVALID => "Cette image ne peut pas servir d’icône.",
+        m::ICON_NOT_UPLOADED => "Cette icône n’a pas encore été envoyée à Yoto.",
+        m::AUDIO_OUTPUT_SILENT => {
             "La sortie audio ne répond pas. Vérifiez le son de votre ordinateur."
         }
+        m::RECOVERY_KEY_FORMAT | m::RECOVERY_KEY_LENGTH => INVALID_RECOVERY_KEY,
+        m::BACKUP_AUTH_FAILED => {
+            "La clé de récupération ne correspond pas à cette sauvegarde, ou la sauvegarde a été modifiée."
+        }
+        m::BACKUP_UNSUPPORTED | m::BACKUP_PATH_INVALID => {
+            "Ce dossier n’est pas une sauvegarde valide. Choisissez le dossier de sauvegarde lui-même."
+        }
+        m::BACKUP_NEWER => {
+            "Cette sauvegarde vient d’une version plus récente de l’application. Mettez l’application à jour puis réessayez."
+        }
+        m::BACKUP_DATABASE_ABSENT | m::BACKUP_INTEGRITY | m::BACKUP_DATABASE_INVALID => {
+            "Cette sauvegarde est incomplète ou endommagée ; elle ne peut pas être restaurée."
+        }
+        m::BACKUP_DESTINATION_EXISTS | m::RESTORE_DESTINATION_EXISTS => {
+            "Un dossier du même nom existe déjà à cet endroit. Réessayez dans un instant ou choisissez un autre dossier."
+        }
+        m::BACKUP_NEEDS_PARENT | m::RESTORE_NEEDS_PARENT => {
+            "Choisissez un dossier sur cet ordinateur, pas la racine d’un disque."
+        }
+        m::TITLE_LENGTH => "Le titre doit contenir entre 1 et 140 caractères.",
+        m::PLAYLIST_EMPTY => "Ajoutez au moins un média à la playlist.",
+        m::PLAYLIST_TRACKS_MAX => "Une playlist Yoto accepte au plus 100 pistes.",
+        m::CHAPTER_EMPTY => "Un chapitre doit contenir au moins une piste.",
+        m::SHUFFLE_RANGE_INVALID | m::SHUFFLE_INVALID => {
+            "La plage de lecture aléatoire est invalide."
+        }
+        m::DUPLICATE_CHAPTER_KEY => "Deux chapitres portent la même clé Yoto.",
+        m::DUPLICATE_TRACK_KEY => "Deux pistes portent la même clé Yoto.",
+        m::TRACK_KEY_COLLISION => {
+            "Ces deux pistes portent la même clé Yoto. Déplacez-les dans des chapitres distincts pour conserver leurs références."
+        }
+        m::UNPARSED_EVENTS => {
+            "Cette playlist contient des événements interactifs non reconnus. Vérifiez-les avant de réorganiser les pistes."
+        }
+        m::REFERENCE_EVENTS => {
+            "Retirez d’abord les événements interactifs qui renvoient à une piste (mode avancé) avant de réorganiser la playlist."
+        }
+        m::SHUFFLE_TARGETS_CHANGED | m::SHUFFLE_CHAPTER_REMOVED => {
+            "Ce changement touche une plage de lecture aléatoire. Retirez d’abord cette plage dans les options de la playlist."
+        }
+        m::SHUFFLE_NOT_CONTIGUOUS => {
+            "Les chapitres d’une plage de lecture aléatoire doivent rester côte à côte."
+        }
+        m::CHAPTER_ABSENT => "Ce chapitre n’existe plus.",
+        m::CHAPTER_BOUNDARY => "Ce chapitre est déjà en bout de liste.",
+        m::TRACK_ABSENT => "Cette piste n’existe plus.",
+        m::DESTINATION_ABSENT => "Le chapitre de destination n’existe plus.",
+        m::TRACK_BOUNDARY => "Cette piste est déjà en bout de chapitre.",
+        m::TRIM_RANGE_INVALID => {
+            "Le début doit précéder la fin, et les deux doivent rester dans la durée de l’audio."
+        }
+        m::TIME_FORMAT => "Indiquez une heure au format HH:MM, par exemple 07:30.",
+        m::COLOUR_FORMAT => "Indiquez une couleur au format #RRGGBB, par exemple #FF8800.",
+        m::LIMITS_NONNEGATIVE => {
+            "Les limites et les durées doivent être des nombres entiers positifs."
+        }
+        m::VOLUME_RANGE => "Le volume doit être compris entre 0 et 100.",
         _ => return None,
     })
+}
+
+const INVALID_RECOVERY_KEY: &str = "Cette clé de récupération n’est pas valide : elle doit contenir 64 caractères (chiffres et lettres de a à f). Vérifiez-la ou générez-en une nouvelle pour une nouvelle sauvegarde.";
+
+/// Plain French for an updater failure, with what to do next.
+pub fn update_failure_text(error: &yoto_updater::UpdateError) -> String {
+    use yoto_updater::UpdateError;
+    match error {
+        UpdateError::Network(_) => {
+            "Le serveur des mises à jour ne répond pas. Vérifiez votre connexion Internet puis réessayez.".into()
+        }
+        UpdateError::Manifest(_) | UpdateError::Signature | UpdateError::Archive(_) => {
+            "La mise à jour reçue n’est pas valide et n’a pas été installée. Réessayez plus tard.".into()
+        }
+        UpdateError::Install(detail) => format!(
+            "La mise à jour n’a pas pu être installée. Téléchargez la nouvelle version depuis GitHub Releases. Détail : {detail}"
+        ),
+        UpdateError::UnsupportedPlatform => {
+            "Les mises à jour automatiques ne sont pas disponibles sur cet ordinateur. Téléchargez la nouvelle version depuis GitHub Releases.".into()
+        }
+        UpdateError::Cancelled => "Téléchargement annulé.".into(),
+    }
+}
+
+/// Shown when a backup starts without a key and the app creates one.
+pub const NEW_RECOVERY_KEY: &str = "Une clé de récupération vient d’être créée. Copiez-la et gardez-la en lieu sûr : sans elle, la sauvegarde ne pourra pas être restaurée.";
+
+/// A recovery key is 64 hexadecimal characters; the parent-facing reason when it is not.
+pub fn check_recovery_key(key: &str) -> std::result::Result<(), &'static str> {
+    if key.is_empty() {
+        Err("Collez la clé de récupération de cette sauvegarde (64 caractères).")
+    } else if key.len() != 64 || !key.chars().all(|c| c.is_ascii_hexdigit()) {
+        Err(INVALID_RECOVERY_KEY)
+    } else {
+        Ok(())
+    }
+}
+
+/// Outcome of deleting several media at once: some may be kept because they are in use.
+pub fn batch_deletion_text(deleted: u64, kept: u64) -> String {
+    if kept == 0 {
+        format!("{deleted} média(s) supprimé(s) de votre médiathèque.")
+    } else {
+        format!(
+            "{deleted} média(s) supprimé(s). {kept} média(s) conservé(s), car encore utilisé(s) dans une playlist ou par une tâche en cours."
+        )
+    }
 }
 
 /// Whole seconds as a parent reads them: « 3 min 05 s », « 1 h 02 min », « 45 s ».
@@ -220,6 +331,22 @@ mod tests {
         let unknown = failure_text(&Failure::Storage("disk full".into()));
         assert!(unknown.starts_with("Un problème est survenu"));
         assert!(unknown.contains("disk full"));
+    }
+    #[core::prelude::v1::test]
+    fn every_shared_message_has_french_wording() {
+        for message in yoto_domain::messages::ALL {
+            assert!(
+                known_message(message).is_some(),
+                "No French wording for « {message} »"
+            );
+        }
+    }
+    #[core::prelude::v1::test]
+    fn recovery_keys_are_checked_before_any_dialog() {
+        assert!(check_recovery_key("").is_err());
+        assert!(check_recovery_key("abc").is_err());
+        assert!(check_recovery_key(&"g".repeat(64)).is_err());
+        assert!(check_recovery_key(&"aF09".repeat(16)).is_ok());
     }
     #[core::prelude::v1::test]
     fn durations_are_readable() {

@@ -2,6 +2,7 @@ pub mod device;
 pub mod ids;
 pub mod jobs;
 pub mod media;
+pub mod messages;
 pub mod playlist;
 pub use device::*;
 pub use ids::*;
@@ -90,10 +91,7 @@ impl Rules {
     pub const WAVEFORM_BUCKETS: usize = 2048;
     pub fn title(value: &str) -> Result<()> {
         if value.trim().is_empty() || value.chars().count() > Self::TITLE_MAX {
-            return Err(Failure::Validation(format!(
-                "Le titre doit contenir entre 1 et {} caractères.",
-                Self::TITLE_MAX
-            )));
+            return Err(Failure::Validation(messages::TITLE_LENGTH.into()));
         }
         Ok(())
     }

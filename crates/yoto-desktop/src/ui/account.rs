@@ -469,7 +469,7 @@ fn backup(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
             theme::pill(
                 Button::new("backup-catalogue")
                     .label("Créer une sauvegarde")
-                    .on_click(cx.listener(|v, _, _, cx| v.recovery(false, cx))),
+                    .on_click(cx.listener(|v, _, window, cx| v.recovery(false, window, cx))),
                 Look::Soft(&theme::LILAC),
                 Height::Hero,
                 false,
@@ -481,7 +481,7 @@ fn backup(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
             theme::pill(
                 Button::new("restore-catalogue")
                     .label("Restaurer une sauvegarde")
-                    .on_click(cx.listener(|v, _, _, cx| v.recovery(true, cx))),
+                    .on_click(cx.listener(|v, _, window, cx| v.recovery(true, window, cx))),
                 Look::Outline,
                 Height::Large,
                 false,
@@ -562,12 +562,7 @@ fn backup(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                     Button::new("generate-recovery-key")
                         .label("Générer une clé")
                         .on_click(cx.listener(|v, _, window, cx| {
-                            use rand::RngCore;
-                            let mut bytes = [0; 32];
-                            rand::thread_rng().fill_bytes(&mut bytes);
-                            let text = bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
-                            v.recovery_key
-                                .update(cx, |s, cx| s.set_value(text, window, cx));
+                            v.generate_recovery_key(window, cx)
                         })),
                     Look::Link(&theme::LILAC),
                     Height::Tiny,

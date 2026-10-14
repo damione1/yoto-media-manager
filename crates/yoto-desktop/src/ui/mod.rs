@@ -616,6 +616,14 @@ impl AppView {
                                     value.get("backup").and_then(serde_json::Value::as_str)
                                 {
                                     view.status = format!("Sauvegarde créée : {backup}");
+                                } else if let (Some(deleted), Some(kept)) = (
+                                    value.get("deleted").and_then(serde_json::Value::as_u64),
+                                    value.get("kept").and_then(serde_json::Value::as_u64),
+                                ) {
+                                    view.status = wording::batch_deletion_text(deleted, kept);
+                                    if kept > 0 {
+                                        view.warn(view.status.clone(), cx);
+                                    }
                                 } else {
                                     view.status = "Opération terminée.".into();
                                 }
@@ -688,18 +696,24 @@ impl AppView {
         if !ignored.is_empty() {
             // The import's own completion text replaces the status line, so the skipped
             // files are reported in a toast that stays until dismissed.
-            let text = format!(
-                "{} fichier(s) ignoré(s) : seuls les fichiers audio (MP3, M4A, WAV, FLAC, OGG…) sont importés.",
-                ignored.len()
+            self.warn(
+                format!(
+                    "{} fichier(s) ignoré(s) : seuls les fichiers audio (MP3, M4A, WAV, FLAC, OGG…) sont importés.",
+                    ignored.len()
+                ),
+                cx,
             );
-            if let Some(window) = cx.windows().first().copied() {
-                cx.defer(move |cx| {
-                    let _ = cx.update_window(window, |_, window, cx| {
-                        use gpui_kit::component::{WindowExt, notification::Notification};
-                        window.push_notification(Notification::warning(text).autohide(false), cx);
-                    });
+        }
+    }
+    /// A warning toast that stays until the parent dismisses it.
+    pub fn warn(&self, text: String, cx: &mut Context<Self>) {
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    use gpui_kit::component::{WindowExt, notification::Notification};
+                    window.push_notification(Notification::warning(text).autohide(false), cx);
                 });
-            }
+            });
         }
     }
     pub fn add_files(&mut self, cx: &mut Context<Self>) {
@@ -866,8 +880,32 @@ impl Render for AppView {
     }
 }
 impl AppView {
-    fn recovery(&mut self, restore: bool, cx: &mut Context<Self>) {
-        let key = self.recovery_key.read(cx).value().to_string();
+    /// Puts a fresh random recovery key in the field and shows it, so it can be copied.
+    pub fn generate_recovery_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use rand::RngCore;
+        let mut bytes = [0; 32];
+        rand::thread_rng().fill_bytes(&mut bytes);
+        let text = bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+        self.recovery_visible = true;
+        self.recovery_key.update(cx, |s, cx| {
+            s.set_value(text, window, cx);
+            s.set_masked(false, window, cx);
+        });
+        cx.notify();
+    }
+    /// Backup or restore. The key is checked before any folder is chosen; a backup without a
+    /// key gets a new one, shown so the parent can keep it.
+    fn recovery(&mut self, restore: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let mut key = self.recovery_key.read(cx).value().trim().to_string();
+        if key.is_empty() && !restore {
+            self.generate_recovery_key(window, cx);
+            key = self.recovery_key.read(cx).value().to_string();
+            self.warn(wording::NEW_RECOVERY_KEY.into(), cx);
+        }
+        if let Err(message) = wording::check_recovery_key(&key) {
+            self.report_error(Failure::Validation(message.into()), cx);
+            return;
+        }
         cx.spawn(async move |weak, cx| {
             let source = if restore {
                 rfd::AsyncFileDialog::new()

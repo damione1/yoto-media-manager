@@ -256,11 +256,17 @@ impl Render for UpdatePanel {
                 );
             }
             UpdateState::Failed(error) => {
-                body =
-                    body.child(div().text_color(cx.theme().danger).child(error.to_string()))
-                        .child(Button::new("retry-update").label("Réessayer").on_click(
+                body = body
+                    .child(
+                        div()
+                            .text_color(cx.theme().danger)
+                            .child(wording::update_failure_text(error)),
+                    )
+                    .child(
+                        Button::new("retry-update").label("Réessayer").on_click(
                             cx.listener(|view, _, _, _| view.request(UpdateAction::Check)),
-                        ));
+                        ),
+                    );
             }
         }
         body = body.children(self.notice.as_ref().map(|error| {

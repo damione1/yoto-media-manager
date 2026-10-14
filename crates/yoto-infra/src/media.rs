@@ -88,9 +88,7 @@ impl Tools {
         .arg(path);
         let out = crate::process::output(cmd, 1_000_000, std::time::Duration::from_secs(30))?;
         if !out.status.success() {
-            return Err(Failure::Media(
-                "This file cannot be decoded as audio.".into(),
-            ));
+            return Err(Failure::Media(messages::AUDIO_UNDECODABLE.into()));
         }
         if out.stdout.len() > 1_000_000 {
             return Err(Failure::Media("Probe metadata too large".into()));
@@ -100,16 +98,16 @@ impl Tools {
             .streams
             .into_iter()
             .find(|s| s.codec_type.as_deref() == Some("audio"))
-            .ok_or_else(|| Failure::Media("No audio stream".into()))?;
+            .ok_or_else(|| Failure::Media(messages::NO_AUDIO_STREAM.into()))?;
         let duration = MediaTime::from_seconds(
             p.format
                 .duration
-                .ok_or_else(|| Failure::Media("No duration".into()))?
+                .ok_or_else(|| Failure::Media(messages::NO_DURATION.into()))?
                 .parse()
                 .map_err(media_error)?,
         )?;
         if duration == MediaTime::ZERO {
-            return Err(Failure::Media("Empty audio".into()));
+            return Err(Failure::Media(messages::AUDIO_EMPTY.into()));
         }
         Ok(AudioInfo {
             duration,
@@ -169,7 +167,7 @@ impl Tools {
         let status =
             crate::process::output(cmd, 16_000, std::time::Duration::from_secs(1800))?.status;
         if !status.success() {
-            return Err(Failure::Media("Local MP3 encoding failed.".into()));
+            return Err(Failure::Media(messages::ENCODING_FAILED.into()));
         }
         let info = self.probe(output)?;
         let error = (info.duration.seconds() - trim.duration().seconds()).abs();
@@ -180,7 +178,7 @@ impl Tools {
         }
         if info.bytes > Rules::TRACK_BYTES_MAX || info.duration.micros() > Rules::TRACK_MICROS_MAX {
             return Err(Failure::Validation(
-                "This prepared track exceeds Yoto’s size or duration limit.".into(),
+                messages::PREPARED_TRACK_TOO_LARGE.into(),
             ));
         }
         Ok(info)
@@ -196,9 +194,7 @@ impl Tools {
             .checked_mul(u64::from(Rules::SAMPLE_RATE) * 4)
             .map(|v| v / 1_000_000 + 65_536)
             .filter(|v| *v <= 2_000_000_000)
-            .ok_or_else(|| {
-                Failure::Validation("Preview exceeds the temporary audio limit".into())
-            })?;
+            .ok_or_else(|| Failure::Validation(messages::PREVIEW_TOO_LONG.into()))?;
         let filter = format!(
             "atrim=start={:.6}:end={:.6},asetpts=PTS-STARTPTS",
             trim.start().seconds(),
@@ -256,7 +252,7 @@ impl Tools {
         let mut stdout = child
             .stdout
             .take()
-            .ok_or_else(|| Failure::Media("No decoded audio stream".into()))?;
+            .ok_or_else(|| Failure::Media(messages::NO_DECODED_AUDIO_STREAM.into()))?;
         let total = (duration.seconds() * 8000.0).ceil() as usize;
         let bucket = total.div_ceil(Rules::WAVEFORM_BUCKETS).max(1);
         let mut peaks = vec![];
@@ -302,7 +298,7 @@ impl Tools {
             peaks.push((lo, hi));
         }
         if !child.wait().map_err(media_error)?.success() {
-            return Err(Failure::Media("Waveform decoding failed".into()));
+            return Err(Failure::Media(messages::WAVEFORM_FAILED.into()));
         }
         let mut levels = vec![peaks];
         while levels.last().map_or(0, Vec::len) > 64 {
@@ -335,7 +331,9 @@ pub fn command(path: &Path) -> Command {
 pub fn prepare_icon(input: &Path, output: &Path) -> Result<()> {
     let image = read_image(input)?;
     if image.width() > 8192 || image.height() > 8192 {
-        return Err(Failure::Validation("Image dimensions too large".into()));
+        return Err(Failure::Validation(
+            messages::IMAGE_DIMENSIONS_TOO_LARGE.into(),
+        ));
     }
     let image = image
         .resize_to_fill(16, 16, image::imageops::FilterType::Nearest)
@@ -345,7 +343,7 @@ pub fn prepare_icon(input: &Path, output: &Path) -> Result<()> {
 
 pub fn read_image(path: &Path) -> Result<image::DynamicImage> {
     if std::fs::metadata(path).map_err(storage)?.len() > 8_000_000 {
-        return Err(Failure::Validation("Image exceeds 8 MB".into()));
+        return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
     }
     let mut reader = image::ImageReader::open(path)
         .map_err(media_error)?

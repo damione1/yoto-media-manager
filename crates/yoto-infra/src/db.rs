@@ -815,15 +815,28 @@ impl Database {
         self.changed();
         Ok(asset.id)
     }
-    pub fn delete_media_batch(&self, media: &[MediaId], policy: ReferencePolicy) -> Result<()> {
+    /// Deletes every media that can go and keeps the others (still in a playlist, used by a
+    /// job, or awaiting reconciliation). Returns the media that were kept.
+    pub fn delete_media_batch(
+        &self,
+        media: &[MediaId],
+        policy: ReferencePolicy,
+    ) -> Result<Vec<MediaId>> {
         let mut c = self.lock()?;
-        let tx = c.transaction().map_err(storage)?;
+        let mut tx = c.transaction().map_err(storage)?;
+        let mut kept = Vec::new();
         for id in media {
-            delete_media_tx(&tx, *id, None, policy)?;
+            let savepoint = tx.savepoint().map_err(storage)?;
+            match delete_media_tx(&savepoint, *id, None, policy) {
+                Ok(()) => savepoint.commit().map_err(storage)?,
+                // Dropping the savepoint rolls back this media only.
+                Err(Failure::Validation(_)) => kept.push(*id),
+                Err(error) => return Err(error),
+            }
         }
         tx.commit().map_err(storage)?;
         self.changed();
-        Ok(())
+        Ok(kept)
     }
     pub fn pin_draft_asset(&self, asset: &Asset, account: Option<&AccountId>) -> Result<()> {
         let mut c = self.lock()?;
@@ -1134,7 +1147,7 @@ impl Database {
     pub fn backup(&self, destination: &Path, key: &[u8; 32]) -> Result<()> {
         if destination.exists() {
             return Err(Failure::Validation(
-                "Backup destination already exists".into(),
+                messages::BACKUP_DESTINATION_EXISTS.into(),
             ));
         }
         let mut out = Connection::open(destination).map_err(storage)?;
@@ -1148,7 +1161,7 @@ impl Database {
     }
 }
 fn delete_media_tx(
-    tx: &rusqlite::Transaction<'_>,
+    tx: &Connection,
     media: MediaId,
     recipe: Option<RecipeId>,
     policy: ReferencePolicy,
@@ -1172,7 +1185,7 @@ fn delete_media_tx(
         .map(|r| r.id)
         .collect::<std::collections::BTreeSet<_>>();
     if ids.is_empty() {
-        return Err(Failure::Validation("Media/version absent".into()));
+        return Err(Failure::Validation(messages::MEDIA_ABSENT.into()));
     }
     let refers = |p: &Playlist| {
         p.chapters
@@ -1195,10 +1208,11 @@ fn delete_media_tx(
                     match read_publication_outcome(tx, &job)? {
                         Some(
                             PublicationOutcome::Possible | PublicationOutcome::Accepted { .. },
-                        ) => return Err(Failure::Validation(
-                            "Reconcile the durable remote effect before removing referenced media"
-                                .into(),
-                        )),
+                        ) => {
+                            return Err(Failure::Validation(
+                                messages::MEDIA_AWAITS_RECONCILE.into(),
+                            ));
+                        }
                         Some(PublicationOutcome::Confirmed { .. }) => {
                             let mut receipt_job = job.clone();
                             if let JobRequest::Publish { snapshot, .. } = &mut receipt_job.request {
@@ -1239,9 +1253,7 @@ fn delete_media_tx(
                 | JobState::WaitingForAuthentication
                 | JobState::Conflict { .. }
                 | JobState::Reconciling => {
-                    return Err(Failure::Validation(
-                        "Cancel/resolve the referencing job before removing media".into(),
-                    ));
+                    return Err(Failure::Validation(messages::MEDIA_IN_JOB.into()));
                 }
             }
         }
@@ -1253,9 +1265,7 @@ fn delete_media_tx(
         }
         match policy {
             ReferencePolicy::RejectReferenced => {
-                return Err(Failure::Validation(
-                    "A playlist references this media/version".into(),
-                ));
+                return Err(Failure::Validation(messages::MEDIA_IN_PLAYLIST.into()));
             }
             ReferencePolicy::RemovePlaylistTracks => {}
         }
@@ -1320,7 +1330,7 @@ enum PlaylistWriteIntent {
     ProvenancePurge,
 }
 fn write_playlist(
-    tx: &rusqlite::Transaction<'_>,
+    tx: &Connection,
     p: &Playlist,
     expected: Option<Revision>,
     intent: PlaylistWriteIntent,
@@ -1454,10 +1464,7 @@ fn publication_guard(c: &Connection, job: &Job, runner: bool) -> Result<()> {
         | PublicationOutcome::Confirmed { .. } => true,
         PublicationOutcome::Prepared | PublicationOutcome::Rejected => false,
     }) {
-        return Err(Failure::Validation(
-            "This publication has a durable remote effect; reconcile it rather than retrying"
-                .into(),
-        ));
+        return Err(Failure::Validation(messages::PUBLICATION_DURABLE.into()));
     }
     let mut q = c
         .prepare("SELECT payload FROM jobs ORDER BY rowid")
@@ -1490,7 +1497,7 @@ fn publication_guard(c: &Connection, job: &Job, runner: bool) -> Result<()> {
                 JobState::Completed { .. } | JobState::Failed { .. } | JobState::Cancelled => false,
             };
         if blocked {
-            return Err(Failure::Validation("A publication for this account and playlist is pending. Resolve it before publishing again.".into()));
+            return Err(Failure::Validation(messages::PUBLICATION_PENDING.into()));
         }
     }
     Ok(())

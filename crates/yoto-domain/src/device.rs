@@ -159,7 +159,9 @@ impl FamilyImageSize {
 impl DeviceConfiguration {
     pub fn validate(&self) -> Result<()> {
         if self.name.trim().is_empty() {
-            return Err(Failure::Validation("Device name cannot be empty".into()));
+            return Err(Failure::Validation(
+                crate::messages::DEVICE_NAME_EMPTY.into(),
+            ));
         }
         for time in [&self.day_time, &self.night_time] {
             if !time.split_once(':').is_some_and(|(h, m)| {
@@ -168,7 +170,7 @@ impl DeviceConfiguration {
                     && h.parse::<u8>().is_ok_and(|h| h < 24)
                     && m.parse::<u8>().is_ok_and(|m| m < 60)
             }) {
-                return Err(Failure::Validation("Time must be HH:MM".into()));
+                return Err(Failure::Validation(crate::messages::TIME_FORMAT.into()));
             }
         }
         for color in [&self.ambient_colour, &self.night_ambient_colour] {
@@ -176,7 +178,7 @@ impl DeviceConfiguration {
                 .strip_prefix('#')
                 .is_some_and(|s| s.len() == 6 && s.bytes().all(|b| b.is_ascii_hexdigit()))
             {
-                return Err(Failure::Validation("Colour must be #RRGGBB".into()));
+                return Err(Failure::Validation(crate::messages::COLOUR_FORMAT.into()));
             }
         }
         for number in [
@@ -187,7 +189,7 @@ impl DeviceConfiguration {
         ] {
             if number.is_empty() || !number.bytes().all(|b| b.is_ascii_digit()) {
                 return Err(Failure::Validation(
-                    "Limits and timeouts must be nonnegative integers".into(),
+                    crate::messages::LIMITS_NONNEGATIVE.into(),
                 ));
             }
         }

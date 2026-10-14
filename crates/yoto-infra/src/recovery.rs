@@ -19,15 +19,11 @@ struct Manifest {
     files: BTreeMap<String, String>,
 }
 fn recovery_key(text: &str) -> Result<Zeroizing<[u8; 32]>> {
-    let decoded = Zeroizing::new(hex::decode(text).map_err(|_| {
-        Failure::Validation(
-            "Recovery key must contain 64 hexadecimal characters (256 random bits)".into(),
-        )
-    })?);
+    let decoded = Zeroizing::new(
+        hex::decode(text).map_err(|_| Failure::Validation(messages::RECOVERY_KEY_FORMAT.into()))?,
+    );
     if decoded.len() != 32 {
-        return Err(Failure::Validation(
-            "Recovery key must contain exactly 256 bits".into(),
-        ));
+        return Err(Failure::Validation(messages::RECOVERY_KEY_LENGTH.into()));
     }
     let mut key = Zeroizing::new([0; 32]);
     key.copy_from_slice(&decoded);
@@ -105,9 +101,7 @@ fn finish(
         .query_row("PRAGMA quick_check", [], |r| r.get(0))
         .map_err(storage)?;
     if integrity != "ok" {
-        return Err(Failure::Storage(
-            "Encrypted backup database is not valid".into(),
-        ));
+        return Err(Failure::Storage(messages::BACKUP_DATABASE_INVALID.into()));
     }
     Ok(())
 }
@@ -118,7 +112,7 @@ fn verify(source: &Path, recovery: &[u8; 32]) -> Result<Zeroizing<[u8; 32]>> {
     }
     let bytes = std::fs::read(path).map_err(storage)?;
     if bytes.len() < 48 || &bytes[..8] != MAGIC {
-        return Err(Failure::Compatibility("Unsupported backup".into()));
+        return Err(Failure::Compatibility(messages::BACKUP_UNSUPPORTED.into()));
     }
     let cipher = XChaCha20Poly1305::new(recovery.into());
     let data = Zeroizing::new(
@@ -130,17 +124,11 @@ fn verify(source: &Path, recovery: &[u8; 32]) -> Result<Zeroizing<[u8; 32]>> {
                     aad: MAGIC,
                 },
             )
-            .map_err(|_| {
-                Failure::Validation(
-                    "Backup authentication failed: wrong recovery key or altered manifest".into(),
-                )
-            })?,
+            .map_err(|_| Failure::Validation(messages::BACKUP_AUTH_FAILED.into()))?,
     );
     let mut manifest: Manifest = serde_json::from_slice(&data).map_err(storage)?;
     if manifest.version != 1 || manifest.schema > 2 {
-        return Err(Failure::Compatibility(
-            "Backup requires a newer application".into(),
-        ));
+        return Err(Failure::Compatibility(messages::BACKUP_NEWER.into()));
     }
     let key = recovery_key(&manifest.key)?;
     use zeroize::Zeroize;
@@ -153,7 +141,7 @@ fn verify(source: &Path, recovery: &[u8; 32]) -> Result<Zeroizing<[u8; 32]>> {
             .all(|c| matches!(c, std::path::Component::Normal(_)))
             || (name != "catalogue.db" && !name.starts_with("assets/"))
         {
-            return Err(Failure::Validation("Invalid backup path".into()));
+            return Err(Failure::Validation(messages::BACKUP_PATH_INVALID.into()));
         }
         let path = root.join(name);
         if !path.canonicalize().map_err(storage)?.starts_with(&root)
@@ -163,7 +151,7 @@ fn verify(source: &Path, recovery: &[u8; 32]) -> Result<Zeroizing<[u8; 32]>> {
                 .is_symlink()
             || checksum(&path)? != *digest
         {
-            return Err(Failure::Storage("Backup file integrity failure".into()));
+            return Err(Failure::Storage(messages::BACKUP_INTEGRITY.into()));
         }
     }
     for entry in std::fs::read_dir(root.join("assets")).map_err(storage)? {
@@ -174,19 +162,19 @@ fn verify(source: &Path, recovery: &[u8; 32]) -> Result<Zeroizing<[u8; 32]>> {
         }
     }
     if !manifest.files.contains_key("catalogue.db") {
-        return Err(Failure::Validation("Backup database absent".into()));
+        return Err(Failure::Validation(messages::BACKUP_DATABASE_ABSENT.into()));
     }
     Ok(key)
 }
 pub fn backup(db: &Database, store: &AssetStore, destination: &Path, recovery: &str) -> Result<()> {
     if destination.exists() {
         return Err(Failure::Validation(
-            "Backup destination already exists".into(),
+            messages::BACKUP_DESTINATION_EXISTS.into(),
         ));
     }
     let parent = destination
         .parent()
-        .ok_or_else(|| Failure::Validation("Backup needs a parent directory".into()))?;
+        .ok_or_else(|| Failure::Validation(messages::BACKUP_NEEDS_PARENT.into()))?;
     std::fs::create_dir_all(parent).map_err(storage)?;
     let temp = tempfile::tempdir_in(parent).map_err(storage)?;
     crate::assets::private(temp.path())?;
@@ -238,14 +226,14 @@ pub fn restore(
 ) -> Result<()> {
     if destination.exists() {
         return Err(Failure::Validation(
-            "Restore to a new profile directory; the active catalogue is never overwritten".into(),
+            messages::RESTORE_DESTINATION_EXISTS.into(),
         ));
     }
     let recovery = recovery_key(recovery)?;
     let key = verify(source, &recovery)?;
     let parent = destination
         .parent()
-        .ok_or_else(|| Failure::Validation("Restore needs a parent directory".into()))?;
+        .ok_or_else(|| Failure::Validation(messages::RESTORE_NEEDS_PARENT.into()))?;
     std::fs::create_dir_all(parent).map_err(storage)?;
     let temp = tempfile::tempdir_in(parent).map_err(storage)?;
     crate::assets::private(temp.path())?;

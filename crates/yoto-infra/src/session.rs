@@ -195,9 +195,7 @@ impl Session {
     pub async fn prepare_update_shutdown(&self) -> Result<()> {
         match &self.owner {
             Some(owner) => owner.prepare_update_shutdown().await,
-            None => Err(Failure::Validation(
-                "Close the other Yoto instance or MCP owner before installing an update".into(),
-            )),
+            None => Err(Failure::Validation(messages::UPDATE_OTHER_INSTANCE.into())),
         }
     }
     pub fn cancel_update_shutdown(&self) {
@@ -206,11 +204,10 @@ impl Session {
         }
     }
     pub async fn install_update(&self) -> Result<()> {
-        let owner = self.owner.clone().ok_or_else(|| {
-            Failure::Validation(
-                "Close the other Yoto instance or MCP owner before installing an update".into(),
-            )
-        })?;
+        let owner = self
+            .owner
+            .clone()
+            .ok_or_else(|| Failure::Validation(messages::UPDATE_OTHER_INSTANCE.into()))?;
         let prepared = owner.updater.prepared().map_err(crate::storage)?;
         if let Err(error) = owner.prepare_update_shutdown().await {
             owner.updater.install_blocked(error.to_string());
@@ -226,9 +223,7 @@ impl Session {
             Ok(Err(error)) => {
                 owner.cancel_update_shutdown();
                 owner.updater.failed(error);
-                Err(Failure::Validation(
-                    "The update helper could not start".into(),
-                ))
+                Err(Failure::Validation(messages::UPDATE_HELPER_FAILED.into()))
             }
             Err(error) => {
                 owner.cancel_update_shutdown();
