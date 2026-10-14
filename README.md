@@ -30,7 +30,7 @@
 
 </div>
 
-<p align="center"><img src="assets/readme/playlist.gif" width="820" alt="The YotoMediaManager playlist editor: a song is dropped into the playlist Evening songs, gets a moon icon, and the playlist goes from Saving to Saved on Yoto."></p>
+<p align="center"><img src="assets/readme/playlist.gif" width="820" alt="The YotoMediaManager playlist editor: Add media opens a dialog, a trimmed song is ticked and added to the playlist Evening songs, its empty icon slot gets a star icon, and the playlist goes from Saving to Saved on Yoto."></p>
 
 ## Why it exists
 

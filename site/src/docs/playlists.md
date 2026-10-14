@@ -16,10 +16,12 @@ The list represents your Yoto playlists. A cache keeps the latest loaded data av
 1. Open your playlist and choose `Ajouter des médias`.
 2. In the dialog, check the audio files you want from your library.
 3. Choose each file's version if you have prepared more than one.
-4. Choose `Ajouter` to send the selection to Yoto.
-5. Wait for confirmation. Progress stays visible during preparation and upload, then the tracks appear in the playlist.
+4. Choose `Ajouter (1)` (the number counts your selection) to send it to Yoto.
+5. Wait for confirmation. The dialog stays open while the audio is sent, then closes, and the tracks appear in the playlist.
 
-`Importer` opens the `Imports` screen so you can add a file or YouTube link to your library. Prepare that audio, then return to the playlist and select it. Importing into the library does not automatically add media to a playlist.
+![The Add media dialog: each media of the library with its icon or an empty slot, the version to send, and Add (1) for the ticked song](images/playlist-add-en.png)
+
+A media without an icon arrives with an empty icon slot; you can choose its icon right after (see below). `Importer de l’audio` opens the `Imports` screen so you can add a file or YouTube link to your library. Prepare that audio, then return to the playlist and select it. Importing into the library does not automatically add media to a playlist.
 
 Versions already uploaded to the active account are reused. A new trim may require another upload. The original remains on your computer.
 
@@ -41,9 +43,11 @@ If an error occurs, the message and task details explain what still needs attent
 
 A cover represents the playlist. Small icons represent its chapters or tracks on the player.
 
-Choose `Changer l’icône` from the audio's menu. The dialog offers the `Yoto` catalog and your personal images in `Mes icônes`. Select an icon to apply it, or import an image to add it to your personal icons. The dialog closes and the change is saved to Yoto with your other changes.
+Click a track's icon, or its empty slot marked `+`, or choose `Changer l’icône` in the track's `⋮` menu. The `Choisir une icône` dialog offers the `Yoto` catalog, `Mes icônes` (your icons on Yoto) and `Mes images` (pictures you imported before). Select an icon and choose `Utiliser cette icône`, or choose `Importer une image` to use a picture of your own: it is fitted to 16 × 16 for the player's screen. The dialog closes and the change is saved to Yoto with your other changes.
 
-![The icon picker open over a newly added track, with the Yoto catalog and My icons](images/playlist-icons-en.png)
+An icon chosen for a media in `Médiathèque` comes with it into the playlists you add it to afterwards.
+
+![Choose an icon open over a newly added track: the Yoto, My icons and My images tabs, the Yoto icons, Import an image and Use this icon](images/playlist-icons-en.png)
 
 A song displays a single title. Playlists with chapters containing multiple tracks keep that structure; their detailed settings remain available in the menus.
 

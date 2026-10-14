@@ -17,7 +17,7 @@ The app copies and analyzes each file. Your source file stays in its original lo
 2. Choose `Importer`. A single video is downloaded directly.
 3. Follow the download and analysis in the import history.
 
-![Import audio: a YouTube link pasted in the field, and the finished task, ready in the library](images/imports-en.png)
+![Import audio: the YouTube link field, cleared once the import has started, and under Activity the finished task, ready in the library, with Listen](images/imports-en.png)
 
 For a YouTube playlist, the app shows the available videos. Select the ones you want, then choose `Importer la sélection`. This selection is required even when the playlist contains just one video. The app limits this selection to 100 videos.
 

@@ -7,19 +7,19 @@ order: 4
 
 From `Médiathèque`, choose `Écouter` on the media you want. The player shows its title and duration, a play button, and a slider for seeking. Editing tools are available when you need them.
 
-![The library: each media shows its version, Original or Trimmed, and a play button](images/library-en.png)
+![The library: each media shows its icon or an empty slot, its version, Original or Trimmed, and a play button; the open song shows its player and Trim the audio in the side panel](images/library-en.png)
 
 ## Remove an introduction or credits
 
 1. Choose `Découper l’audio` to open the trimming dialog and its waveform.
-2. Drag the start and end boundaries to keep the part you want.
+2. Drag the start and end handles on the waveform, or the slider under it, to keep the part you want.
 3. For greater precision, enter the two positions in seconds. For example, start `12` and end `180` keep the audio from 12 seconds to 3 minutes.
-4. Choose `Écouter la sélection` to check your selection.
-5. Adjust the boundaries, then choose `Appliquer`. The app prepares an MP3 version and returns to the player when it is ready.
+4. Click the waveform to move the playhead, then choose `Écouter la sélection` to listen from there. `Écouter la fin de la sélection` plays its last seconds, to check where it ends.
+5. Adjust the boundaries, then choose `Appliquer`. The app prepares an MP3 version; when it is ready, the dialog closes and the player shows `Version découpée`.
 
-Playback in the trimming dialog plays only the selected range. `Arrêter` stops the preview. `Annuler` or Escape closes the dialog without creating a version; your original stays intact.
+Playback in the trimming dialog plays only the selected range. `Arrêter l’écoute` stops the preview. `Annuler` or Escape closes the dialog without creating a version; your original stays intact.
 
-![The trimming dialog: the two handles around the kept part, the start, end and kept length, Listen to the selection and Apply](images/trim-en.png)
+![The trimming dialog: the two handles around the kept part, the playhead, the start, end and kept length, Play the end of the selection, Listen to the selection and Apply](images/trim-en.png)
 
 The end must follow the start and stay within the original duration. The app reports an error if the boundaries are invalid.
 
@@ -27,7 +27,7 @@ The end must follow the start and stay within the original duration. The app rep
 
 In the trimming dialog, enable `Égaliser le volume` to prepare a version with more consistent volume. Leave this option off to preserve the source level.
 
-Conversion and volume normalization happen on your computer. The dialog shows preparation progress and closes when the version is available. You can also find this task in `Imports`.
+Conversion and volume normalization happen on your computer. The dialog shows `Préparation de votre découpe…` and closes when the version is available. You can also find this task in `Imports`.
 
 ## Understand audio versions
 
