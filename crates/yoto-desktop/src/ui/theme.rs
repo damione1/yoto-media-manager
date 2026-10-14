@@ -259,14 +259,23 @@ pub fn install(cx: &mut App) {
     gpui_kit::component::Theme::update(cx, |theme| theme.apply_config(&Rc::new(config)));
 }
 
-/// The application icon, decoded once.
+/// The app icon artwork, shared with the bundle icons and the website.
+const LOGO_SVG: &str = include_str!("../../../../assets/branding/app-icon.svg");
+/// Intrinsic size the logo is rasterised at. GPUI renders an SVG image once,
+/// at its own `width`/`height` times two, then lets the GPU scale it: left at
+/// 1024, that is a 2048 px texture shrunk to a few dozen pixels, which costs
+/// memory and comes out aliased. 75 gives a 150 px raster, enough for the
+/// sidebar logo on a Retina display.
+const LOGO_RASTER: &str = r#"width="75" height="75""#;
+
+fn logo_svg() -> String {
+    LOGO_SVG.replacen(r#"width="1024" height="1024""#, LOGO_RASTER, 1)
+}
+
+/// The application icon, rasterised from the SVG once.
 pub fn logo(size: f32) -> Img {
-    static LOGO: LazyLock<Arc<Image>> = LazyLock::new(|| {
-        Arc::new(Image::from_bytes(
-            ImageFormat::Png,
-            include_bytes!("../../../../assets/branding/portal-logo.png").to_vec(),
-        ))
-    });
+    static LOGO: LazyLock<Arc<Image>> =
+        LazyLock::new(|| Arc::new(Image::from_bytes(ImageFormat::Svg, logo_svg().into_bytes())));
     img(LOGO.clone()).size(px(size)).flex_shrink_0()
 }
 
@@ -925,5 +934,29 @@ mod tests {
                 assert!(x + w <= 8 && y + h <= 7);
             }
         }
+    }
+
+    /// Goes through the same path as `img()`: GPUI rasterises the colour SVG
+    /// with resvg, keeping gradients and the card shadows.
+    #[core::prelude::v1::test]
+    fn logo_svg_renders_in_colour_at_the_raster_size() {
+        let svg = logo_svg();
+        assert!(
+            svg.contains(LOGO_RASTER),
+            "app-icon.svg no longer declares width/height 1024"
+        );
+        let render = Image::from_bytes(ImageFormat::Svg, svg.into_bytes())
+            .to_image_data(SvgRenderer::new(Arc::new(())))
+            .expect("the logo SVG renders");
+        assert_eq!(render.size(0), size(DevicePixels(150), DevicePixels(150)));
+        let bytes = render.as_bytes(0).expect("one frame");
+        let pixel = |x: usize, y: usize| {
+            let at = (y * 150 + x) * 4;
+            [bytes[at + 2], bytes[at + 1], bytes[at], bytes[at + 3]]
+        };
+        assert_eq!(pixel(0, 0)[3], 0, "transparent outside the tile");
+        let [r, g, b, a] = pixel(75, 22);
+        assert_eq!(a, 255);
+        assert!(r > 200 && g > 150 && b < 120, "warm sky, got {r},{g},{b}");
     }
 }
