@@ -151,8 +151,13 @@ fn whole_webm_opus_preview_accepts_the_shorter_decoded_tail() {
             "sine=frequency=440:duration=6.01",
             "-ac",
             "2",
+            "-ar",
+            "48000",
+            // The bundled ffmpeg has only its own Opus encoder, which is marked experimental.
             "-c:a",
-            "libopus",
+            "opus",
+            "-strict",
+            "experimental",
             "-y",
         ])
         .arg(&input);
