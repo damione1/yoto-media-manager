@@ -3198,13 +3198,109 @@ fn is_empty(value: &serde_json::Value) -> bool {
 fn excerpt(value: &serde_json::Value) -> String {
     value.to_string().chars().take(120).collect()
 }
-/// Where previews play: a sink on the OS default output, with the device it was opened on
-/// and whether its stream has reported an error since.
+/// What plays previews on this computer, owned by the preview thread. The system routes the
+/// sound to whatever output the user has picked and keeps following it: the app never chooses
+/// or configures an audio device itself.
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+struct Playback {
+    player: Option<objc2::rc::Retained<objc2_avf_audio::AVAudioPlayer>>,
+}
+#[cfg(target_os = "macos")]
+impl Playback {
+    /// Starts `path` through AVAudioPlayer, which plays on the system default output and
+    /// moves with it when a headset is put on or taken off mid-sound.
+    fn start(&mut self, path: &std::path::Path) -> Result<()> {
+        use objc2::AnyThread;
+        use objc2_avf_audio::AVAudioPlayer;
+        use objc2_foundation::NSURL;
+        self.stop();
+        objc2::rc::autoreleasepool(|_| {
+            let url = NSURL::from_file_path(path).ok_or_else(|| {
+                Failure::Media(format!("Preview decoding failed: {}", path.display()))
+            })?;
+            // SAFETY: AVAudioPlayer is not main-thread bound; this thread alone creates,
+            // drives and drops it, and the lease keeps the file alive as long as it does.
+            let player =
+                unsafe { AVAudioPlayer::initWithContentsOfURL_error(AVAudioPlayer::alloc(), &url) }
+                    .map_err(|e| {
+                        eprintln!("Preview decoding failed: {e:?}");
+                        Failure::Media(format!(
+                            "Preview decoding failed: {}",
+                            e.localizedDescription()
+                        ))
+                    })?;
+            if !unsafe { player.play() } {
+                eprintln!(
+                    "Audio output unavailable: playback of {} refused",
+                    path.display()
+                );
+                return Err(Failure::Media(
+                    "Audio output unavailable: playback did not start".into(),
+                ));
+            }
+            self.player = Some(player);
+            Ok(())
+        })
+    }
+    /// Seconds played so far, or `None` once the sound has ended or nothing is playing.
+    fn elapsed(&self) -> Option<f64> {
+        let player = self.player.as_ref()?;
+        // SAFETY: plain property reads on the player this thread owns.
+        unsafe { player.isPlaying().then(|| player.currentTime()) }
+    }
+    fn stop(&mut self) {
+        if let Some(player) = self.player.take() {
+            // SAFETY: the player is this thread's and is dropped right after.
+            objc2::rc::autoreleasepool(|_| unsafe { player.stop() });
+        }
+    }
+}
+/// Where previews play: a rodio player on the OS default output, reopened when that output
+/// changes between plays.
+#[cfg(not(target_os = "macos"))]
+#[derive(Default)]
+struct Playback {
+    output: Option<PreviewOutput>,
+    player: Option<rodio::Player>,
+}
+#[cfg(not(target_os = "macos"))]
+impl Playback {
+    fn start(&mut self, path: &std::path::Path) -> Result<()> {
+        self.stop();
+        let output = match PreviewOutput::current_or_open(self.output.take()) {
+            Ok(output) => self.output.insert(output),
+            Err(e) => {
+                eprintln!("Audio output unavailable: {e:?}");
+                return Err(Failure::Media(format!("Audio output unavailable: {e}")));
+            }
+        };
+        let file = File::open(path).map_err(storage)?;
+        let decoder = rodio::Decoder::try_from(file)
+            .map_err(|e| Failure::Media(format!("Preview decoding failed: {e}")))?;
+        let player = rodio::Player::connect_new(output.sink.mixer());
+        player.append(decoder);
+        self.player = Some(player);
+        Ok(())
+    }
+    /// Seconds played so far, or `None` once the sound has ended or nothing is playing.
+    fn elapsed(&self) -> Option<f64> {
+        let player = self.player.as_ref()?;
+        (!player.empty()).then(|| player.get_pos().as_secs_f64())
+    }
+    fn stop(&mut self) {
+        self.player.take();
+    }
+}
+/// A sink on the OS default output, with the device it was opened on and whether its stream
+/// has reported an error since.
+#[cfg(not(target_os = "macos"))]
 struct PreviewOutput {
     sink: rodio::MixerDeviceSink,
     device: rodio::Device,
     failed: Arc<std::sync::atomic::AtomicBool>,
 }
+#[cfg(not(target_os = "macos"))]
 impl PreviewOutput {
     /// `current` while it still plays to the default device and has not failed, otherwise a
     /// sink opened on today's default: a headset put on or taken off since the last preview
@@ -3249,6 +3345,7 @@ impl PreviewOutput {
 /// About 50 ms of audio per buffer, as rodio aims for, rounded to a power of two and kept
 /// within what the device accepts; the OS picks when the device does not say. Rodio's own
 /// choice ignores the range, which some headsets refuse.
+#[cfg(not(target_os = "macos"))]
 fn output_buffer_size(
     sample_rate: u32,
     supported: &rodio::cpal::SupportedBufferSize,
@@ -3268,38 +3365,47 @@ fn output_buffer_size(
         SupportedBufferSize::Range { .. } | SupportedBufferSize::Unknown => BufferSize::Default,
     }
 }
+/// Where a preview that began at `start` stands after `elapsed` seconds of playback; `start`
+/// itself when the player reports nothing usable.
+fn preview_position(start: MediaTime, elapsed: f64) -> MediaTime {
+    if elapsed < 0.0 {
+        return start;
+    }
+    MediaTime::from_seconds(start.seconds() + elapsed).unwrap_or(start)
+}
 fn preview_loop(
     receiver: std::sync::mpsc::Receiver<PreviewCommand>,
     status: Arc<Mutex<PreviewStatus>>,
 ) {
+    let mut playback = Playback::default();
     let mut timeline: Option<(MediaId, MediaTime)> = None;
-    let mut stream = None;
-    let mut player = None;
     let mut lease = None;
     let mut active_cancel: Option<Arc<std::sync::atomic::AtomicBool>> = None;
     loop {
         let command = match receiver.recv_timeout(std::time::Duration::from_millis(100)) {
             Ok(command) => command,
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                if player.as_ref().is_some_and(rodio::Player::empty)
-                    || active_cancel
-                        .as_ref()
-                        .is_some_and(|c| c.load(std::sync::atomic::Ordering::SeqCst))
-                {
-                    player.take();
-                    lease.take();
-                    active_cancel.take();
-                    timeline = None;
-                    if let Ok(mut state) = status.lock() {
-                        *state = PreviewStatus::Stopped;
+                let Some((media, start)) = timeline else {
+                    continue;
+                };
+                let cancelled = active_cancel
+                    .as_ref()
+                    .is_some_and(|c| c.load(std::sync::atomic::Ordering::SeqCst));
+                let state = match playback.elapsed() {
+                    Some(elapsed) if !cancelled => PreviewStatus::Playing {
+                        media,
+                        position: preview_position(start, elapsed),
+                    },
+                    _ => {
+                        playback.stop();
+                        lease.take();
+                        active_cancel.take();
+                        timeline = None;
+                        PreviewStatus::Stopped
                     }
-                } else if let (Some(player), Some((media, start))) = (&player, timeline)
-                    && let Ok(mut state) = status.lock()
-                {
-                    let position =
-                        MediaTime::from_seconds(start.seconds() + player.get_pos().as_secs_f64())
-                            .unwrap_or(start);
-                    *state = PreviewStatus::Playing { media, position };
+                };
+                if let Ok(mut current) = status.lock() {
+                    *current = state;
                 }
                 continue;
             }
@@ -3313,28 +3419,17 @@ fn preview_loop(
                 cancel,
                 reply,
             } => {
-                player.take();
+                playback.stop();
                 lease.take();
                 let result = (|| {
                     if cancel.load(std::sync::atomic::Ordering::SeqCst) {
                         return Err(Failure::Cancelled);
                     }
-                    let output = match PreviewOutput::current_or_open(stream.take()) {
-                        Ok(output) => stream.insert(output),
-                        Err(e) => {
-                            eprintln!("Audio output unavailable: {e:?}");
-                            return Err(Failure::Media(format!("Audio output unavailable: {e}")));
-                        }
-                    };
-                    let file = File::open(next.path()).map_err(storage)?;
-                    let decoder = rodio::Decoder::try_from(file)
-                        .map_err(|e| Failure::Media(format!("Preview decoding failed: {e}")))?;
-                    let p = rodio::Player::connect_new(output.sink.mixer());
+                    playback.start(next.path())?;
                     if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                        playback.stop();
                         return Err(Failure::Cancelled);
                     }
-                    p.append(decoder);
-                    player = Some(p);
                     lease = Some(next);
                     active_cancel = Some(cancel);
                     timeline = Some((media, start));
@@ -3347,7 +3442,7 @@ fn preview_loop(
                 let _ = reply.send(result);
             }
             PreviewCommand::Stop => {
-                player.take();
+                playback.stop();
                 lease.take();
                 active_cancel.take();
                 timeline = None;
@@ -3393,6 +3488,19 @@ mod tests {
             Some(".content.chapters[0].tracks[0].trackUrl: \"yoto:#b\", expected \"yoto:#a\"")
         );
     }
+    #[test]
+    fn preview_position_follows_the_player_from_the_trim_start() {
+        let start = MediaTime::from_seconds(12.5).unwrap();
+        assert_eq!(
+            preview_position(start, 2.25),
+            MediaTime::from_seconds(14.75).unwrap()
+        );
+        assert_eq!(preview_position(start, 0.0), start);
+        assert_eq!(preview_position(start, -1.0), start);
+        assert_eq!(preview_position(start, f64::NAN), start);
+        assert_eq!(preview_position(start, f64::INFINITY), start);
+    }
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn preview_buffer_stays_within_what_the_output_device_accepts() {
         use rodio::cpal::{BufferSize, SupportedBufferSize};

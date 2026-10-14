@@ -27,7 +27,6 @@ httpdate = "1"
 webbrowser = "1"
 toml = "0.9"
 tokio-util = { version = "0.7", features = ["io"] }
-rodio = { version = "=0.23.0", default-features = false, features = ["playback", "mp3", "wav", "flac", "mp4", "vorbis"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
 yoto-api-generated = { path = "../yoto-api-generated" }
 yoto-auth-generated = { path = "../yoto-auth-generated" }
@@ -35,6 +34,13 @@ tempfile = "3"
 rumqttc = { version = "=0.25.1", features = ["websocket", "url"] }
 libc = "0.2"
 schemars = "1"
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSError", "NSString", "NSURL"] }
+objc2-avf-audio = { version = "0.3", default-features = false, features = ["std", "AVAudioPlayer"] }
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+rodio = { version = "=0.23.0", default-features = false, features = ["playback", "wav"] }
 [dev-dependencies]
+rodio = { version = "=0.23.0", default-features = false, features = ["wav"] }
 tempfile = "3"
 wiremock = "0.6"
