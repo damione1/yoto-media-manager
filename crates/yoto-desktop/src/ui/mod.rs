@@ -74,6 +74,9 @@ pub struct AppView {
     pub _subscriptions: Vec<Subscription>,
     pub group_editors: BTreeMap<(AccountId, Option<GroupId>), Entity<group::GroupEditor>>,
     pub selected_group: Option<Option<GroupId>>,
+    /// « Mode avancé » in Compte: shows the technical settings parents rarely need.
+    /// Kept for this session only; it starts off.
+    pub advanced: bool,
 }
 impl AppView {
     pub fn navigate(&mut self, route: Route, cx: &mut Context<Self>) {
@@ -176,10 +179,8 @@ impl AppView {
             search_index,
             job_page: None,
             job_offset: 0,
-            receipt_card: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .placeholder("ID de la carte Yoto à associer après déconnexion")
-            }),
+            receipt_card: cx
+                .new(|cx| InputState::new(window, cx).placeholder("Identifiant de la carte")),
             route: Route::Library,
             selected_media: None,
             selected_media_set: Default::default(),
@@ -222,6 +223,7 @@ impl AppView {
             _subscriptions: subscriptions,
             group_editors: BTreeMap::new(),
             selected_group: None,
+            advanced: false,
         };
         view.refresh_playlists(cx);
         view

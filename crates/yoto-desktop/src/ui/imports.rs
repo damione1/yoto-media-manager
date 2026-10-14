@@ -610,19 +610,8 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
         ),
         JobState::Conflict { .. } => {
             let mut actions = vec![];
-            for (choice, label, look) in [
-                (
-                    ConflictChoice::KeepLocal,
-                    "Publier ma version",
-                    Look::Primary,
-                ),
-                (
-                    ConflictChoice::UseRemote,
-                    "Garder celle de Yoto",
-                    Look::Outline,
-                ),
-                (ConflictChoice::CreateCopy, "Créer une copie", Look::Ghost),
-            ] {
+            for (choice, look) in CONFLICT_CHOICES {
+                let label = conflict_label(choice);
                 actions.push(
                     theme::pill(
                         Button::new(element_id(label, id))
@@ -827,65 +816,181 @@ fn show_details(view: &mut AppView, id: JobId, window: &mut Window, cx: &mut Con
         dialog.title(title.clone()).w(px(700.)).child(content)
     });
 }
+/// The three answers to a playlist changed both here and on Yoto, in the order offered.
+const CONFLICT_CHOICES: [(ConflictChoice, theme::Look); 3] = [
+    (ConflictChoice::KeepLocal, theme::Look::Primary),
+    (ConflictChoice::UseRemote, theme::Look::Outline),
+    (ConflictChoice::CreateCopy, theme::Look::Ghost),
+];
+/// One label per conflict answer, shared by the job card and its details.
+fn conflict_label(choice: ConflictChoice) -> &'static str {
+    match choice {
+        ConflictChoice::KeepLocal => "Publier ma version",
+        ConflictChoice::UseRemote => "Garder la version Yoto",
+        ConflictChoice::CreateCopy => "Créer une copie",
+    }
+}
 fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement {
+    use gpui_kit::component::dialog::DialogClose;
+    use theme::{Height, Look};
     let id = job.id;
-    let mut body = div().flex().flex_col().gap_3().child(job.state.label());
+    let state_family = match &job.state {
+        JobState::Completed { .. } => &theme::MINT,
+        JobState::Failed { .. }
+        | JobState::Retry { .. }
+        | JobState::WaitingForAuthentication
+        | JobState::Reconciling => &theme::ROSE,
+        JobState::Conflict { .. } => &theme::BUTTER,
+        JobState::Queued | JobState::Running { .. } => &theme::SKY,
+        JobState::Cancelled => &theme::STONE,
+    };
+    let actions = || div().flex().flex_wrap().gap(px(8.));
+    let mut body = div().flex().flex_col().gap(px(14.)).child(
+        div()
+            .flex()
+            .child(theme::tag(job.state.label(), state_family)),
+    );
     if let JobRequest::Import {
         selection: ImportSelection::Youtube { url, .. },
     } = &job.request
     {
         let source = url.clone();
-        body = body
-            .child(div().text_sm().child(format!("Lien source : {url}")))
-            .child(
-                Button::new(element_id("copy-import-url", id))
-                    .label("Copier le lien source")
-                    .on_click(cx.listener(move |_, _, _, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(source.clone()))
-                    })),
-            );
+        body = body.child(
+            theme::inset()
+                .child(
+                    div()
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .child("Vidéo YouTube d’origine"),
+                )
+                .child(theme::meta(url.clone()).truncate())
+                .child(
+                    div().flex().child(theme::pill(
+                        Button::new(element_id("copy-import-url", id))
+                            .icon(IconName::Link)
+                            .label("Copier le lien")
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(source.clone()))
+                            })),
+                        Look::Outline,
+                        Height::Small,
+                        false,
+                        cx,
+                    )),
+                ),
+        );
     }
     match &job.state {
         JobState::Failed { failure } | JobState::Retry { failure, .. } => {
-            body = body.child(failure_text(failure)).child(
-                Button::new(element_id("retry-details", id))
-                    .label("Réessayer")
-                    .on_click(cx.listener(move |v, _, window, cx| {
-                        v.send(Command::Retry(id), cx);
-                        window.close_dialog(cx);
-                    })),
-            );
+            body = body
+                .child(
+                    theme::inset().bg(theme::c(theme::ROSE.soft)).child(
+                        div()
+                            .text_color(theme::c(theme::ROSE.ink))
+                            .font_weight(FontWeight::BOLD)
+                            .child(failure_text(failure)),
+                    ),
+                )
+                .child(
+                    actions().child(theme::pill(
+                        Button::new(element_id("retry-details", id))
+                            .label("Réessayer")
+                            .on_click(cx.listener(move |v, _, window, cx| {
+                                v.send(Command::Retry(id), cx);
+                                window.close_dialog(cx);
+                            })),
+                        Look::Primary,
+                        Height::Medium,
+                        false,
+                        cx,
+                    )),
+                );
         }
         JobState::Conflict { .. } => {
-            body = body.child(
-                "La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver.",
-            );
-            for (choice, label) in [
-                (ConflictChoice::KeepLocal, "Publier ma version"),
-                (ConflictChoice::UseRemote, "Conserver la version Yoto"),
-                (ConflictChoice::CreateCopy, "Créer une copie"),
-            ] {
-                body = body.child(Button::new(element_id(label, id)).label(label).on_click(
-                    cx.listener(move |v, _, window, cx| {
-                        v.send(Command::Resolve { job: id, choice }, cx);
-                        window.close_dialog(cx);
-                    }),
+            let mut choices = actions();
+            for (choice, look) in CONFLICT_CHOICES {
+                let label = conflict_label(choice);
+                choices = choices.child(theme::pill(
+                    Button::new(element_id(label, id))
+                        .label(label)
+                        .on_click(cx.listener(move |v, _, window, cx| {
+                            v.send(Command::Resolve { job: id, choice }, cx);
+                            window.close_dialog(cx);
+                        })),
+                    look,
+                    Height::Medium,
+                    false,
+                    cx,
                 ));
             }
+            body = body
+                .child(theme::note(
+                    "La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver.",
+                ))
+                .child(choices);
         }
         JobState::Reconciling => {
-            body = body.child("La réponse de Yoto est incertaine. Vérifiez la publication avant de la renvoyer.")
-                .child(Button::new(element_id("reconcile", id)).label("Vérifier auprès de Yoto").primary().on_click(cx.listener(move |v, _, window, cx| { v.send(Command::Reconcile(id), cx); window.close_dialog(cx); })))
-                .child(div().text_sm().child("Si votre compte a été déconnecté, vous pouvez associer explicitement l’ID de la carte déjà créée :"))
-                .child(Input::new(&view.receipt_card))
-                .child(Button::new(element_id("attach-receipt", id)).label("Associer cette carte").on_click(cx.listener(move |v, _, window, cx| match CardId::new(v.receipt_card.read(cx).value().to_string()) {
-                    Ok(card) => { v.send(Command::AttachPublicationReceipt { job: id, card }, cx); window.close_dialog(cx); }
-                    Err(error) => { v.error = Some(error); cx.notify(); }
-                })));
+            body = body
+                .child(theme::note(
+                    "Yoto n’a pas confirmé cet envoi. Vérifiez-le avant de le renvoyer, pour ne pas créer la playlist deux fois.",
+                ))
+                .child(actions().child(theme::pill(
+                    Button::new(element_id("reconcile", id))
+                        .label("Vérifier auprès de Yoto")
+                        .on_click(cx.listener(move |v, _, window, cx| {
+                            v.send(Command::Reconcile(id), cx);
+                            window.close_dialog(cx);
+                        })),
+                    Look::Primary,
+                    Height::Medium,
+                    false,
+                    cx,
+                )));
+            if view.advanced {
+                body = body.child(
+                    theme::inset()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::EXTRA_BOLD)
+                                .child("La carte existe déjà ?"),
+                        )
+                        .child(theme::note(
+                            "Si l’envoi a créé une carte avant une déconnexion, collez son identifiant (affiché dans l’application Yoto) pour la relier à cet envoi.",
+                        ))
+                        .child(theme::small_field(Input::new(&view.receipt_card)))
+                        .child(div().flex().child(theme::pill(
+                            Button::new(element_id("attach-receipt", id))
+                                .label("Relier cette carte")
+                                .on_click(cx.listener(move |v, _, window, cx| {
+                                    match CardId::new(v.receipt_card.read(cx).value().trim()) {
+                                        Ok(card) => {
+                                            v.send(
+                                                Command::AttachPublicationReceipt { job: id, card },
+                                                cx,
+                                            );
+                                            window.close_dialog(cx);
+                                        }
+                                        Err(_) => v.report_error(
+                                            Failure::Validation(
+                                                "Collez l’identifiant de la carte, tel qu’il apparaît dans l’application Yoto."
+                                                    .into(),
+                                            ),
+                                            cx,
+                                        ),
+                                    }
+                                })),
+                            Look::Outline,
+                            Height::Small,
+                            false,
+                            cx,
+                        ))),
+                );
+            }
         }
         JobState::Completed { output } => match output {
             JobOutput::Published { .. } => {
-                body = body.child("Enregistré sur votre compte Yoto. Pour l’écouter sur une carte, associez cette playlist à une carte « Make Your Own » dans l’application Yoto.");
+                body = body.child(theme::note(
+                    "Enregistré sur votre compte Yoto. Pour l’écouter sur une carte, associez cette playlist à une carte « Make Your Own » dans l’application Yoto.",
+                ));
             }
             JobOutput::Imported { .. } | JobOutput::Encoded { .. } => {}
         },
@@ -894,5 +999,17 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
         | JobState::WaitingForAuthentication
         | JobState::Cancelled => {}
     }
-    body.into_any_element()
+    body.child(
+        div()
+            .flex()
+            .justify_end()
+            .child(DialogClose::new().child(theme::pill(
+                Button::new(element_id("close-job-details", id)).label("Fermer"),
+                Look::Outline,
+                Height::Medium,
+                false,
+                cx,
+            ))),
+    )
+    .into_any_element()
 }

@@ -158,48 +158,100 @@ impl UpdatePanel {
 }
 impl Render for UpdatePanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(format!("Version installée : {CURRENT_VERSION}"));
+        use theme::{Height, Look};
+        let busy = |text: String| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .font_weight(FontWeight::BOLD)
+                .text_color(theme::c(theme::INK_SOFT))
+                .child(Spinner::new().color(theme::c(theme::MINT.accent)))
+                .child(text)
+        };
+        let problem = |text: String| {
+            theme::inset().bg(theme::c(theme::ROSE.soft)).child(
+                div()
+                    .text_color(theme::c(theme::ROSE.ink))
+                    .font_weight(FontWeight::BOLD)
+                    .child(text),
+            )
+        };
+        let mut body = div().flex().flex_col().gap(px(14.)).child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(theme::icon_tile(IconName::Download, &theme::MINT, 44., 13.))
+                .child(
+                    div()
+                        .child(theme::heading(PRODUCT_NAME, 19.))
+                        .child(theme::meta(format!(
+                            "Version installée : {CURRENT_VERSION}"
+                        ))),
+                ),
+        );
+        let mut action = None;
         match self.state.as_ref() {
             UpdateState::Idle => {
-                body = body.child(format!("Recevez les nouvelles versions de {PRODUCT_NAME} directement dans l’application.")).child(Button::new("check-update").label("Rechercher une mise à jour").primary().on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))));
+                body = body.child(theme::note(format!(
+                    "Recevez les nouvelles versions de {PRODUCT_NAME} directement dans l’application."
+                )));
+                action = Some(theme::pill(
+                    Button::new("check-update")
+                        .label("Rechercher une mise à jour")
+                        .on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))),
+                    Look::Primary,
+                    Height::Medium,
+                    false,
+                    cx,
+                ));
             }
             UpdateState::Checking => {
+                body = body.child(busy("Recherche de mises à jour…".into()));
+            }
+            UpdateState::Current => {
                 body = body.child(
                     div()
                         .flex()
-                        .gap_2()
-                        .child(Spinner::new().small())
-                        .child("Recherche de mises à jour…"),
+                        .items_center()
+                        .gap(px(8.))
+                        .child(theme::done_mark(22.))
+                        .child(
+                            div()
+                                .font_weight(FontWeight::BOLD)
+                                .child("Vous utilisez la dernière version disponible."),
+                        ),
                 );
-            }
-            UpdateState::Current => {
-                body = body
-                    .child("Vous utilisez la dernière version disponible.")
-                    .child(
-                        Button::new("recheck-update")
-                            .label("Vérifier à nouveau")
-                            .on_click(
-                                cx.listener(|view, _, _, _| view.request(UpdateAction::Check)),
-                            ),
-                    );
+                action = Some(theme::pill(
+                    Button::new("recheck-update")
+                        .label("Vérifier à nouveau")
+                        .on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))),
+                    Look::Outline,
+                    Height::Medium,
+                    false,
+                    cx,
+                ));
             }
             UpdateState::Available(release) => {
-                let release = release.clone();
                 body = body
-                    .child(format!("La version {} est disponible.", release.version))
-                    .child(release.notes.clone())
                     .child(
-                        Button::new("download-update")
-                            .label("Télécharger la mise à jour")
-                            .primary()
-                            .on_click(
-                                cx.listener(|view, _, _, _| view.request(UpdateAction::Download)),
-                            ),
-                    );
+                        div()
+                            .font_weight(FontWeight::EXTRA_BOLD)
+                            .child(format!("La version {} est disponible.", release.version)),
+                    )
+                    .child(release_notes(&release.notes));
+                action = Some(theme::pill(
+                    Button::new("download-update")
+                        .label("Télécharger la mise à jour")
+                        .on_click(
+                            cx.listener(|view, _, _, _| view.request(UpdateAction::Download)),
+                        ),
+                    Look::Primary,
+                    Height::Medium,
+                    false,
+                    cx,
+                ));
             }
             UpdateState::Downloading {
                 received, total, ..
@@ -209,79 +261,120 @@ impl Render for UpdatePanel {
                 } else {
                     received.saturating_mul(100) / total
                 };
-                body = body
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(Spinner::new().small())
-                            .child(format!(
-                                "Téléchargement : {percent} % ({:.1} / {:.1} Mo)",
-                                *received as f64 / 1_000_000.,
-                                *total as f64 / 1_000_000.
-                            )),
-                    )
-                    .child(
-                        Button::new("cancel-update")
-                            .label("Annuler le téléchargement")
-                            .on_click(
-                                cx.listener(|view, _, _, _| view.request(UpdateAction::Cancel)),
-                            ),
-                    );
+                body = body.child(busy(format!(
+                    "Téléchargement : {percent} % ({:.1} / {:.1} Mo)",
+                    *received as f64 / 1_000_000.,
+                    *total as f64 / 1_000_000.
+                )));
+                action = Some(theme::pill(
+                    Button::new("cancel-update")
+                        .label("Annuler le téléchargement")
+                        .on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Cancel))),
+                    Look::Outline,
+                    Height::Medium,
+                    false,
+                    cx,
+                ));
             }
             UpdateState::Verifying(_) => {
-                body = body.child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .child(Spinner::new().small())
-                        .child("Vérification et préparation de la mise à jour…"),
-                );
+                body = body.child(busy(
+                    "Vérification et préparation de la mise à jour…".into(),
+                ));
             }
             UpdateState::Ready { release, issue } => {
-                body = body.children(issue.clone().map(|message| {
-                    div()
-                        .text_color(cx.theme().danger)
-                        .child(failure_text(&Failure::Validation(message)))
-                }));
-                body = body.child(format!("La version {} est prête à être installée.", release.version)).child("Votre médiathèque est conservée. Terminez vos imports et envois avant de redémarrer.").child(Button::new("install-update").label("Installer et redémarrer").primary().on_click(cx.listener(|view, _, _, cx| view.install(cx))));
+                body = body
+                    .children(
+                        issue
+                            .clone()
+                            .map(|message| problem(failure_text(&Failure::Validation(message)))),
+                    )
+                    .child(div().font_weight(FontWeight::EXTRA_BOLD).child(format!(
+                        "La version {} est prête à être installée.",
+                        release.version
+                    )))
+                    .child(theme::note(
+                        "Votre médiathèque est conservée. Terminez vos imports et envois avant de redémarrer.",
+                    ));
+                action = Some(theme::pill(
+                    Button::new("install-update")
+                        .label("Installer et redémarrer")
+                        .on_click(cx.listener(|view, _, _, cx| view.install(cx))),
+                    Look::Primary,
+                    Height::Medium,
+                    false,
+                    cx,
+                ));
             }
             UpdateState::Installing => {
-                body = body.child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .child(Spinner::new().small())
-                        .child("Redémarrage de l’application…"),
-                );
+                body = body.child(busy("Redémarrage de l’application…".into()));
             }
             UpdateState::Failed(error) => {
-                body = body
-                    .child(
-                        div()
-                            .text_color(cx.theme().danger)
-                            .child(wording::update_failure_text(error)),
-                    )
-                    .child(
-                        Button::new("retry-update").label("Réessayer").on_click(
-                            cx.listener(|view, _, _, _| view.request(UpdateAction::Check)),
-                        ),
-                    );
+                body = body.child(problem(wording::update_failure_text(error)));
+                action = Some(theme::pill(
+                    Button::new("retry-update")
+                        .label("Réessayer")
+                        .on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))),
+                    Look::Primary,
+                    Height::Medium,
+                    false,
+                    cx,
+                ));
             }
         }
-        body = body.children(self.notice.as_ref().map(|error| {
-            div()
-                .text_color(cx.theme().danger)
-                .child(failure_text(error))
-        }));
+        body = body.children(
+            self.notice
+                .as_ref()
+                .map(|error| problem(failure_text(error))),
+        );
+        let installing = matches!(self.state.as_ref(), UpdateState::Installing);
         body.child(
-            div().flex().justify_end().child(
-                DialogClose::new().child(
-                    Button::new("close-update")
-                        .label("Fermer")
-                        .disabled(matches!(self.state.as_ref(), UpdateState::Installing)),
-                ),
-            ),
+            div()
+                .flex()
+                .justify_end()
+                .gap(px(8.))
+                .child(DialogClose::new().child(theme::pill(
+                    Button::new("close-update").label("Fermer"),
+                    Look::Outline,
+                    Height::Medium,
+                    installing,
+                    cx,
+                )))
+                .children(action),
         )
     }
+}
+
+/// Release notes as short paragraphs and bullets, in a scrolling inset. Markdown markers
+/// (`#`, `-`, `*`) are read as structure instead of being shown.
+fn release_notes(notes: &str) -> Stateful<Div> {
+    let mut list = div()
+        .id("release-notes")
+        .max_h(px(220.))
+        .overflow_y_scroll()
+        .bg(theme::c(theme::CREAM))
+        .rounded(px(16.))
+        .p(px(14.))
+        .flex()
+        .flex_col()
+        .gap(px(6.))
+        .text_size(px(13.))
+        .line_height(relative(1.45))
+        .text_color(theme::c(theme::INK_SOFT));
+    for line in notes.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        list = list.child(if let Some(title) = line.strip_prefix('#') {
+            div()
+                .font_weight(FontWeight::EXTRA_BOLD)
+                .text_color(theme::c(theme::INK))
+                .child(title.trim_start_matches('#').trim().to_owned())
+        } else if let Some(item) = line.strip_prefix("- ").or_else(|| line.strip_prefix("* ")) {
+            div()
+                .flex()
+                .gap(px(8.))
+                .child("•")
+                .child(div().flex_1().child(item.to_owned()))
+        } else {
+            div().child(line.to_owned())
+        });
+    }
+    list
 }
