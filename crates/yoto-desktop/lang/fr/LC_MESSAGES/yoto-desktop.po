@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:14-0400\n"
+"POT-Creation-Date: 2026-10-14 09:09-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -3312,6 +3312,10 @@ msgstr "Cette image ne peut pas servir d’icône."
 #: src/ui/wording.rs
 msgid "Cette icône n’a pas encore été envoyée à Yoto."
 msgstr "Cette icône n’a pas encore été envoyée à Yoto."
+
+#: src/ui/wording.rs
+msgid "Cette icône n’est plus disponible. Choisissez-en une autre."
+msgstr "Cette icône n’est plus disponible. Choisissez-en une autre."
 
 #: src/ui/wording.rs
 msgid "La sortie audio ne répond pas. Vérifiez le son de votre ordinateur."

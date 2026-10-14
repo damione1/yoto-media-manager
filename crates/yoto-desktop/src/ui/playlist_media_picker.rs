@@ -365,6 +365,7 @@ mod tests {
                 name: "conte.mp3".into(),
             },
             recipes: vec![original, ready, pending],
+            icon: None,
         };
         let media_id = media.id;
         let original_asset = media.original;

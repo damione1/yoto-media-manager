@@ -91,6 +91,12 @@ pub enum Command {
         media: MediaId,
         metadata: MediaMetadata,
     },
+    /// Give a media the icon its chapter and tracks get when it is added to a playlist,
+    /// or remove it with `None`. Playlists already holding the media keep their icons.
+    SetMediaIcon {
+        media: MediaId,
+        icon: Option<IconReference>,
+    },
     Prepare {
         media: MediaId,
         trim: TrimRange,
@@ -798,6 +804,7 @@ impl Service {
             | Command::DeletePlaylist(_)
             | Command::AddMedia { .. }
             | Command::UpdateMedia { .. }
+            | Command::SetMediaIcon { .. }
             | Command::DeleteMedia { .. }
             | Command::DeleteRecipe { .. }
             | Command::DeleteMediaBatch { .. }
@@ -1527,6 +1534,7 @@ impl Service {
             | Command::Backup { .. }
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
+            | Command::SetMediaIcon { .. }
             | Command::Prepare { .. }
             | Command::Waveform(_)
             | Command::Preview(_)
@@ -1590,6 +1598,7 @@ impl Service {
             | Command::Thumbnail(_)
             | Command::StoreImage { .. }
             | Command::ImportIcon { .. }
+            | Command::SetMediaIcon { .. }
             | Command::SetCover { .. } => Some(self.protect_assets()?),
             Command::Import(_)
             | Command::InspectYoutube(_)
@@ -1746,6 +1755,18 @@ impl Service {
             }
             Command::UpdateMedia { media, metadata } => {
                 self.db.update_media_metadata(media, &metadata)?;
+                Ok(Reply::Updated)
+            }
+            Command::SetMediaIcon { media, icon } => {
+                if let Some(IconReference::Local { asset }) = &icon
+                    && self
+                        .db
+                        .get::<Asset>(Table::Asset, &asset.to_string())?
+                        .is_none()
+                {
+                    return Err(Failure::Validation(messages::ICON_ABSENT.into()));
+                }
+                self.db.update_media_icon(media, icon)?;
                 Ok(Reply::Updated)
             }
             Command::Prepare {
@@ -2573,6 +2594,20 @@ impl Service {
         recipe: RecipeId,
         part_title: Option<&str>,
     ) -> Result<()> {
+        // A Yoto icon only works on a card of the account it belongs to.
+        let owner = match &playlist.origin {
+            DraftOrigin::Existing { base } => Some(&base.account),
+            DraftOrigin::New => None,
+        };
+        let media = &match &media.icon {
+            Some(IconReference::Yoto { account, .. }) if owner.is_some_and(|o| o != account) => {
+                MediaItem {
+                    icon: None,
+                    ..media.clone()
+                }
+            }
+            Some(IconReference::Yoto { .. } | IconReference::Local { .. }) | None => media.clone(),
+        };
         let version = self.recipe(recipe)?;
         let ranges = plan_parts(version.trim);
         if ranges.len() == 1 {

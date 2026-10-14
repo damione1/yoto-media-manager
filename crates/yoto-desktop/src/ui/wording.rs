@@ -727,6 +727,7 @@ fn known_message(message: &str) -> Option<&'static str> {
             tr!("Cette image ne peut pas servir d’icône.")
         }
         m::ICON_NOT_UPLOADED => tr!("Cette icône n’a pas encore été envoyée à Yoto."),
+        m::ICON_ABSENT => tr!("Cette icône n’est plus disponible. Choisissez-en une autre."),
         m::AUDIO_OUTPUT_SILENT => {
             tr!("La sortie audio ne répond pas. Vérifiez le son de votre ordinateur.")
         }

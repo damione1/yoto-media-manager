@@ -290,6 +290,7 @@ fn a_long_media_becomes_one_chapter_of_ordered_parts() {
             name: "histoire.mp3".into(),
         },
         recipes: vec![],
+        icon: None,
     };
     let parts = [RecipeId::new(), RecipeId::new()];
     let mut playlist = Playlist::new("Soir".into()).unwrap();
@@ -302,4 +303,52 @@ fn a_long_media_becomes_one_chapter_of_ordered_parts() {
         assert!(matches!(track.media, TrackMedia::Local { recipe: r, .. } if r == recipe));
     }
     playlist.validate().unwrap();
+}
+#[test]
+fn a_media_icon_goes_to_its_chapter_and_every_track() {
+    let icon = AssetId::new();
+    let media = MediaItem {
+        id: MediaId::new(),
+        title: "Histoire".into(),
+        author: String::new(),
+        tags: vec![],
+        original: AssetId::new(),
+        info: AudioInfo {
+            duration: MediaTime::try_from(60_000_000).unwrap(),
+            bytes: 1,
+            codec: "mp3".into(),
+            sample_rate: 44_100,
+            channels: 2,
+        },
+        provenance: Provenance::LocalFile {
+            name: "histoire.mp3".into(),
+        },
+        recipes: vec![],
+        icon: Some(IconReference::Local { asset: icon }),
+    };
+    let local = |reference: &Option<IconReference>| match reference {
+        Some(IconReference::Local { asset }) => Some(*asset),
+        Some(IconReference::Yoto { .. }) | None => None,
+    };
+    let mut playlist = Playlist::new("Soir".into()).unwrap();
+    playlist.add_media(&media, RecipeId::new()).unwrap();
+    playlist
+        .add_media_parts(&media, &[RecipeId::new(), RecipeId::new()], None)
+        .unwrap();
+    assert_eq!(playlist.chapters[1].tracks.len(), 2);
+    for chapter in &playlist.chapters {
+        assert_eq!(local(&chapter.icon), Some(icon));
+        for track in &chapter.tracks {
+            assert_eq!(local(&track.icon), Some(icon));
+        }
+    }
+    assert_eq!(
+        playlist.image_assets(),
+        std::collections::BTreeSet::from([icon])
+    );
+    // Media stored before icons existed still load, without one.
+    let mut stored = serde_json::to_value(&media).unwrap();
+    stored.as_object_mut().unwrap().remove("icon");
+    let old: MediaItem = serde_json::from_value(stored).unwrap();
+    assert!(old.icon.is_none());
 }

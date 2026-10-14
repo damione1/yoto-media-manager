@@ -655,6 +655,32 @@ impl Database {
         self.changed();
         Ok(())
     }
+    pub fn update_media_icon(&self, id: MediaId, icon: Option<IconReference>) -> Result<()> {
+        let mut c = self.lock()?;
+        let tx = c.transaction().map_err(storage)?;
+        let json: String = tx
+            .query_row(
+                "SELECT payload FROM media_items WHERE id=?1",
+                [id.to_string()],
+                |r| r.get(0),
+            )
+            .map_err(storage)?;
+        let mut media: MediaItem = decode(&json)?;
+        media.icon = icon;
+        let json = serde_json::to_string(&Envelope {
+            version: 1,
+            value: media,
+        })
+        .map_err(storage)?;
+        tx.execute(
+            "UPDATE media_items SET payload=?2 WHERE id=?1",
+            params![id.to_string(), json],
+        )
+        .map_err(storage)?;
+        tx.commit().map_err(storage)?;
+        self.changed();
+        Ok(())
+    }
     pub fn add_recipe(&self, recipe: &MediaRecipe) -> Result<()> {
         let mut c = self.lock()?;
         let tx = c.transaction().map_err(storage)?;
@@ -893,6 +919,9 @@ impl Database {
         }
         for m in self.list::<MediaItem>(Table::Media)? {
             roots.insert(m.original);
+            if let Some(IconReference::Local { asset }) = m.icon {
+                roots.insert(asset);
+            }
             if let Some(w) = self.get::<AssetId>(Table::Remote, &format!("waveform:{}", m.id))? {
                 roots.insert(w);
             }
