@@ -60,6 +60,9 @@ pub struct PlaylistEditor {
     /// The version playing on this computer from a track's « Écouter » button.
     previewing: Option<RecipeId>,
     preview_generation: u64,
+    /// Mirrors « Mode avancé »: shows interactive playback, shuffle ranges, streams and
+    /// raw event parameters.
+    pub(super) advanced: bool,
 }
 impl PlaylistEditor {
     pub fn new(
@@ -197,6 +200,7 @@ impl PlaylistEditor {
             expanded_tracks: Default::default(),
             previewing: None,
             preview_generation: 0,
+            advanced: false,
             draft,
             service,
             runtime,
@@ -284,6 +288,7 @@ impl PlaylistEditor {
             std::mem::take(&mut self.expanded_tracks),
         );
         let preview = (self.previewing, self.preview_generation);
+        let advanced = self.advanced;
         *self = Self::new(
             draft,
             self.parent.clone(),
@@ -295,6 +300,7 @@ impl PlaylistEditor {
         (self.options_open, self.advanced_open, self.expanded_tracks) = open;
         // A track still playing keeps its « Arrêter » button and its follower.
         (self.previewing, self.preview_generation) = preview;
+        self.advanced = advanced;
         self.status = "Playlist actualisée depuis Yoto.".into();
         cx.notify();
     }
@@ -1296,7 +1302,7 @@ impl PlaylistEditor {
                                     ),
                                 ),
                         );
-                        if selected.is_some() {
+                        if selected.is_some() && self.advanced {
                             advanced = advanced.children(
                                 self.event_params
                                     .get(&(tid, trigger))
@@ -1304,7 +1310,7 @@ impl PlaylistEditor {
                             );
                         }
                     }
-                } else if !single {
+                } else if !single && self.advanced {
                     advanced = advanced.child(theme::note(
                         "Les événements de piste s’activent avec la lecture interactive, dans les réglages avancés de la playlist.",
                     ));
@@ -2327,7 +2333,7 @@ impl Render for PlaylistEditor {
                         })),
                     )
                     .children(self.options_open.then(|| self.options_panel(cx)))
-                    .child(
+                    .children(self.advanced.then(|| {
                         theme::disclosure(
                             "playlist-advanced",
                             "Réglages avancés",
@@ -2339,9 +2345,11 @@ impl Render for PlaylistEditor {
                         .on_click(cx.listener(|v, _, _, cx| {
                             v.advanced_open = !v.advanced_open;
                             cx.notify();
-                        })),
-                    )
-                    .children(self.advanced_open.then(|| self.advanced_panel(cx))),
+                        }))
+                    }))
+                    .children(
+                        (self.advanced && self.advanced_open).then(|| self.advanced_panel(cx)),
+                    ),
             )
             .children(
                 (!self.status.is_empty() && self.external.is_none() && !self.deleted)

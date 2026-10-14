@@ -44,7 +44,7 @@ A song displays a single title. Playlists with chapters containing multiple trac
 
 Linear playback follows the chapters and tracks in order. End-of-track settings let playback continue to the next track, repeat, or stop.
 
-Events and random playback ranges are advanced settings. Some order changes are blocked if they would make an event reference ambiguous. Update the affected events before continuing.
+Interactive playback, events, random playback ranges and streams are under the playlist's `Réglages avancés`, shown only when `Mode avancé` is on in `Compte`. Some order changes are blocked if they would make an event reference ambiguous. Update the affected events before continuing.
 
 ## Duplicate or delete
 

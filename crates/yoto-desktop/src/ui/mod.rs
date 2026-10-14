@@ -787,7 +787,20 @@ impl AppView {
                     cx,
                 )
             });
+            let advanced = self.advanced;
+            editor.update(cx, |e, _| e.advanced = advanced);
             self.editors.insert(id, editor);
+        }
+        cx.notify();
+    }
+    /// Turn « Mode avancé » on or off everywhere it applies.
+    pub fn set_advanced(&mut self, advanced: bool, cx: &mut Context<Self>) {
+        self.advanced = advanced;
+        for editor in self.editors.values() {
+            editor.update(cx, |e, cx| {
+                e.advanced = advanced;
+                cx.notify();
+            });
         }
         cx.notify();
     }

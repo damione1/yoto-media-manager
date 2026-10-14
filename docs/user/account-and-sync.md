@@ -57,6 +57,10 @@ In `Imports`, open `Vérifier la publication`, then choose `Vérifier auprès de
 
 If another app changed the playlist, the update may require a choice between your version and the Yoto version. Read the proposed choices before deciding. You can keep a copy to preserve your work.
 
+## Advanced mode
+
+`Mode avancé`, in `Compte`, shows technical settings most families never need: interactive playback, track events, random playback ranges and streams in playlists; raw Yoto values, shortcuts and technical commands for players; and manually linking a card after an uncertain upload. It is off each time the app starts.
+
 ## Disconnect
 
 In `Compte`, open the account's `⋯` button (`Options du compte`) and choose `Déconnecter ce compte`. Its authorizations and cached remote data are removed. Your original audio and local work are preserved.

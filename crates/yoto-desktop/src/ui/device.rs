@@ -17,7 +17,7 @@ const LIGHTS: [(&str, [u8; 3]); 6] = [
 ];
 /// Sleep timer choices: label, seconds (0 cancels the timer).
 const TIMERS: [(&str, u32); 4] = [("Non", 0), ("15 min", 900), ("30 min", 1800), ("1 h", 3600)];
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Field {
     Name,
     Light,
@@ -498,6 +498,18 @@ fn caption(text: impl Into<SharedString>) -> Div {
 fn label(text: impl Into<SharedString>) -> Div {
     div().font_weight(FontWeight::EXTRA_BOLD).child(text.into())
 }
+/// A light color as Yoto stores it: « #RRGGBB ».
+fn light_hex([r, g, b]: [u8; 3]) -> String {
+    format!("#{r:02X}{g:02X}{b:02X}")
+}
+/// The swatch color drawn for a light; « off » is shown dark rather than pure black.
+fn swatch_color([r, g, b]: [u8; 3]) -> u32 {
+    if (r, g, b) == (0, 0, 0) {
+        0x3A3A3A
+    } else {
+        u32::from_be_bytes([0, r, g, b])
+    }
+}
 /// Ring drawn around the chosen night-light swatch: white gap, then ink.
 fn swatch_ring() -> Vec<BoxShadow> {
     [(theme::SURFACE, 3.), (theme::INK, 5.)]
@@ -514,6 +526,61 @@ fn swatch_ring() -> Vec<BoxShadow> {
 impl DevicePanel {
     fn stored(&self, field: Field) -> &Entity<InputState> {
         &self.inputs[&field]
+    }
+    /// Day or night light color as swatches. A color set elsewhere that matches none of
+    /// them stays shown first, selected.
+    fn colour_picker(&self, field: Field, cx: &mut Context<Self>) -> Div {
+        let current = self.value(field, cx).trim().to_ascii_uppercase();
+        let mut row = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(6.))
+            .py(px(4.));
+        let known = LIGHTS.iter().any(|(_, rgb)| light_hex(*rgb) == current);
+        if !known
+            && let Some(rgb) = current
+                .strip_prefix('#')
+                .filter(|hex| hex.len() == 6)
+                .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+        {
+            row = row.child(
+                div()
+                    .size(px(28.))
+                    .rounded_full()
+                    .bg(theme::c(rgb))
+                    .shadow(swatch_ring()),
+            );
+        }
+        for (index, (name, rgb)) in LIGHTS.iter().enumerate() {
+            let hex = light_hex(*rgb);
+            let shown = swatch_color(*rgb);
+            let input = self.stored(field).clone();
+            let selected = hex == current;
+            let swatch = Button::new(element_id(&format!("{field:?}-light"), index))
+                .custom(
+                    ButtonCustomVariant::new(cx)
+                        .color(theme::c(shown))
+                        .hover(theme::c(shown))
+                        .active(theme::c(shown)),
+                )
+                .accessibility_label(format!("Couleur de la lumière : {name}"))
+                .tooltip(*name)
+                .toggled(selected)
+                .bg(theme::c(shown))
+                .rounded(ButtonRounded::Size(px(999.)))
+                .size(px(28.))
+                .on_click(cx.listener(move |_, _, window, cx| {
+                    input.update(cx, |s, cx| s.set_value(hex.clone(), window, cx));
+                    cx.notify();
+                }));
+            row = row.child(if selected {
+                swatch.shadow(swatch_ring())
+            } else {
+                swatch
+            });
+        }
+        row
     }
     /// The « Lecture sur … » card: playlist, play/pause/stop, volume, night light, timer.
     pub fn play_card(
@@ -703,13 +770,9 @@ impl DevicePanel {
                     .child(Slider::new(&self.volume).bg(theme::c(theme::SKY.accent))),
             );
         let mut swatches = div().flex().flex_wrap().gap(px(8.));
-        for (index, (name, [r, g, b])) in LIGHTS.iter().enumerate() {
-            let shown = if (*r, *g, *b) == (0, 0, 0) {
-                0x3A3A3A
-            } else {
-                u32::from_be_bytes([0, *r, *g, *b])
-            };
-            let (r, g, b) = (*r, *g, *b);
+        for (index, (name, rgb)) in LIGHTS.iter().enumerate() {
+            let shown = swatch_color(*rgb);
+            let [r, g, b] = *rgb;
             let swatch = Button::new(("device-light", index))
                 .custom(
                     ButtonCustomVariant::new(cx)
@@ -780,7 +843,7 @@ impl DevicePanel {
         card.into_any_element()
     }
     /// « Jour et nuit », the collapsed « Plus de réglages » and their content.
-    pub fn settings(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    pub fn settings(&mut self, advanced: bool, cx: &mut Context<Self>) -> AnyElement {
         let night = self.night;
         let mut column = div().flex().flex_col().gap(px(12.));
         let mut card = theme::card().px(px(20.)).py(px(18.)).child(
@@ -836,21 +899,26 @@ impl DevicePanel {
             };
             let mut grid = div().flex().flex_wrap().gap(px(10.));
             for (text, field) in tiles {
-                grid = grid.child(
-                    div()
-                        .flex_1()
-                        .min_w(px(160.))
-                        .flex_basis(relative(0.4))
-                        .bg(theme::c(theme::CREAM))
-                        .rounded(px(14.))
-                        .px(px(12.))
-                        .py(px(10.))
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.))
-                        .child(caption(text))
-                        .child(theme::small_field(Input::new(self.stored(field)))),
-                );
+                let colour = matches!(field, Field::Light | Field::NightLight);
+                let mut tile = div()
+                    .flex_1()
+                    .min_w(px(160.))
+                    .flex_basis(relative(0.4))
+                    .bg(theme::c(theme::CREAM))
+                    .rounded(px(14.))
+                    .px(px(12.))
+                    .py(px(10.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(caption(text));
+                if colour {
+                    tile = tile.child(self.colour_picker(field, cx));
+                }
+                if !colour || advanced {
+                    tile = tile.child(theme::small_field(Input::new(self.stored(field))));
+                }
+                grid = grid.child(tile);
             }
             card = card.child(grid).child(
                 div().flex().justify_end().child(theme::pill(
@@ -884,7 +952,11 @@ impl DevicePanel {
             theme::disclosure(
                 "device-more",
                 "Plus de réglages",
-                "Casque, arrêt auto, raccourcis (bêta)",
+                if advanced {
+                    "Casque, arrêt auto, raccourcis, commandes techniques"
+                } else {
+                    "Nom, casque, arrêt automatique"
+                },
                 self.more_open,
                 cx,
             )
@@ -894,13 +966,13 @@ impl DevicePanel {
             })),
         );
         if self.more_open {
-            column = column.child(self.more(cx));
+            column = column.child(self.more(advanced, cx));
         }
         column.into_any_element()
     }
     /// Everything behind « Plus de réglages »: rarely changed settings, the raw Yoto
     /// values, beta shortcuts and the technical player commands.
-    fn more(&mut self, cx: &mut Context<Self>) -> Div {
+    fn more(&mut self, advanced: bool, cx: &mut Context<Self>) -> Div {
         let labelled = |text: &'static str, input: &Entity<InputState>| {
             div()
                 .flex_1()
@@ -923,7 +995,10 @@ impl DevicePanel {
                             "Délai avant atténuation de l’écran",
                             self.stored(Field::Dim),
                         ))
-                        .child(labelled("Délai avant arrêt auto", self.stored(Field::Shutdown))),
+                        .child(labelled(
+                            "Délai avant arrêt auto",
+                            self.stored(Field::Shutdown),
+                        )),
                 )
                 .child(
                     Checkbox::new("repeat")
@@ -951,7 +1026,10 @@ impl DevicePanel {
                             p.limited = *checked;
                             cx.notify();
                         })),
-                )
+                );
+        }
+        if self.loaded && advanced {
+            card = card
                 .child(theme::heading("Valeurs Yoto avancées", 17.))
                 .child(theme::note(
                     "Valeurs transmises telles quelles à Yoto. Ne les modifiez que si vous savez ce qu’elles font.",
@@ -971,7 +1049,10 @@ impl DevicePanel {
             ] {
                 raw = raw.child(labelled(field.label(), self.stored(field)));
             }
-            card = card.child(raw).child(
+            card = card.child(raw);
+        }
+        if self.loaded {
+            card = card.child(
                 div().flex().justify_end().child(theme::pill(
                     Button::new("save-device-more")
                         .label("Enregistrer ces réglages")
@@ -982,6 +1063,11 @@ impl DevicePanel {
                     cx,
                 )),
             );
+        }
+        if !advanced {
+            return card.child(theme::note(
+                "Les raccourcis et les commandes techniques du lecteur s’affichent avec le « Mode avancé », dans « Compte ».",
+            ));
         }
         card = card
             .child(
@@ -1038,10 +1124,30 @@ impl DevicePanel {
             PlayerCommand::Reboot,
         ] {
             let label = command.label();
+            let reboot = matches!(command, PlayerCommand::Reboot);
             commands = commands.child(theme::pill(
                 Button::new(label)
                     .label(label)
-                    .on_click(cx.listener(move |p, _, _, cx| p.player(command.clone(), cx))),
+                    .on_click(cx.listener(move |p, _, window, cx| {
+                        if reboot {
+                            let owner = cx.entity().downgrade();
+                            let name = p.name.clone();
+                            confirm_destructive(
+                                window,
+                                cx,
+                                format!("Redémarrer « {name} » ?"),
+                                "La lecture en cours s’arrête et le lecteur reste indisponible le temps de redémarrer.",
+                                "Redémarrer",
+                                move |_, cx| {
+                                    let _ = owner.update(cx, |p, cx| {
+                                        p.player(PlayerCommand::Reboot, cx)
+                                    });
+                                },
+                            );
+                        } else {
+                            p.player(command.clone(), cx)
+                        }
+                    })),
                 Look::Outline,
                 Height::Small,
                 false,

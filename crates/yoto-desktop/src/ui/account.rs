@@ -40,7 +40,11 @@ pub fn render(view: &mut AppView, cx: &mut Context<AppView>) -> AnyElement {
                         .flex_grow(2.)
                         .flex_basis(px(0.))
                         .min_w(px(320.))
-                        .child(backup(view, cx)),
+                        .flex()
+                        .flex_col()
+                        .gap(px(14.))
+                        .child(backup(view, cx))
+                        .child(advanced_mode(view, cx)),
                 ),
         )
         .into_any_element()
@@ -573,60 +577,17 @@ fn backup(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
             ),
     );
     card = card.child(
-        div()
-            .border_t_2()
-            .border_color(theme::c(theme::DIVIDER))
-            .pt(px(6.))
-            .child(
-                Button::new("account-advanced")
-                    .custom(
-                        ButtonCustomVariant::new(cx)
-                            .color(theme::c(theme::SURFACE))
-                            .foreground(theme::c(theme::MUTED))
-                            .hover(theme::c(theme::CREAM))
-                            .active(theme::c(theme::SAND)),
-                    )
-                    .toggled(view.account_backup_open)
-                    .accessibility_label("Options avancées")
-                    .bg(theme::c(theme::SURFACE))
-                    .rounded(ButtonRounded::Size(px(12.)))
-                    .w_full()
-                    .h(px(46.))
-                    .px(px(4.))
-                    .child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .items_center()
-                            .gap(px(10.))
-                            .text_color(theme::c(theme::MUTED))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .font_weight(FontWeight::EXTRA_BOLD)
-                                    .child("Options avancées"),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight::BOLD)
-                                    .child("Autre médiathèque"),
-                            )
-                            .child(
-                                gpui_kit::component::Icon::new(if view.account_backup_open {
-                                    IconName::ChevronUp
-                                } else {
-                                    IconName::ChevronDown
-                                })
-                                .size(px(18.))
-                                .text_color(theme::c(theme::MUTED)),
-                            ),
-                    )
-                    .on_click(cx.listener(|v, _, _, cx| {
-                        v.account_backup_open = !v.account_backup_open;
-                        cx.notify();
-                    })),
-            ),
+        theme::disclosure(
+            "account-advanced",
+            "Options avancées",
+            "Autre médiathèque",
+            view.account_backup_open,
+            cx,
+        )
+        .on_click(cx.listener(|v, _, _, cx| {
+            v.account_backup_open = !v.account_backup_open;
+            cx.notify();
+        })),
     );
     if view.account_backup_open {
         card = card
@@ -644,6 +605,31 @@ fn backup(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
             ));
     }
     card.into_any_element()
+}
+
+/// The « Mode avancé » switch: technical settings stay out of sight until a parent asks.
+fn advanced_mode(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
+    use gpui_kit::component::switch::Switch;
+    theme::card()
+        .p(px(22.))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .child(theme::icon_tile(IconName::Settings2, &theme::STONE, 40., 12.))
+                .child(div().flex_1().child(theme::heading("Mode avancé", 20.)))
+                .child(
+                    Switch::new("advanced-mode")
+                        .accessibility_label("Mode avancé")
+                        .checked(view.advanced)
+                        .on_click(cx.listener(|v, checked, _, cx| v.set_advanced(*checked, cx))),
+                ),
+        )
+        .child(theme::note(
+            "Affiche les réglages techniques : lecture interactive, événements des pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, raccourcis et commandes techniques des lecteurs. Inutile au quotidien.",
+        ))
+        .into_any_element()
 }
 
 #[cfg(test)]

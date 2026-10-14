@@ -282,13 +282,14 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
             .flex_col()
             .gap(px(12.))
     };
+    let advanced = view.advanced;
     let (play, settings) = match selected {
         Some((panel, online)) => {
             let snapshot = view.snapshot.clone();
             panel.update(cx, |p, cx| {
                 (
                     p.play_card(&snapshot.remote, online, cx),
-                    Some(p.settings(cx)),
+                    Some(p.settings(advanced, cx)),
                 )
             })
         }

@@ -22,9 +22,9 @@ Some features, such as lighting or Bluetooth, depend on the model and the API's 
 
 ## Settings and shortcuts
 
-The player's settings are read as soon as you select it. `Jour et nuit` shows the start time, maximum volume, screen brightness and light color of each mode; switch between `Jour` and `Nuit`, adjust the values, then choose `Enregistrer ces réglages`. If the settings could not be read, choose `Lire les réglages`.
+The player's settings are read as soon as you select it. `Jour et nuit` shows the start time, maximum volume, screen brightness and light color of each mode; switch between `Jour` and `Nuit`, adjust the values, pick the light color from the swatches, then choose `Enregistrer ces réglages`. If the settings could not be read, choose `Lire les réglages`.
 
-Rarer settings (player name, headphones, automatic shutdown, raw Yoto values), shortcuts and technical commands are under `Plus de réglages`.
+Rarer settings (player name, headphones, automatic shutdown) are under `Plus de réglages`. Raw Yoto values, shortcuts and technical commands appear there only when `Mode avancé` is on in `Compte`; restarting a player asks for confirmation first.
 
 Day and night shortcuts are shown separately. Changing one does not erase the other. Saving an empty selection for one mode explicitly removes its shortcuts. Some predefined Yoto shortcuts may be visible but cannot be edited.
 
