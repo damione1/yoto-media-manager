@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:11-0400\n"
+"POT-Creation-Date: 2026-10-14 00:13-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -16,7 +16,7 @@ msgstr ""
 msgid "Annuler"
 msgstr "Cancel"
 
-#: src/i18n.rs
+#: src/i18n.rs src/ui/editor.rs
 #, rust-format
 msgid "{count} piste"
 msgid_plural "{count} pistes"
@@ -437,11 +437,11 @@ msgstr "Resume"
 msgid "Pause"
 msgstr "Pause"
 
-#: src/ui/device.rs
+#: src/ui/device.rs src/ui/editor.rs
 msgid "Arrêter la lecture"
 msgstr "Stop playback"
 
-#: src/ui/device.rs src/ui/wording.rs
+#: src/ui/device.rs src/ui/editor.rs src/ui/wording.rs
 msgid "Arrêter"
 msgstr "Stop"
 
@@ -609,6 +609,533 @@ msgstr "Playback stops and the player is unavailable while it restarts."
 msgid "Redémarrer"
 msgstr "Restart"
 
+#: src/ui/editor.rs
+msgid ""
+"La playlist a changé sur Yoto. Choisissez « Recharger la version Yoto » "
+"avant de continuer."
+msgstr ""
+"The playlist changed on Yoto. Choose “Reload the Yoto version” before "
+"continuing."
+
+#: src/ui/editor.rs
+msgid ""
+"Cette playlist a été supprimée sur Yoto. Choisissez une autre playlist dans "
+"la liste."
+msgstr ""
+"This playlist was deleted on Yoto. Choose another playlist from the list."
+
+#: src/ui/editor.rs
+msgid "Envoi sur Yoto en attente…"
+msgstr "Waiting to send to Yoto…"
+
+#: src/ui/editor.rs
+#, rust-format
+msgid "Nouvel essai automatique : {reason}"
+msgstr "Trying again automatically: {reason}"
+
+#: src/ui/editor.rs
+msgid "Reconnectez le compte Yoto pour terminer l’envoi."
+msgstr "Reconnect the Yoto account to finish the upload."
+
+#: src/ui/editor.rs
+msgid ""
+"La playlist a changé sur Yoto. Vérifiez la version distante avant de "
+"continuer."
+msgstr ""
+"The playlist changed on Yoto. Check the Yoto version before continuing."
+
+#: src/ui/editor.rs
+msgid ""
+"Yoto a peut-être reçu la modification. Vérification requise avant un nouvel "
+"envoi."
+msgstr ""
+"Yoto may have received the change. It needs checking before sending again."
+
+#: src/ui/editor.rs
+msgid "Description"
+msgstr "Description"
+
+#: src/ui/editor.rs src/ui/library.rs src/ui/trim.rs
+msgid "Auteur"
+msgstr "Author"
+
+#: src/ui/editor.rs
+msgid "Narrateur"
+msgstr "Narrator"
+
+#: src/ui/editor.rs
+msgid "Langues : fr, en…"
+msgstr "Languages: fr, en…"
+
+#: src/ui/editor.rs
+msgid "Âge minimum"
+msgstr "Minimum age"
+
+#: src/ui/editor.rs
+msgid "Âge maximum"
+msgstr "Maximum age"
+
+#: src/ui/editor.rs
+msgid "Aléatoire : début-fin-limite (chapitres dès 1)"
+msgstr "Shuffle: start-end-limit (chapters from 1)"
+
+#: src/ui/editor.rs
+msgid "URL audio HTTPS de streaming"
+msgstr "HTTPS streaming audio URL"
+
+#: src/ui/editor.rs
+msgid "Paramètres de l’événement"
+msgstr "Event parameters"
+
+#: src/ui/editor.rs
+msgid "Playlist actualisée depuis Yoto."
+msgstr "Playlist refreshed from Yoto."
+
+#: src/ui/editor.rs
+msgid "La durée de reprise doit être un nombre entier de secondes."
+msgstr "The resume time must be a whole number of seconds."
+
+#: src/ui/editor.rs
+msgid "Âge entier attendu"
+msgstr "Expected a whole-number age"
+
+#: src/ui/editor.rs
+msgid "Âge minimum supérieur au maximum"
+msgstr "Minimum age is above the maximum"
+
+#: src/ui/editor.rs
+msgid "Les paramètres doivent être un objet JSON"
+msgstr "The parameters must be a JSON object"
+
+#: src/ui/editor.rs src/ui/mod.rs
+msgid "Opération terminée."
+msgstr "Done."
+
+#: src/ui/editor.rs
+msgid ""
+"Images non enregistrées abandonnées. Les autres saisies sont conservées."
+msgstr "Unsaved images discarded. Your other entries are kept."
+
+#: src/ui/editor.rs
+msgid "Ouvrez une playlist de votre compte Yoto."
+msgstr "Open a playlist from your Yoto account."
+
+#: src/ui/editor.rs
+msgid "Résultat de playlist inattendu."
+msgstr "Unexpected playlist result."
+
+#: src/ui/editor.rs
+msgid "Connectez le compte propriétaire de cette playlist."
+msgstr "Connect the account that owns this playlist."
+
+#: src/ui/editor.rs
+msgid "Ajouter des médias"
+msgstr "Add media"
+
+#: src/ui/editor.rs
+msgid "Changer l’icône de la piste"
+msgstr "Change the track icon"
+
+#: src/ui/editor.rs
+msgid "Changer l’icône du chapitre"
+msgstr "Change the chapter icon"
+
+#: src/ui/editor.rs
+msgid "Changer l’icône"
+msgstr "Change the icon"
+
+#: src/ui/editor.rs
+msgid "Options du chapitre"
+msgstr "Chapter options"
+
+#: src/ui/editor.rs
+msgid "Remonter le chapitre"
+msgstr "Move the chapter up"
+
+#: src/ui/editor.rs
+msgid "Descendre le chapitre"
+msgstr "Move the chapter down"
+
+#: src/ui/editor.rs
+msgid "Séparer les pistes en chapitres"
+msgstr "Split the tracks into chapters"
+
+#: src/ui/editor.rs
+msgid "Audio de la médiathèque"
+msgstr "Audio from the library"
+
+#: src/ui/editor.rs
+msgid "Streaming"
+msgstr "Streaming"
+
+#: src/ui/editor.rs
+msgid "Options de la piste"
+msgstr "Track options"
+
+#: src/ui/editor.rs
+msgid "Retirer l’icône du chapitre"
+msgstr "Remove the chapter icon"
+
+#: src/ui/editor.rs
+msgid "Retirer l’icône"
+msgstr "Remove the icon"
+
+#: src/ui/editor.rs
+msgid "Remplacer l’audio…"
+msgstr "Replace the audio…"
+
+#: src/ui/editor.rs
+msgid "Déplacer / regrouper…"
+msgstr "Move / group…"
+
+#: src/ui/editor.rs
+msgid "Remonter"
+msgstr "Move up"
+
+#: src/ui/editor.rs src/ui/group.rs
+msgid "Descendre"
+msgstr "Move down"
+
+#: src/ui/editor.rs
+msgid "Réglages avancés"
+msgstr "Advanced settings"
+
+#: src/ui/editor.rs
+msgid "Retirer de la playlist"
+msgstr "Remove from the playlist"
+
+#: src/ui/editor.rs
+#, rust-format
+msgid "Arrêter l’écoute de {title}"
+msgstr "Stop listening to {title}"
+
+#: src/ui/editor.rs src/ui/library.rs
+#, rust-format
+msgid "Écouter {title}"
+msgstr "Listen to {title}"
+
+#: src/ui/editor.rs src/ui/trim.rs
+msgid "Arrêter l’écoute"
+msgstr "Stop listening"
+
+#: src/ui/editor.rs
+msgid "Écouter sur cet ordinateur"
+msgstr "Listen on this computer"
+
+#: src/ui/editor.rs
+msgid "Titre du chapitre (facultatif, distinct du titre de la piste)"
+msgstr "Chapter title (optional, separate from the track title)"
+
+#: src/ui/editor.rs
+msgid "Icône du chapitre"
+msgstr "Chapter icon"
+
+#: src/ui/editor.rs
+msgid "Aucun"
+msgstr "None"
+
+#: src/ui/editor.rs
+msgid ""
+"Les événements de piste s’activent avec la lecture interactive, dans les "
+"réglages avancés de la playlist."
+msgstr ""
+"Track events are turned on with interactive playback, in the playlist’s "
+"advanced settings."
+
+#: src/ui/editor.rs
+msgid "Choisir une icône"
+msgstr "Choose an icon"
+
+#: src/ui/editor.rs
+msgid "Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes."
+msgstr "The account or the playlist changed. Open the icon picker again."
+
+#: src/ui/editor.rs
+msgid "Déplacer dans un chapitre"
+msgstr "Move into a chapter"
+
+#: src/ui/editor.rs
+msgid "Sélectionnez un seul média pour remplacer cette piste."
+msgstr "Select a single media item to replace this track."
+
+#: src/ui/editor.rs
+msgid ""
+"Cette piste n’existe plus dans la playlist ; l’audio n’a pas été remplacé."
+msgstr "This track is no longer in the playlist; the audio was not replaced."
+
+#: src/ui/editor.rs src/ui/mod.rs
+msgid "Suppression sur Yoto…"
+msgstr "Deleting on Yoto…"
+
+#: src/ui/editor.rs
+msgid "Playlist supprimée sur Yoto."
+msgstr "Playlist deleted on Yoto."
+
+#: src/ui/editor.rs src/ui/group.rs src/ui/pixelart.rs
+msgid "Image"
+msgstr "Image"
+
+#: src/ui/editor.rs
+msgid "Vide"
+msgstr "Empty"
+
+#: src/ui/editor.rs
+#, rust-format
+msgid "{count} piste · {duration}"
+msgid_plural "{count} pistes · {duration}"
+msgstr[0] "{count} track · {duration}"
+msgstr[1] "{count} tracks · {duration}"
+
+#: src/ui/editor.rs
+msgid "Choisir une couverture"
+msgstr "Choose a cover"
+
+#: src/ui/editor.rs
+msgid "Changer la couverture"
+msgstr "Change the cover"
+
+#: src/ui/editor.rs
+msgid "Plus d’actions"
+msgstr "More actions"
+
+#: src/ui/editor.rs
+msgid "Dupliquer la playlist"
+msgstr "Duplicate the playlist"
+
+#: src/ui/editor.rs
+msgid "Supprimer la playlist de mon compte Yoto"
+msgstr "Delete the playlist from my Yoto account"
+
+#: src/ui/editor.rs
+#, rust-format
+msgid "Supprimer « {title} » de votre compte Yoto ?"
+msgstr "Delete “{title}” from your Yoto account?"
+
+#: src/ui/editor.rs
+msgid ""
+"La playlist disparaîtra de votre compte Yoto et de vos lecteurs. Vos "
+"fichiers audio restent dans la médiathèque. Cette action est irréversible."
+msgstr ""
+"The playlist will disappear from your Yoto account and your players. Your "
+"audio files stay in the library. This cannot be undone."
+
+#: src/ui/editor.rs src/ui/library.rs src/ui/players.rs src/ui/trim.rs
+msgid "Supprimer"
+msgstr "Delete"
+
+#: src/ui/editor.rs
+msgid "Langues"
+msgstr "Languages"
+
+#: src/ui/editor.rs
+msgid "Catégorie"
+msgstr "Category"
+
+#: src/ui/editor.rs
+msgid "Après une piste"
+msgstr "After a track"
+
+#: src/ui/editor.rs
+msgid "Lecture"
+msgstr "Playback"
+
+#: src/ui/editor.rs
+msgid "Connexion requise sur le lecteur"
+msgstr "Player must be online"
+
+#: src/ui/editor.rs
+msgid "Lecture aléatoire : début-fin-limite (chapitres dès 1)"
+msgstr "Shuffle: start-end-limit (chapters from 1)"
+
+#: src/ui/editor.rs
+msgid "Durée de reprise (secondes)"
+msgstr "Resume time (seconds)"
+
+#: src/ui/editor.rs
+msgid "Ajouter un stream"
+msgstr "Add a stream"
+
+#: src/ui/editor.rs
+msgid "Abandonner les images non enregistrées"
+msgstr "Discard unsaved images"
+
+#: src/ui/editor.rs
+msgid ""
+"Les événements de chaque piste se règlent depuis son menu, « Réglages "
+"avancés »."
+msgstr "Each track’s events are set from its menu, “Advanced settings”."
+
+#: src/ui/editor.rs
+msgid "Recharger la version Yoto"
+msgstr "Reload the Yoto version"
+
+#: src/ui/editor.rs
+msgid "Voir le suivi"
+msgstr "See progress"
+
+#: src/ui/editor.rs
+msgid "Cette playlist est vide"
+msgstr "This playlist is empty"
+
+#: src/ui/editor.rs
+msgid ""
+"Cliquez sur « Ajouter des médias » pour y mettre des audios de votre "
+"médiathèque."
+msgstr "Click “Add media” to put audio from your library in it."
+
+#: src/ui/editor.rs
+msgid "Options de la playlist"
+msgstr "Playlist options"
+
+#: src/ui/editor.rs
+msgid "Description, auteur, catégorie, langue, lecture"
+msgstr "Description, author, category, language, playback"
+
+#: src/ui/editor.rs
+msgid "Lecture interactive, événements"
+msgstr "Interactive playback, events"
+
+#: src/ui/editor.rs src/ui/wording.rs
+msgid "Playlists"
+msgstr "Playlists"
+
+#: src/ui/editor.rs src/ui/players.rs
+msgid "Actualiser depuis Yoto"
+msgstr "Refresh from Yoto"
+
+#: src/ui/editor.rs
+msgid "Créer une playlist"
+msgstr "Create a playlist"
+
+#: src/ui/editor.rs
+msgid "Créer une playlist avec ce titre"
+msgstr "Create a playlist with this title"
+
+#: src/ui/editor.rs
+msgid "Connectez votre compte Yoto pour retrouver et modifier vos playlists."
+msgstr "Connect your Yoto account to find and edit your playlists."
+
+#: src/ui/editor.rs src/ui/players.rs
+msgid "Connecter Yoto"
+msgstr "Connect Yoto"
+
+#: src/ui/editor.rs
+msgid ""
+"Aucune playlist Yoto. Créez votre première playlist ou actualisez la liste."
+msgstr "No Yoto playlists. Create your first playlist or refresh the list."
+
+#: src/ui/editor.rs
+msgid "Ouverture depuis Yoto…"
+msgstr "Opening from Yoto…"
+
+#: src/ui/editor.rs
+msgid "Création et vérification sur Yoto…"
+msgstr "Creating and checking on Yoto…"
+
+#: src/ui/editor.rs
+msgid "Vos playlists Yoto"
+msgstr "Your Yoto playlists"
+
+#: src/ui/editor.rs
+msgid ""
+"Choisissez une playlist à gauche pour la modifier et y ajouter des audios de "
+"votre médiathèque."
+msgstr ""
+"Choose a playlist on the left to edit it and add audio from your library."
+
+#: src/ui/editor.rs
+msgid "Les modifications sont enregistrées directement sur votre compte Yoto."
+msgstr "Changes are saved directly to your Yoto account."
+
+#: src/ui/editor.rs
+msgid "Aléatoire attendu début-fin-limite"
+msgstr "Expected shuffle as start-end-limit"
+
+#: src/ui/editor.rs
+msgid "Début de chapitre attendu"
+msgstr "Expected a start chapter"
+
+#: src/ui/editor.rs
+msgid "Les chapitres commencent à 1"
+msgstr "Chapters start at 1"
+
+#: src/ui/editor.rs
+msgid "Fin de chapitre attendue"
+msgstr "Expected an end chapter"
+
+#: src/ui/editor.rs
+msgid "Limite entière attendue"
+msgstr "Expected a whole-number limit"
+
+#: src/ui/editor.rs
+msgid "Aucune"
+msgstr "None"
+
+#: src/ui/editor.rs
+msgid "Histoires"
+msgstr "Stories"
+
+#: src/ui/editor.rs
+msgid "Musique"
+msgstr "Music"
+
+#: src/ui/editor.rs
+msgid "Radio"
+msgstr "Radio"
+
+#: src/ui/editor.rs
+msgid "Podcasts"
+msgstr "Podcasts"
+
+#: src/ui/editor.rs
+msgid "Sons"
+msgstr "Sounds"
+
+#: src/ui/editor.rs
+msgctxt "catégorie"
+msgid "Activités"
+msgstr "Activities"
+
+#: src/ui/editor.rs
+msgid "Alarmes"
+msgstr "Alarms"
+
+#: src/ui/editor.rs
+msgid "Lire la piste suivante"
+msgstr "Play the next track"
+
+#: src/ui/editor.rs
+msgid "Répéter la piste"
+msgstr "Repeat the track"
+
+#: src/ui/editor.rs
+msgid "Lecture continue"
+msgstr "Continuous playback"
+
+#: src/ui/editor.rs
+msgid "Lecture interactive"
+msgstr "Interactive playback"
+
+#: src/ui/editor.rs
+msgid "Répéter"
+msgstr "Repeat"
+
+#: src/ui/editor.rs
+msgid "Aller à une piste"
+msgstr "Go to a track"
+
+#: src/ui/editor.rs
+msgid "À la fin de la piste"
+msgstr "At the end of the track"
+
+#: src/ui/editor.rs
+msgid "Bouton gauche"
+msgstr "Left button"
+
+#: src/ui/editor.rs
+msgid "Bouton droit"
+msgstr "Right button"
+
 #: src/ui/group.rs
 msgid "Nom du groupe"
 msgstr "Group name"
@@ -637,10 +1164,6 @@ msgstr "Unexpected answer."
 #, rust-format
 msgid "Groupe enregistré. Actualisation impossible : {reason}"
 msgstr "Group saved. Could not refresh: {reason}"
-
-#: src/ui/group.rs src/ui/pixelart.rs
-msgid "Image"
-msgstr "Image"
 
 #: src/ui/group.rs
 msgid "Modifier le groupe"
@@ -672,10 +1195,6 @@ msgstr "Move up"
 #, rust-format
 msgid "Descendre « {title} »"
 msgstr "Move “{title}” down"
-
-#: src/ui/group.rs
-msgid "Descendre"
-msgstr "Move down"
 
 #: src/ui/group.rs
 msgid ""
@@ -987,11 +1506,6 @@ msgid "Original"
 msgstr "Original"
 
 #: src/ui/library.rs
-#, rust-format
-msgid "Écouter {title}"
-msgstr "Listen to {title}"
-
-#: src/ui/library.rs
 msgid "Ouvrir et écouter"
 msgstr "Open and listen"
 
@@ -1030,10 +1544,6 @@ msgstr[1] "{count} audios · on this computer"
 msgid "Titre"
 msgstr "Title"
 
-#: src/ui/library.rs src/ui/trim.rs
-msgid "Auteur"
-msgstr "Author"
-
 #: src/ui/library.rs
 msgid "Durée"
 msgstr "Duration"
@@ -1070,10 +1580,6 @@ msgstr[1] "{count} audios selected"
 #: src/ui/library.rs
 msgid "Désélectionner"
 msgstr "Deselect"
-
-#: src/ui/library.rs src/ui/players.rs src/ui/trim.rs
-msgid "Supprimer"
-msgstr "Delete"
 
 #: src/ui/library.rs
 #, rust-format
@@ -1136,10 +1642,6 @@ msgstr "Saving on Yoto…"
 #: src/ui/mod.rs
 msgid "Commande acceptée par le lecteur."
 msgstr "Command accepted by the player."
-
-#: src/ui/mod.rs
-msgid "Opération terminée."
-msgstr "Done."
 
 #: src/ui/mod.rs
 msgid ""
@@ -1255,10 +1757,6 @@ msgstr "Copy created on Yoto."
 #: src/ui/mod.rs
 msgid "Ouverture de la playlist…"
 msgstr "Opening the playlist…"
-
-#: src/ui/mod.rs
-msgid "Suppression sur Yoto…"
-msgstr "Deleting on Yoto…"
 
 #: src/ui/mod.rs
 msgid "Playlist supprimée de votre compte Yoto."
@@ -1409,14 +1907,6 @@ msgstr "Choose a player, start a playlist, set the volume and the light."
 #: src/ui/players.rs
 msgid "Vous verrez alors vos lecteurs et pourrez lancer une playlist dessus."
 msgstr "You will then see your players and can start a playlist on them."
-
-#: src/ui/players.rs
-msgid "Connecter Yoto"
-msgstr "Connect Yoto"
-
-#: src/ui/players.rs
-msgid "Actualiser depuis Yoto"
-msgstr "Refresh from Yoto"
 
 #: src/ui/players.rs
 msgid "En ligne"
@@ -1625,10 +2115,6 @@ msgstr "Kept length"
 #: src/ui/trim.rs
 msgid "Préparation de l’écoute…"
 msgstr "Getting ready to play…"
-
-#: src/ui/trim.rs
-msgid "Arrêter l’écoute"
-msgstr "Stop listening"
 
 #: src/ui/trim.rs
 msgid "Écouter la sélection"
@@ -1932,10 +2418,6 @@ msgid "Échec"
 msgstr "Failed"
 
 #: src/ui/wording.rs
-msgid "Playlists"
-msgstr "Playlists"
-
-#: src/ui/wording.rs
 msgid "Imports"
 msgstr "Imports"
 
@@ -2034,6 +2516,11 @@ msgstr "Refresh playback"
 #: src/ui/wording.rs
 msgid "Actualiser l’état"
 msgstr "Refresh status"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "{title} — partie {part}/{parts}"
+msgstr "{title} — part {part} of {parts}"
 
 #: src/ui/wording.rs
 #, rust-format

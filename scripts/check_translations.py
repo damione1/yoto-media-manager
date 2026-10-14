@@ -12,7 +12,7 @@ from pathlib import Path
 # explicit review decision.
 UNCHANGED_ENGLISH = {
     "Audio", "Image", "Image {number}", "Imports", "Original", "Original · {duration}", "Pause",
-    "Playlists", "Volume",
+    "Description", "Playlists", "Podcasts", "Radio", "Streaming", "Volume",
     "{count} playlist", "{count} playlists", "Version {version} ({origin})",
     # Units and numbers only.
     "{hours} h {minutes} min", "{minutes} min {seconds} s", "{seconds} s",

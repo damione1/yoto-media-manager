@@ -191,6 +191,12 @@ pub mod labels {
     }
 }
 
+/// Title of each part of a media too long for one Yoto track, as Yoto will show it;
+/// `{title}`, `{part}` and `{parts}` are replaced by the service.
+pub fn part_title_template() -> &'static str {
+    tr!("{title} — partie {part}/{parts}")
+}
+
 /// Under a media too long for one Yoto track: what happens when it joins a playlist.
 pub fn split_note(parts: usize) -> String {
     tr!(
@@ -989,6 +995,19 @@ mod tests {
                 "« {message} » is not translated to English"
             );
         }
+    }
+    #[core::prelude::v1::test]
+    fn part_titles_are_worded_in_the_interface_language() {
+        use crate::i18n::{Language, tests::with_language};
+        assert_eq!(
+            with_language(Language::French, part_title_template),
+            yoto_domain::PART_TITLE
+        );
+        let english = with_language(Language::English, part_title_template);
+        assert_eq!(
+            yoto_domain::part_title_with(english, "Lullabies", 2, 3),
+            "Lullabies — part 2 of 3"
+        );
     }
     #[core::prelude::v1::test]
     fn failures_and_durations_read_in_english() {
