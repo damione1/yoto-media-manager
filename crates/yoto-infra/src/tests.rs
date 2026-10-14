@@ -363,6 +363,7 @@ fn commit_recovery_never_requeues_post() {
         attempts: 1,
         created: 1,
         checkpoint: Some(JobPhase::Committing),
+        dismissed: false,
     };
     service.db.put(Table::Job, &j.id.to_string(), &j).unwrap();
     j.id = JobId::new();
@@ -837,6 +838,7 @@ async fn ten_thousand_catalogue_rows_page_across_bounded_ipc_and_aliases_share_o
             attempts: 1,
             created: 0,
             checkpoint: None,
+            dismissed: false,
         };
         service
             .db
@@ -1318,4 +1320,56 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
         .unwrap();
     assert!(service.playlist(playlist.id).unwrap().chapters.is_empty());
     assert!(first.iter().all(|id| service.recipe(*id).is_err()));
+}
+#[tokio::test]
+async fn finished_tasks_leave_the_activity_list_but_stay_recorded() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [5; 32]).unwrap();
+    let job = |state| Job {
+        id: JobId::new(),
+        request: JobRequest::Import {
+            selection: ImportSelection::LocalFile {
+                path: "missing.mp3".into(),
+            },
+        },
+        state,
+        attempts: 1,
+        created: 0,
+        checkpoint: None,
+        dismissed: false,
+    };
+    let failed = job(JobState::Failed {
+        failure: Failure::Connection,
+    });
+    let running = job(JobState::Running {
+        phase: JobPhase::Acquiring,
+    });
+    for j in [&failed, &running] {
+        service.db.put(Table::Job, &j.id.to_string(), j).unwrap();
+    }
+    let stored = |id: JobId| {
+        service
+            .db
+            .get::<Job>(Table::Job, &id.to_string())
+            .unwrap()
+            .unwrap()
+    };
+    // A task still in progress is refused, and the whole request with it.
+    assert!(matches!(
+        service
+            .execute(Command::DismissJobs(vec![failed.id, running.id]))
+            .await,
+        Err(Failure::Validation(_))
+    ));
+    assert!(!stored(failed.id).dismissed);
+    assert!(!stored(running.id).dismissed);
+    service
+        .execute(Command::DismissJobs(vec![failed.id]))
+        .await
+        .unwrap();
+    assert!(stored(failed.id).dismissed);
+    assert_eq!(service.db.jobs_page(0, 200).unwrap().len(), 2);
+    // Trying it again brings it back to the list.
+    service.execute(Command::Retry(failed.id)).await.unwrap();
+    assert!(!stored(failed.id).dismissed);
 }

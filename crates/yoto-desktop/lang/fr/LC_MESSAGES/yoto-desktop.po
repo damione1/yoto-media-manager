@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:14-0400\n"
+"POT-Creation-Date: 2026-10-14 01:03-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1362,6 +1362,14 @@ msgid "Activités"
 msgstr "Activités"
 
 #: src/ui/imports.rs
+msgid "Tout effacer"
+msgstr "Tout effacer"
+
+#: src/ui/imports.rs
+msgid "Retirer de la liste les activités terminées"
+msgstr "Retirer de la liste les activités terminées"
+
+#: src/ui/imports.rs
 msgid "Vos imports apparaîtront ici, avec leur progression."
 msgstr "Vos imports apparaîtront ici, avec leur progression."
 
@@ -1432,6 +1440,10 @@ msgstr "Enregistré sur Yoto"
 #: src/ui/imports.rs src/ui/wording.rs
 msgid "Annulé"
 msgstr "Annulé"
+
+#: src/ui/imports.rs
+msgid "Retirer de la liste"
+msgstr "Retirer de la liste"
 
 #: src/ui/imports.rs
 msgid "Vidéo YouTube"
@@ -3229,6 +3241,10 @@ msgstr ""
 #: src/ui/wording.rs
 msgid "Cette tâche est déjà terminée."
 msgstr "Cette tâche est déjà terminée."
+
+#: src/ui/wording.rs
+msgid "Cette tâche est encore en cours. Annulez-la d’abord."
+msgstr "Cette tâche est encore en cours. Annulez-la d’abord."
 
 #: src/ui/wording.rs
 msgid ""

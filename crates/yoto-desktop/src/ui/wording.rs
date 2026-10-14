@@ -685,6 +685,7 @@ fn known_message(message: &str) -> Option<&'static str> {
             tr!("Cette tâche ne peut pas être relancée telle quelle. Ouvrez ses détails.")
         }
         m::TASK_COMPLETED => tr!("Cette tâche est déjà terminée."),
+        m::TASK_STILL_ACTIVE => tr!("Cette tâche est encore en cours. Annulez-la d’abord."),
         m::RESTART_BUSY => {
             tr!(
                 "Terminez les imports, préparations et envois en cours avant d’installer la mise à jour."

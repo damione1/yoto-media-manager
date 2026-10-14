@@ -1494,7 +1494,8 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::AppUpdate(_)
         | Command::YoutubeTool(_)
         | Command::CancelConnect
-        | Command::JobsPage { .. } => return None,
+        | Command::JobsPage { .. }
+        | Command::DismissJobs(_) => return None,
         Command::InspectYoutube(_)
         | Command::NewPlaylist(_)
         | Command::SavePlaylist { .. }
