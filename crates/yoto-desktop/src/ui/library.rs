@@ -17,7 +17,7 @@ impl AppView {
 pub fn source_label(media: &MediaItem) -> &'static str {
     match media.provenance {
         Provenance::Youtube { .. } => "YouTube",
-        Provenance::LocalFile { .. } => "Fichier audio",
+        Provenance::LocalFile { .. } => tr!("Fichier audio"),
     }
 }
 /// Duration, then the author when known, otherwise the source.
@@ -94,7 +94,10 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                         id,
                                     ))
                                     .large()
-                                    .accessibility_label(format!("Sélectionner {}", media.title))
+                                    .accessibility_label(tr!(
+                                        "Sélectionner {title}",
+                                        title = media.title
+                                    ))
                                     .checked(selected)
                                     .on_click(cx.listener(
                                         move |v, checked, _, cx| {
@@ -116,9 +119,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                         .child(theme::meta(media_meta(media)).truncate()),
                                 )
                                 .child(if trimmed {
-                                    theme::tag("Découpé", &theme::SKY)
+                                    theme::tag(tr!("Découpé"), &theme::SKY)
                                 } else {
-                                    theme::tag_colors("Original", theme::SAND, theme::BROWN)
+                                    theme::tag_colors(tr!("Original"), theme::SAND, theme::BROWN)
                                 })
                                 .child(theme::round(
                                     Button::new(element_id("open-media", id.to_string()))
@@ -127,11 +130,14 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                         } else {
                                             IconName::Play
                                         })
-                                        .accessibility_label(format!("Écouter {}", media.title))
+                                        .accessibility_label(tr!(
+                                            "Écouter {title}",
+                                            title = media.title
+                                        ))
                                         .tooltip(if open {
-                                            "Écouter"
+                                            tr!("Écouter")
                                         } else {
-                                            "Ouvrir et écouter"
+                                            tr!("Ouvrir et écouter")
                                         })
                                         .on_click(cx.listener(move |v, _, window, cx| {
                                             if v.selected_media != Some(id) {
@@ -164,10 +170,10 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     .gap(px(14.))
                     .items_start()
                     .child(theme::thumbnail("bienvenue", 64., 18.))
-                    .child(theme::heading("Commencez votre médiathèque", 24.))
+                    .child(theme::heading(tr!("Commencez votre médiathèque"), 24.))
                     .child(
                         div().text_color(theme::c(theme::INK_SOFT)).child(
-                            "Ajoutez un fichier audio ou un lien YouTube. Vous pourrez ensuite écouter, découper, puis ajouter l’audio à une playlist Yoto.",
+                            tr!("Ajoutez un fichier audio ou un lien YouTube. Vous pourrez ensuite écouter, découper, puis ajouter l’audio à une playlist Yoto."),
                         ),
                     )
                     .child(
@@ -177,7 +183,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                             .child(theme::pill(
                                 Button::new("first-file")
                                     .icon(IconName::Plus)
-                                    .label("Ajouter un fichier audio")
+                                    .label(tr!("Ajouter un fichier audio"))
                                     .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
                                 Look::Primary,
                                 Height::Large,
@@ -187,7 +193,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                             .child(theme::pill(
                                 Button::new("first-youtube")
                                     .icon(IconName::Link)
-                                    .label("Importer depuis un lien YouTube")
+                                    .label(tr!("Importer depuis un lien YouTube"))
                                     .on_click(cx.listener(|v, _, _, cx| {
                                         v.navigate(Route::Imports, cx);
                                     })),
@@ -203,9 +209,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         list = div()
             .flex_1()
             .pt(px(12.))
-            .child(theme::note(
-                "Aucun audio ne correspond à votre recherche. Essayez un autre mot.",
-            ))
+            .child(theme::note(tr!(
+                "Aucun audio ne correspond à votre recherche. Essayez un autre mot."
+            )))
             .into_any_element();
     }
     let panel = view
@@ -227,17 +233,17 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         .items_center()
         .gap(px(12.))
         .child(div().flex_1().min_w_0().child(theme::screen_header(
-            "Médiathèque",
-            if count == 1 {
-                "1 audio · sur cet ordinateur".to_owned()
-            } else {
-                format!("{count} audios · sur cet ordinateur")
-            },
+            tr!("Médiathèque"),
+            trn!(
+                "{count} audio · sur cet ordinateur",
+                "{count} audios · sur cet ordinateur",
+                count
+            ),
         )))
         .child(theme::pill(
             Button::new("add-youtube")
                 .icon(IconName::Link)
-                .label("Lien YouTube")
+                .label(tr!("Lien YouTube"))
                 .on_click(cx.listener(|v, _, _, cx| v.navigate(Route::Imports, cx))),
             Look::Outline,
             Height::Large,
@@ -247,7 +253,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         .child(theme::pill(
             Button::new("add-file")
                 .icon(IconName::Plus)
-                .label("Ajouter un fichier audio")
+                .label(tr!("Ajouter un fichier audio"))
                 .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
             Look::Primary,
             Height::Large,
@@ -280,10 +286,10 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
 
 fn sort_label(sort: CatalogueSort) -> &'static str {
     match sort {
-        CatalogueSort::Title => "Titre",
-        CatalogueSort::Author => "Auteur",
-        CatalogueSort::Duration => "Durée",
-        CatalogueSort::RecentlyImported => "Plus récents",
+        CatalogueSort::Title => tr!("Titre"),
+        CatalogueSort::Author => tr!("Auteur"),
+        CatalogueSort::Duration => tr!("Durée"),
+        CatalogueSort::RecentlyImported => tr!("Plus récents"),
     }
 }
 fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
@@ -298,7 +304,7 @@ fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
         theme::segment(
             Button::new(element_id("sort-library", sort_label(sort)))
                 .label(sort_label(sort))
-                .accessibility_label(format!("Trier par : {}", sort_label(sort)))
+                .accessibility_label(tr!("Trier par : {order}", order = sort_label(sort)))
                 .on_click(cx.listener(move |v, _, _, cx| {
                     v.sort = sort;
                     v.filter_library(cx);
@@ -336,8 +342,8 @@ fn library_menu(has_media: bool, cx: &mut Context<AppView>) -> impl IntoElement 
     theme::round(
         Button::new("library-more")
             .icon(IconName::Ellipsis)
-            .accessibility_label("Plus d’options")
-            .tooltip("Plus d’options"),
+            .accessibility_label(tr!("Plus d’options"))
+            .tooltip(tr!("Plus d’options")),
         Look::Ghost,
         44.,
         false,
@@ -351,7 +357,7 @@ fn library_menu(has_media: bool, cx: &mut Context<AppView>) -> impl IntoElement 
         if has_media {
             menu = menu
                 .item(
-                    PopupMenuItem::new("Tout sélectionner").on_click(move |_, _, cx| {
+                    PopupMenuItem::new(tr!("Tout sélectionner")).on_click(move |_, _, cx| {
                         let _ = select.update(cx, |v, cx| {
                             v.selected_media_set = v
                                 .library_rows
@@ -365,7 +371,7 @@ fn library_menu(has_media: bool, cx: &mut Context<AppView>) -> impl IntoElement 
                 .separator();
         }
         menu.item(
-            PopupMenuItem::new("Libérer l’espace inutilisé").on_click(move |_, _, cx| {
+            PopupMenuItem::new(tr!("Libérer l’espace inutilisé")).on_click(move |_, _, cx| {
                 let _ = clean.update(cx, |v, cx| v.send(Command::CollectGarbage, cx));
             }),
         )
@@ -402,9 +408,12 @@ fn selection_bar(view: &AppView, cx: &mut Context<AppView>) -> Option<AnyElement
         return None;
     }
     let label = match (ticked, open) {
-        (0, Some(media)) => format!("« {} »", media.title),
-        (1, _) => "1 audio sélectionné".to_owned(),
-        (count, _) => format!("{count} audios sélectionnés"),
+        (0, Some(media)) => tr!("« {title} »", title = media.title),
+        (count, _) => trn!(
+            "{count} audio sélectionné",
+            "{count} audios sélectionnés",
+            count
+        ),
     };
     let mut bar = div()
         .absolute()
@@ -433,7 +442,7 @@ fn selection_bar(view: &AppView, cx: &mut Context<AppView>) -> Option<AnyElement
         bar = bar
             .child(theme::pill(
                 Button::new("clear-media-selection")
-                    .label("Désélectionner")
+                    .label(tr!("Désélectionner"))
                     .on_click(cx.listener(|v, _, _, cx| {
                         v.selected_media_set.clear();
                         cx.notify();
@@ -445,16 +454,20 @@ fn selection_bar(view: &AppView, cx: &mut Context<AppView>) -> Option<AnyElement
             ))
             .child(theme::pill(
                 Button::new("delete-selected-media")
-                    .label("Supprimer")
+                    .label(tr!("Supprimer"))
                     .on_click(cx.listener(|v, _, window, cx| {
                         let count = v.selected_media_set.len();
                         let owner = cx.entity().downgrade();
                         confirm_destructive(
                             window,
                             cx,
-                            format!("Supprimer {count} média(s) de la médiathèque ?"),
-                            "Les fichiers audio et leurs versions préparées seront effacés de cet ordinateur. Les médias encore utilisés dans une playlist ou par une tâche en cours seront conservés. Cette action est irréversible.",
-                            "Supprimer",
+                            trn!(
+                                "Supprimer {count} média de la médiathèque ?",
+                                "Supprimer {count} médias de la médiathèque ?",
+                                count
+                            ),
+                            tr!("Les fichiers audio et leurs versions préparées seront effacés de cet ordinateur. Les médias encore utilisés dans une playlist ou par une tâche en cours seront conservés. Cette action est irréversible."),
+                            tr!("Supprimer"),
                             move |_, cx| {
                                 let _ = owner.update(cx, |v, cx| {
                                     v.send(
@@ -479,7 +492,7 @@ fn selection_bar(view: &AppView, cx: &mut Context<AppView>) -> Option<AnyElement
         let blocked = view.editors.get(&id).is_none_or(|e| e.read(cx).blocked());
         bar = bar.child(theme::pill(
             Button::new("add-selected-audio-to-playlist")
-                .label(format!("Ajouter à « {} »", playlist.title))
+                .label(tr!("Ajouter à « {title} »", title = playlist.title))
                 .on_click(cx.listener(move |v, _, window, cx| {
                     let chosen: Vec<_> = if v.selected_media_set.is_empty() {
                         v.selected_media.into_iter().collect()

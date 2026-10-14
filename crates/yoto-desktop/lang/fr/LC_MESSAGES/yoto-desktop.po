@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:04-0400\n"
+"POT-Creation-Date: 2026-10-14 00:05-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -101,7 +101,7 @@ msgstr ""
 msgid "Déconnecter"
 msgstr "Déconnecter"
 
-#: src/ui/account.rs
+#: src/ui/account.rs src/ui/players.rs
 msgid "Connectez votre compte Yoto"
 msgstr "Connectez votre compte Yoto"
 
@@ -172,7 +172,7 @@ msgstr ""
 "Vos playlists se chargent automatiquement. Actualisez pour retrouver aussi "
 "vos lecteurs."
 
-#: src/ui/account.rs
+#: src/ui/account.rs src/ui/players.rs
 #, rust-format
 msgid "{count} playlist"
 msgid_plural "{count} playlists"
@@ -190,7 +190,7 @@ msgstr[1] "{count} lecteurs"
 msgid "Connecté · utilisé pour la synchronisation"
 msgstr "Connecté · utilisé pour la synchronisation"
 
-#: src/ui/account.rs
+#: src/ui/account.rs src/ui/players.rs
 msgid "Actualisation…"
 msgstr "Actualisation…"
 
@@ -226,6 +226,262 @@ msgstr ""
 "raccourcis et commandes techniques des lecteurs ; ouverture d’une autre "
 "médiathèque. Inutile au quotidien."
 
+#: src/ui/group.rs
+msgid "Nom du groupe"
+msgstr "Nom du groupe"
+
+#: src/ui/group.rs
+msgid "Aucune image pour l’instant : ajoutez-en une depuis votre ordinateur."
+msgstr "Aucune image pour l’instant : ajoutez-en une depuis votre ordinateur."
+
+#: src/ui/group.rs
+msgid "Choisissez l’image du groupe."
+msgstr "Choisissez l’image du groupe."
+
+#: src/ui/group.rs
+msgid "Image ajoutée à votre famille."
+msgstr "Image ajoutée à votre famille."
+
+#: src/ui/group.rs
+msgid "Groupe enregistré sur Yoto."
+msgstr "Groupe enregistré sur Yoto."
+
+#: src/ui/group.rs
+msgid "Réponse inattendue."
+msgstr "Réponse inattendue."
+
+#: src/ui/group.rs
+#, rust-format
+msgid "Groupe enregistré. Actualisation impossible : {reason}"
+msgstr "Groupe enregistré. Actualisation impossible : {reason}"
+
+#: src/ui/group.rs src/ui/pixelart.rs
+msgid "Image"
+msgstr "Image"
+
+#: src/ui/group.rs
+msgid "Modifier le groupe"
+msgstr "Modifier le groupe"
+
+#: src/ui/group.rs
+msgid "Nouveau groupe"
+msgstr "Nouveau groupe"
+
+#: src/ui/group.rs
+msgid "Fermer l’éditeur de groupe"
+msgstr "Fermer l’éditeur de groupe"
+
+#: src/ui/group.rs src/ui/update.rs src/ui/wording.rs
+msgid "Fermer"
+msgstr "Fermer"
+
+#: src/ui/group.rs
+#, rust-format
+msgid "Monter « {title} »"
+msgstr "Monter « {title} »"
+
+#: src/ui/group.rs
+msgid "Monter"
+msgstr "Monter"
+
+#: src/ui/group.rs
+#, rust-format
+msgid "Descendre « {title} »"
+msgstr "Descendre « {title} »"
+
+#: src/ui/group.rs
+msgid "Descendre"
+msgstr "Descendre"
+
+#: src/ui/group.rs
+msgid ""
+"Cochez les playlists à mettre dans le groupe ; vous pourrez ensuite les "
+"ordonner ici."
+msgstr ""
+"Cochez les playlists à mettre dans le groupe ; vous pourrez ensuite les "
+"ordonner ici."
+
+#: src/ui/group.rs
+#, rust-format
+msgid "Image {number}"
+msgstr "Image {number}"
+
+#: src/ui/group.rs
+msgid "Ajouter une image"
+msgstr "Ajouter une image"
+
+#: src/ui/group.rs
+msgid "Choisir parmi vos images"
+msgstr "Choisir parmi vos images"
+
+#: src/ui/group.rs
+msgid "Retirer l’image"
+msgstr "Retirer l’image"
+
+#: src/ui/group.rs
+msgid "Playlists du groupe"
+msgstr "Playlists du groupe"
+
+#: src/ui/group.rs
+msgid "Ordre dans le groupe"
+msgstr "Ordre dans le groupe"
+
+#: src/ui/group.rs
+msgid "Image du groupe"
+msgstr "Image du groupe"
+
+#: src/ui/group.rs src/ui/wording.rs
+msgid "Enregistrement…"
+msgstr "Enregistrement…"
+
+#: src/ui/group.rs
+msgid "Enregistrer le groupe"
+msgstr "Enregistrer le groupe"
+
+#: src/ui/library.rs
+msgid "Fichier audio"
+msgstr "Fichier audio"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Sélectionner {title}"
+msgstr "Sélectionner {title}"
+
+#: src/ui/library.rs
+msgid "Découpé"
+msgstr "Découpé"
+
+#: src/ui/library.rs
+msgid "Original"
+msgstr "Original"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Écouter {title}"
+msgstr "Écouter {title}"
+
+#: src/ui/library.rs
+msgid "Écouter"
+msgstr "Écouter"
+
+#: src/ui/library.rs
+msgid "Ouvrir et écouter"
+msgstr "Ouvrir et écouter"
+
+#: src/ui/library.rs
+msgid "Commencez votre médiathèque"
+msgstr "Commencez votre médiathèque"
+
+#: src/ui/library.rs
+msgid ""
+"Ajoutez un fichier audio ou un lien YouTube. Vous pourrez ensuite écouter, "
+"découper, puis ajouter l’audio à une playlist Yoto."
+msgstr ""
+"Ajoutez un fichier audio ou un lien YouTube. Vous pourrez ensuite écouter, "
+"découper, puis ajouter l’audio à une playlist Yoto."
+
+#: src/ui/library.rs
+msgid "Ajouter un fichier audio"
+msgstr "Ajouter un fichier audio"
+
+#: src/ui/library.rs
+msgid "Importer depuis un lien YouTube"
+msgstr "Importer depuis un lien YouTube"
+
+#: src/ui/library.rs
+msgid "Aucun audio ne correspond à votre recherche. Essayez un autre mot."
+msgstr "Aucun audio ne correspond à votre recherche. Essayez un autre mot."
+
+#: src/ui/library.rs src/ui/wording.rs
+msgid "Médiathèque"
+msgstr "Médiathèque"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "{count} audio · sur cet ordinateur"
+msgid_plural "{count} audios · sur cet ordinateur"
+msgstr[0] "{count} audio · sur cet ordinateur"
+msgstr[1] "{count} audios · sur cet ordinateur"
+
+#: src/ui/library.rs
+msgid "Lien YouTube"
+msgstr "Lien YouTube"
+
+#: src/ui/library.rs
+msgid "Titre"
+msgstr "Titre"
+
+#: src/ui/library.rs
+msgid "Auteur"
+msgstr "Auteur"
+
+#: src/ui/library.rs
+msgid "Durée"
+msgstr "Durée"
+
+#: src/ui/library.rs
+msgid "Plus récents"
+msgstr "Plus récents"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Trier par : {order}"
+msgstr "Trier par : {order}"
+
+#: src/ui/library.rs
+msgid "Plus d’options"
+msgstr "Plus d’options"
+
+#: src/ui/library.rs
+msgid "Tout sélectionner"
+msgstr "Tout sélectionner"
+
+#: src/ui/library.rs
+msgid "Libérer l’espace inutilisé"
+msgstr "Libérer l’espace inutilisé"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "« {title} »"
+msgstr "« {title} »"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "{count} audio sélectionné"
+msgid_plural "{count} audios sélectionnés"
+msgstr[0] "{count} audio sélectionné"
+msgstr[1] "{count} audios sélectionnés"
+
+#: src/ui/library.rs
+msgid "Désélectionner"
+msgstr "Désélectionner"
+
+#: src/ui/library.rs src/ui/players.rs
+msgid "Supprimer"
+msgstr "Supprimer"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Supprimer {count} média de la médiathèque ?"
+msgid_plural "Supprimer {count} médias de la médiathèque ?"
+msgstr[0] "Supprimer {count} média de la médiathèque ?"
+msgstr[1] "Supprimer {count} médias de la médiathèque ?"
+
+#: src/ui/library.rs
+msgid ""
+"Les fichiers audio et leurs versions préparées seront effacés de cet "
+"ordinateur. Les médias encore utilisés dans une playlist ou par une tâche en "
+"cours seront conservés. Cette action est irréversible."
+msgstr ""
+"Les fichiers audio et leurs versions préparées seront effacés de cet "
+"ordinateur. Les médias encore utilisés dans une playlist ou par une tâche en "
+"cours seront conservés. Cette action est irréversible."
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Ajouter à « {title} »"
+msgstr "Ajouter à « {title} »"
+
 #: src/ui/mod.rs
 msgid "Rechercher dans vos médias…"
 msgstr "Rechercher dans vos médias…"
@@ -241,10 +497,6 @@ msgstr "Identifiant de la carte"
 #: src/ui/pixelart.rs
 msgid "Choisissez une image…"
 msgstr "Choisissez une image…"
-
-#: src/ui/pixelart.rs
-msgid "Image"
-msgstr "Image"
 
 #: src/ui/pixelart.rs
 msgid "Préparation de l’image…"
@@ -286,6 +538,89 @@ msgstr "Importer une image"
 #: src/ui/pixelart.rs
 msgid "Utiliser cette icône"
 msgstr "Utiliser cette icône"
+
+#: src/ui/players.rs src/ui/wording.rs
+msgid "Lecteurs"
+msgstr "Lecteurs"
+
+#: src/ui/players.rs
+msgid ""
+"Choisissez un lecteur, lancez une playlist, réglez le volume et la lumière."
+msgstr ""
+"Choisissez un lecteur, lancez une playlist, réglez le volume et la lumière."
+
+#: src/ui/players.rs
+msgid "Vous verrez alors vos lecteurs et pourrez lancer une playlist dessus."
+msgstr "Vous verrez alors vos lecteurs et pourrez lancer une playlist dessus."
+
+#: src/ui/players.rs
+msgid "Connecter Yoto"
+msgstr "Connecter Yoto"
+
+#: src/ui/players.rs
+msgid "Actualiser depuis Yoto"
+msgstr "Actualiser depuis Yoto"
+
+#: src/ui/players.rs
+msgid "En ligne"
+msgstr "En ligne"
+
+#: src/ui/players.rs
+msgid "Hors ligne"
+msgstr "Hors ligne"
+
+#: src/ui/players.rs
+msgid ""
+"Aucun lecteur trouvé. Actualisez depuis Yoto, puis vérifiez que votre "
+"lecteur est allumé et connecté au Wi-Fi."
+msgstr ""
+"Aucun lecteur trouvé. Actualisez depuis Yoto, puis vérifiez que votre "
+"lecteur est allumé et connecté au Wi-Fi."
+
+#: src/ui/players.rs
+msgid ""
+"Choisissez un lecteur ci-dessus pour lancer une playlist, régler le volume, "
+"la veilleuse ou la minuterie."
+msgstr ""
+"Choisissez un lecteur ci-dessus pour lancer une playlist, régler le volume, "
+"la veilleuse ou la minuterie."
+
+#: src/ui/players.rs
+msgid "Groupes familiaux"
+msgstr "Groupes familiaux"
+
+#: src/ui/players.rs
+msgid "Créer un groupe"
+msgstr "Créer un groupe"
+
+#: src/ui/players.rs
+msgid ""
+"Un groupe rassemble des playlists à partager avec la famille, dans "
+"l’application Yoto."
+msgstr ""
+"Un groupe rassemble des playlists à partager avec la famille, dans "
+"l’application Yoto."
+
+#: src/ui/players.rs
+msgid "Aucune playlist"
+msgstr "Aucune playlist"
+
+#: src/ui/players.rs
+msgid "Modifier"
+msgstr "Modifier"
+
+#: src/ui/players.rs
+#, rust-format
+msgid "Supprimer le groupe « {name} » ?"
+msgstr "Supprimer le groupe « {name} » ?"
+
+#: src/ui/players.rs
+msgid ""
+"Le groupe disparaîtra de votre compte Yoto. Les playlists qu’il contient ne "
+"sont pas supprimées."
+msgstr ""
+"Le groupe disparaîtra de votre compte Yoto. Les playlists qu’il contient ne "
+"sont pas supprimées."
 
 #: src/ui/playlist_media_picker.rs
 #, rust-format
@@ -431,10 +766,6 @@ msgstr "Installer et redémarrer"
 #: src/ui/update.rs
 msgid "Redémarrage de l’application…"
 msgstr "Redémarrage de l’application…"
-
-#: src/ui/update.rs src/ui/wording.rs
-msgid "Fermer"
-msgstr "Fermer"
 
 #: src/ui/wording.rs
 #, rust-format
@@ -598,20 +929,12 @@ msgid "Annulé"
 msgstr "Annulé"
 
 #: src/ui/wording.rs
-msgid "Médiathèque"
-msgstr "Médiathèque"
-
-#: src/ui/wording.rs
 msgid "Playlists"
 msgstr "Playlists"
 
 #: src/ui/wording.rs
 msgid "Imports"
 msgstr "Imports"
-
-#: src/ui/wording.rs
-msgid "Lecteurs"
-msgstr "Lecteurs"
 
 #: src/ui/wording.rs
 msgid "Compte"
@@ -737,10 +1060,6 @@ msgid ""
 msgstr ""
 "Trop long pour une seule piste Yoto (1 h au plus) : ajouté à une playlist, "
 "il sera découpé en {parts} parties."
-
-#: src/ui/wording.rs
-msgid "Enregistrement…"
-msgstr "Enregistrement…"
 
 #: src/ui/wording.rs
 msgid "Enregistré sur Yoto"

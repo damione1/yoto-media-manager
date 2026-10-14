@@ -39,7 +39,7 @@ impl GroupEditor {
     ) -> Self {
         let name = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Nom du groupe")
+                .placeholder(tr!("Nom du groupe"))
                 .default_value(group.as_ref().map(|g| g.name.clone()).unwrap_or_default())
         });
         Self {
@@ -57,6 +57,12 @@ impl GroupEditor {
             status: String::new(),
             saving: false,
         }
+    }
+    /// Input placeholders, again in the interface language after it changed.
+    pub fn relabel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.name.update(cx, |s, cx| {
+            s.set_placeholder(tr!("Nom du groupe"), window, cx)
+        });
     }
     fn send(&mut self, command: Command, cx: &mut Context<Self>) {
         let writing = matches!(&command, Command::SaveGroup { .. });
@@ -110,10 +116,10 @@ impl GroupEditor {
                             v.load_preview(id.clone(), cx);
                         }
                         v.status = if images.is_empty() {
-                            "Aucune image pour l’instant : ajoutez-en une depuis votre ordinateur."
+                            tr!("Aucune image pour l’instant : ajoutez-en une depuis votre ordinateur.")
                                 .into()
                         } else {
-                            "Choisissez l’image du groupe.".into()
+                            tr!("Choisissez l’image du groupe.").into()
                         };
                         v.images = images;
                     }
@@ -122,7 +128,7 @@ impl GroupEditor {
                             v.images.insert(0, id.clone());
                         }
                         v.select_image(id, cx);
-                        v.status = "Image ajoutée à votre famille.".into();
+                        v.status = tr!("Image ajoutée à votre famille.").into();
                     }
                     Ok(Ok(
                         Reply::Data(_)
@@ -132,7 +138,7 @@ impl GroupEditor {
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)
                         | Reply::PlaylistOperation { .. },
-                    )) => v.status = "Groupe enregistré sur Yoto.".into(),
+                    )) => v.status = tr!("Groupe enregistré sur Yoto.").into(),
                     Ok(Ok(
                         Reply::Entries(_)
                         | Reply::Waveform(_)
@@ -140,7 +146,7 @@ impl GroupEditor {
                         | Reply::Asset(_)
                         | Reply::PixelArt(_)
                         | Reply::Player(_),
-                    )) => v.status = "Réponse inattendue.".into(),
+                    )) => v.status = tr!("Réponse inattendue.").into(),
                     Ok(Err(e)) => {
                         if writing && matches!(e, Failure::Ambiguous) {
                             v.saving = true;
@@ -150,9 +156,9 @@ impl GroupEditor {
                     Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
                 }
                 if let Some(error) = refresh_failure {
-                    v.status = format!(
-                        "Groupe enregistré. Actualisation impossible : {}",
-                        failure_text(&error)
+                    v.status = tr!(
+                        "Groupe enregistré. Actualisation impossible : {reason}",
+                        reason = failure_text(&error)
                     );
                 }
                 if let Some(id) = created {
@@ -211,7 +217,7 @@ impl GroupEditor {
         let account = self.account.clone();
         self.tasks.push(cx.spawn(async move |weak, cx| {
             if let Some(file) = rfd::AsyncFileDialog::new()
-                .add_filter("Image", &["png", "jpg", "jpeg", "gif"])
+                .add_filter(tr!("Image"), &["png", "jpg", "jpeg", "gif"])
                 .pick_file()
                 .await
             {
@@ -244,17 +250,17 @@ impl Render for GroupEditor {
             .child(theme::icon_tile(IconName::Users, &theme::PEACH, 36., 11.))
             .child(div().flex_1().child(theme::heading(
                 if self.id.is_some() {
-                    "Modifier le groupe"
+                    tr!("Modifier le groupe")
                 } else {
-                    "Nouveau groupe"
+                    tr!("Nouveau groupe")
                 },
                 18.,
             )))
             .child(theme::round(
                 Button::new("close-group-editor")
                     .icon(IconName::X)
-                    .accessibility_label("Fermer l’éditeur de groupe")
-                    .tooltip("Fermer")
+                    .accessibility_label(tr!("Fermer l’éditeur de groupe"))
+                    .tooltip(tr!("Fermer"))
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(GroupEditorEvent::Close))),
                 Look::Soft(&theme::LIGHT_SAND),
                 36.,
@@ -332,8 +338,8 @@ impl Render for GroupEditor {
                     .child(theme::round(
                         Button::new(element_id("group-up", index))
                             .icon(IconName::ArrowUp)
-                            .accessibility_label(format!("Monter « {title} »"))
-                            .tooltip("Monter")
+                            .accessibility_label(tr!("Monter « {title} »", title = title))
+                            .tooltip(tr!("Monter"))
                             .on_click(cx.listener(move |v, _, _, cx| {
                                 v.cards.swap(index, index - 1);
                                 cx.notify();
@@ -346,8 +352,8 @@ impl Render for GroupEditor {
                     .child(theme::round(
                         Button::new(element_id("group-down", index))
                             .icon(IconName::ArrowDown)
-                            .accessibility_label(format!("Descendre « {title} »"))
-                            .tooltip("Descendre")
+                            .accessibility_label(tr!("Descendre « {title} »", title = title))
+                            .tooltip(tr!("Descendre"))
                             .on_click(cx.listener(move |v, _, _, cx| {
                                 v.cards.swap(index, index + 1);
                                 cx.notify();
@@ -361,7 +367,7 @@ impl Render for GroupEditor {
         }
         if self.cards.is_empty() {
             order = order.child(theme::note(
-                "Cochez les playlists à mettre dans le groupe ; vous pourrez ensuite les ordonner ici.",
+                tr!("Cochez les playlists à mettre dans le groupe ; vous pourrez ensuite les ordonner ici."),
             ));
         }
         let mut images = div().flex().flex_wrap().gap(px(8.));
@@ -387,7 +393,7 @@ impl Render for GroupEditor {
                 .on_click(cx.listener(move |v, _, _, cx| v.select_image(choose.clone(), cx)));
             tile = match self.previews.get(id) {
                 Some(art) => tile.child(pixelart::thumbnail(art, 4., cx)),
-                None => tile.child(theme::meta(format!("Image {}", index + 1))),
+                None => tile.child(theme::meta(tr!("Image {number}", number = index + 1))),
             };
             images = images.child(tile);
         }
@@ -400,7 +406,7 @@ impl Render for GroupEditor {
             .child(theme::pill(
                 Button::new("family-image-upload")
                     .icon(IconName::Upload)
-                    .label("Ajouter une image")
+                    .label(tr!("Ajouter une image"))
                     .on_click(cx.listener(|v, _, _, cx| v.upload(cx))),
                 Look::Soft(&theme::PEACH),
                 Height::Small,
@@ -409,7 +415,7 @@ impl Render for GroupEditor {
             ))
             .child(theme::pill(
                 Button::new("family-image-list")
-                    .label("Choisir parmi vos images")
+                    .label(tr!("Choisir parmi vos images"))
                     .on_click(cx.listener(|v, _, _, cx| {
                         v.send(Command::FamilyImages(v.account.clone()), cx)
                     })),
@@ -423,7 +429,7 @@ impl Render for GroupEditor {
         if self.id.is_none() && self.image.is_some() {
             image_row = image_row.child(theme::pill(
                 Button::new("group-clear-image")
-                    .label("Retirer l’image")
+                    .label(tr!("Retirer l’image"))
                     .on_click(cx.listener(|v, _, _, cx| {
                         v.image = None;
                         cx.notify();
@@ -437,18 +443,18 @@ impl Render for GroupEditor {
         theme::inset()
             .gap(px(14.))
             .child(header)
-            .child(section("Nom du groupe"))
+            .child(section(tr!("Nom du groupe")))
             .child(theme::small_field(Input::new(&self.name)))
-            .child(section("Playlists du groupe"))
+            .child(section(tr!("Playlists du groupe")))
             .child(available)
-            .child(section("Ordre dans le groupe"))
+            .child(section(tr!("Ordre dans le groupe")))
             .child(order)
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap(px(10.))
-                    .child(div().flex_1().child(section("Image du groupe")))
+                    .child(div().flex_1().child(section(tr!("Image du groupe"))))
                     .children(selected_preview.map(|art| pixelart::thumbnail(art, 3., cx))),
             )
             .child(image_row)
@@ -461,7 +467,7 @@ impl Render for GroupEditor {
                     .gap(px(8.))
                     .child(theme::pill(
                         Button::new("cancel-group-draft")
-                            .label("Fermer")
+                            .label(tr!("Fermer"))
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(GroupEditorEvent::Close))),
                         Look::Outline,
                         Height::Medium,
@@ -471,9 +477,9 @@ impl Render for GroupEditor {
                     .child(theme::pill(
                         Button::new("save-group-draft")
                             .label(if self.saving {
-                                "Enregistrement…"
+                                tr!("Enregistrement…")
                             } else {
-                                "Enregistrer le groupe"
+                                tr!("Enregistrer le groupe")
                             })
                             .on_click(cx.listener(|v, _, _, cx| {
                                 v.send(

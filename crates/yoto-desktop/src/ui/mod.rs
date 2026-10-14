@@ -952,6 +952,9 @@ impl AppView {
         for (input, placeholder) in placeholders {
             input.update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
         }
+        for editor in self.group_editors.values() {
+            editor.update(cx, |e, cx| e.relabel(window, cx));
+        }
     }
     /// Keep the interface settings for the next launch. Failing to write them only costs
     /// the choice at the next launch, so it is reported without interrupting.

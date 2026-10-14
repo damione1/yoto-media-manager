@@ -105,8 +105,8 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         .items_center()
         .gap(px(12.))
         .child(div().flex_1().child(theme::screen_header(
-            "Lecteurs",
-            "Choisissez un lecteur, lancez une playlist, réglez le volume et la lumière.",
+            tr!("Lecteurs"),
+            tr!("Choisissez un lecteur, lancez une playlist, réglez le volume et la lumière."),
         )));
     let mut body = div()
         .id("players-scroll")
@@ -124,10 +124,10 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                 theme::card()
                     .items_start()
                     .child(theme::icon_tile(IconName::Speaker, &theme::SKY, 48., 14.))
-                    .child(theme::heading("Connectez votre compte Yoto", 19.))
-                    .child(theme::note(
-                        "Vous verrez alors vos lecteurs et pourrez lancer une playlist dessus.",
-                    ))
+                    .child(theme::heading(tr!("Connectez votre compte Yoto"), 19.))
+                    .child(theme::note(tr!(
+                        "Vous verrez alors vos lecteurs et pourrez lancer une playlist dessus."
+                    )))
                     .child(
                         div()
                             .flex()
@@ -138,7 +138,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                     .label(if view.connecting {
                                         wording::connect::waiting()
                                     } else {
-                                        "Connecter Yoto"
+                                        tr!("Connecter Yoto")
                                     })
                                     .on_click(
                                         cx.listener(|v, _, _, cx| v.send(Command::Connect, cx)),
@@ -161,9 +161,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         Button::new("sync-yoto")
             .icon(IconName::RefreshCw)
             .label(if syncing {
-                "Actualisation…"
+                tr!("Actualisation…")
             } else {
-                "Actualiser depuis Yoto"
+                tr!("Actualiser depuis Yoto")
             })
             .on_click(
                 cx.listener(move |v, _, _, cx| v.send(Command::Sync(sync_account.clone()), cx)),
@@ -206,9 +206,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                 "{} · {}",
                 device.name,
                 if device.online {
-                    "En ligne"
+                    tr!("En ligne")
                 } else {
-                    "Hors ligne"
+                    tr!("Hors ligne")
                 }
             ))
             .toggled(selected)
@@ -254,9 +254,9 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                         theme::OFFLINE
                                     }))
                                     .child(if device.online {
-                                        "En ligne"
+                                        tr!("En ligne")
                                     } else {
-                                        "Hors ligne"
+                                        tr!("Hors ligne")
                                     }),
                             ),
                     ),
@@ -277,7 +277,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
     body = body.child(players);
     if view.snapshot.devices.is_empty() {
         body = body.child(theme::note(
-            "Aucun lecteur trouvé. Actualisez depuis Yoto, puis vérifiez que votre lecteur est allumé et connecté au Wi-Fi.",
+            tr!("Aucun lecteur trouvé. Actualisez depuis Yoto, puis vérifiez que votre lecteur est allumé et connecté au Wi-Fi."),
         ));
     }
     let selected = view.selected_device.as_ref().and_then(|id| {
@@ -307,7 +307,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         None if !view.snapshot.devices.is_empty() => (
             theme::inset()
                 .child(theme::note(
-                    "Choisissez un lecteur ci-dessus pour lancer une playlist, régler le volume, la veilleuse ou la minuterie.",
+                    tr!("Choisissez un lecteur ci-dessus pour lancer une playlist, régler le volume, la veilleuse ou la minuterie."),
                 ))
                 .into_any_element(),
             None,
@@ -333,10 +333,10 @@ fn groups(view: &AppView, account: AccountId, cx: &mut Context<AppView>) -> AnyE
             .flex()
             .items_center()
             .justify_between()
-            .child(theme::heading("Groupes familiaux", 19.))
+            .child(theme::heading(tr!("Groupes familiaux"), 19.))
             .child(theme::pill(
                 Button::new("new-group")
-                    .label("Créer un groupe")
+                    .label(tr!("Créer un groupe"))
                     .on_click(cx.listener(move |v, _, window, cx| {
                         v.edit_group(create_account.clone(), None, window, cx)
                     })),
@@ -347,9 +347,9 @@ fn groups(view: &AppView, account: AccountId, cx: &mut Context<AppView>) -> AnyE
             )),
     );
     if view.snapshot.groups.is_empty() {
-        card = card.child(theme::note(
-            "Un groupe rassemble des playlists à partager avec la famille, dans l’application Yoto.",
-        ));
+        card = card.child(theme::note(tr!(
+            "Un groupe rassemble des playlists à partager avec la famille, dans l’application Yoto."
+        )));
     }
     for group in &view.snapshot.groups {
         let id = group.id.clone();
@@ -381,14 +381,13 @@ fn groups(view: &AppView, account: AccountId, cx: &mut Context<AppView>) -> AnyE
                                 .child(group.name.clone()),
                         )
                         .child(theme::meta(match count {
-                            0 => "Aucune playlist".to_owned(),
-                            1 => "1 playlist".to_owned(),
-                            n => format!("{n} playlists"),
+                            0 => tr!("Aucune playlist").to_owned(),
+                            n => trn!("{count} playlist", "{count} playlists", n),
                         })),
                 )
                 .child(theme::pill(
                     Button::new(element_id("edit-group", edit_id.to_string()))
-                        .label("Modifier")
+                        .label(tr!("Modifier"))
                         .on_click(cx.listener(move |v, _, window, cx| {
                             v.edit_group(edit_account.clone(), Some(edit_id.clone()), window, cx)
                         })),
@@ -399,7 +398,7 @@ fn groups(view: &AppView, account: AccountId, cx: &mut Context<AppView>) -> AnyE
                 ))
                 .child(theme::pill(
                     Button::new(element_id("delete-group", id.as_str().to_owned()))
-                        .label("Supprimer")
+                        .label(tr!("Supprimer"))
                         .on_click(cx.listener(move |_, _, window, cx| {
                             let owner = cx.entity().downgrade();
                             let account = delete_account.clone();
@@ -407,9 +406,9 @@ fn groups(view: &AppView, account: AccountId, cx: &mut Context<AppView>) -> AnyE
                             confirm_destructive(
                                 window,
                                 cx,
-                                format!("Supprimer le groupe « {name} » ?"),
-                                "Le groupe disparaîtra de votre compte Yoto. Les playlists qu’il contient ne sont pas supprimées.",
-                                "Supprimer",
+                                tr!("Supprimer le groupe « {name} » ?", name = name),
+                                tr!("Le groupe disparaîtra de votre compte Yoto. Les playlists qu’il contient ne sont pas supprimées."),
+                                tr!("Supprimer"),
                                 move |_, cx| {
                                     let _ = owner.update(cx, |v, cx| {
                                         v.send(
