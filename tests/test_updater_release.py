@@ -67,7 +67,7 @@ class UpdaterReleaseTests(unittest.TestCase):
         self.addCleanup(self.patch.stop)
         for target, (platform, extension) in release.PLATFORMS.items():
             if extension == "tar.gz":
-                app = self.root / "dist" / target / "Yoto.app"
+                app = self.root / "dist" / target / "YotoMediaManager.app"
                 (app / "Contents/MacOS").mkdir(parents=True)
                 (app / "Contents/MacOS/yoto-desktop").write_bytes(b"test desktop")
                 (app / "Contents/Resources").mkdir()
@@ -111,18 +111,23 @@ class UpdaterReleaseTests(unittest.TestCase):
         self.assertEqual(manifest["version"], self.version)
         self.assertEqual(set(manifest["platforms"]), {pair[0] for pair in release.PLATFORMS.values()})
         for platform, extension in release.PLATFORMS.values():
-            archive = folder / f"Yoto-{self.version}-{platform}.{extension}"
+            archive = folder / f"YotoMediaManager-{self.version}-{platform}.{extension}"
             self.assertEqual(manifest["platforms"][platform]["size"], archive.stat().st_size)
+            self.assertEqual(
+                manifest["platforms"][platform]["url"],
+                f"https://github.com/damione1/yoto-media-manager/releases/download/v{self.version}/{archive.name}",
+            )
             if extension == "tar.gz":
                 with tarfile.open(archive) as reader:
-                    link = reader.getmember("Yoto.app/Contents/Resources/current")
+                    link = reader.getmember("YotoMediaManager.app/Contents/Resources/current")
                     self.assertTrue(link.issym())
                     self.assertEqual(link.linkname, "../MacOS/yoto-desktop")
             else:
                 with zipfile.ZipFile(archive) as reader:
                     self.assertEqual(set(reader.namelist()), {
-                        "Yoto/yoto-desktop.exe", "Yoto/yoto-mcp.exe", "Yoto/tools/ffmpeg.exe",
-                        "Yoto/tools/nested/manifest.json", "Yoto/THIRD-PARTY-NOTICES.md",
+                        "YotoMediaManager/yoto-desktop.exe", "YotoMediaManager/yoto-mcp.exe",
+                        "YotoMediaManager/tools/ffmpeg.exe", "YotoMediaManager/tools/nested/manifest.json",
+                        "YotoMediaManager/THIRD-PARTY-NOTICES.md",
                     })
         self.assertFalse(list(self.root.rglob("private.key")))
 
@@ -158,14 +163,14 @@ class UpdaterReleaseTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"YOTO_UPDATER_PRIVATE_KEY": key}), mock.patch.object(release.subprocess, "run", side_effect=quiet_run):
             folder = self.build_all()
             release.assemble(folder)
-            archive = folder / "Yoto-1.2.3-windows-x86_64.zip"
+            archive = folder / "YotoMediaManager-1.2.3-windows-x86_64.zip"
             original = archive.read_bytes()
             archive.write_bytes(bytes([original[0] ^ 1]) + original[1:])
             with self.assertRaises(subprocess.CalledProcessError):
                 release.assemble(folder)
             archive.write_bytes(original)
             signature = archive.with_name(archive.name + ".minisig")
-            quiet_run(["minisign", "-S", "-s", str(private), "-m", str(archive), "-x", str(signature), "-t", "YotoMediaManager Yoto-1.0.0-windows-x86_64.zip"], check=True)
+            quiet_run(["minisign", "-S", "-s", str(private), "-m", str(archive), "-x", str(signature), "-t", "YotoMediaManager YotoMediaManager-1.0.0-windows-x86_64.zip"], check=True)
             metadata_path = folder / "windows-x86_64.json"
             metadata = json.loads(metadata_path.read_text())
             metadata["signature"] = base64.b64encode(signature.read_bytes()).decode()

@@ -9,7 +9,9 @@ if not a.dev and not a.notarize_profile:raise SystemExit('Release requires a not
 version=app_version()
 if version is None and not a.dev:raise SystemExit('A release bundle requires YOTO_APP_VERSION from the release tag')
 bundle_version=version or '0.0.0'
-name='Yoto Dev' if a.dev else 'Yoto';out_dir=a.output_dir if a.output_dir is not None else ROOT/'dist'/a.target;out=out_dir/(name+'.app');out.parent.mkdir(parents=True,exist_ok=True)
+# The bundle identifier stays dev.yoto.desktop(.dev): keychain items, permissions and the
+# updater's signing check are tied to it, so renaming the bundle must not change it.
+name='YotoMediaManager Dev' if a.dev else 'YotoMediaManager';out_dir=a.output_dir if a.output_dir is not None else ROOT/'dist'/a.target;out=out_dir/(name+'.app');out.parent.mkdir(parents=True,exist_ok=True)
 if out.exists():shutil.rmtree(out)
 mac=out/'Contents/MacOS';resources=out/'Contents/Resources';mac.mkdir(parents=True);resources.mkdir()
 profile='debug' if a.dev else 'release';build=ROOT/'target'/a.target/profile
@@ -46,5 +48,5 @@ run([mac/'yoto-mcp','--self-test'])
 if not a.dev:
     archive=out.parent/'notarize.zip';run(['ditto','-c','-k','--keepParent',out,archive]);run(['xcrun','notarytool','submit',archive,'--keychain-profile',a.notarize_profile,'--wait']);run(['xcrun','stapler','staple',out]);run(['xcrun','stapler','validate',out]);run(['spctl','--assess','--type','execute','--verbose=4',out])
     staging=stage_dmg(out,out.parent);stage=pathlib.Path(staging.name)
-    dmg=out.parent/f'Yoto-{version}-{a.target}.dmg';run(['hdiutil','create','-volname','Yoto','-srcfolder',stage,'-ov','-format','UDZO',dmg]);run(['codesign','--timestamp','--sign',a.identity,dmg]);run(['xcrun','notarytool','submit',dmg,'--keychain-profile',a.notarize_profile,'--wait']);run(['xcrun','stapler','staple',dmg]);run(['xcrun','stapler','validate',dmg]);staging.cleanup()
+    dmg=out.parent/f'YotoMediaManager-{version}-{a.target}.dmg';run(['hdiutil','create','-volname','YotoMediaManager','-srcfolder',stage,'-ov','-format','UDZO',dmg]);run(['codesign','--timestamp','--sign',a.identity,dmg]);run(['xcrun','notarytool','submit',dmg,'--keychain-profile',a.notarize_profile,'--wait']);run(['xcrun','stapler','staple',dmg]);run(['xcrun','stapler','validate',dmg]);staging.cleanup()
 print(out)
