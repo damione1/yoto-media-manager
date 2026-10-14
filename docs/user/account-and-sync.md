@@ -11,7 +11,7 @@ sidebar_position: 6
 1. Open `Compte` and choose `Connecter mon compte Yoto`.
 2. Your browser opens the Yoto login page.
 3. Sign in there and approve the access the app needs.
-4. Return to Yoto Atelier after confirmation. The connected account becomes active and your playlists load automatically. The sidebar also shows the account in use.
+4. Return to YotoMediaManager after confirmation. The connected account becomes active and your playlists load automatically. The sidebar also shows the account in use.
 
 You enter your password on Yoto's website. The app keeps login authorizations in your operating system's secure vault. You do not need to create a developer key to use the configured app.
 

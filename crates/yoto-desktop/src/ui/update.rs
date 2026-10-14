@@ -165,7 +165,7 @@ impl Render for UpdatePanel {
             .child(format!("Version installée : {CURRENT_VERSION}"));
         match self.state.as_ref() {
             UpdateState::Idle => {
-                body = body.child("Recevez les nouvelles versions de YotoMediaManager directement dans l’application.").child(Button::new("check-update").label("Rechercher une mise à jour").primary().on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))));
+                body = body.child(format!("Recevez les nouvelles versions de {PRODUCT_NAME} directement dans l’application.")).child(Button::new("check-update").label("Rechercher une mise à jour").primary().on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))));
             }
             UpdateState::Checking => {
                 body = body.child(

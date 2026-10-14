@@ -5,7 +5,7 @@ if (!baseUrl.startsWith('/') || !baseUrl.endsWith('/')) {
 }
 
 export default {
-  title: 'Yoto Atelier',
+  title: 'YotoMediaManager',
   tagline: 'Your audio library, your stories, your playlists.',
   url: process.env.DOCS_URL || 'http://localhost:3000',
   baseUrl,
@@ -26,8 +26,8 @@ export default {
   themeConfig: {
     colorMode: { respectPrefersColorScheme: true },
     navbar: {
-      title: 'Yoto Atelier',
-      logo: { alt: 'Yoto Atelier audio library', src: 'img/portal-logo.png' },
+      title: 'YotoMediaManager',
+      logo: { alt: 'YotoMediaManager audio library', src: 'img/portal-logo.png' },
       items: [{ type: 'docSidebar', sidebarId: 'guide', label: 'User guide', position: 'left' }],
     },
     footer: {
@@ -37,7 +37,7 @@ export default {
         { label: 'Troubleshooting', to: '/troubleshooting/' },
         { label: 'Back up your library', to: '/backups/' },
       ] }],
-      copyright: 'Yoto Atelier · Your personal audio library',
+      copyright: 'YotoMediaManager · Your personal audio library',
     },
   },
 };

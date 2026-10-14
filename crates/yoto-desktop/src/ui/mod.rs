@@ -20,7 +20,7 @@ use gpui_kit::component::{
 use gpui_kit::*;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 pub use theme::install as install_theme;
-pub use wording::failure_text;
+pub use wording::{PRODUCT_NAME, failure_text};
 use wording::{confirm_destructive, duration_text};
 use yoto_domain::*;
 use yoto_infra::{Command, Reply, Session as Service, Snapshot};
@@ -993,7 +993,7 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
             div()
                 .flex()
                 .flex_col()
-                .child(theme::heading("Yoto Atelier", 20.))
+                .child(theme::heading(PRODUCT_NAME, 18.))
                 .child(
                     div()
                         .text_size(px(12.))

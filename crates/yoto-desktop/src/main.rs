@@ -17,7 +17,7 @@ fn main() {
             .map(ui::failure_text)
             .unwrap_or_else(|| e.to_string());
         rfd::MessageDialog::new()
-            .set_title("YotoMediaManager")
+            .set_title(ui::PRODUCT_NAME)
             .set_description(if updating {
                 format!("La mise à jour n’a pas pu être installée.\n\n{detail}")
             } else {
@@ -79,7 +79,7 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     window_min_size: Some(size(px(980.), px(640.))),
                     titlebar: Some(TitlebarOptions {
-                        title: Some("Yoto — votre bibliothèque audio".into()),
+                        title: Some(ui::PRODUCT_NAME.into()),
                         ..Default::default()
                     }),
                     ..Default::default()

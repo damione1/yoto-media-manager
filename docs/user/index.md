@@ -4,9 +4,9 @@ slug: /
 sidebar_position: 1
 ---
 
-# Yoto Atelier
+# YotoMediaManager
 
-Yoto Atelier helps you collect audio, prepare excerpts, and manage playlists for your Yoto players. Your audio library stays on your computer. Your playlists belong to your Yoto account, and changes are sent to Yoto directly.
+YotoMediaManager helps you collect audio, prepare excerpts, and manage playlists for your Yoto players. Your audio library stays on your computer. Your playlists belong to your Yoto account, and changes are sent to Yoto directly.
 
 Import an audio file or a publicly accessible YouTube video, remove an introduction or credits, rename the content, and choose a small illustration for each chapter.
 

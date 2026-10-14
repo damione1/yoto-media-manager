@@ -6,6 +6,9 @@
 use super::*;
 use gpui_kit::component::{WindowExt, button::ButtonVariant};
 
+/// The product name, the same in the window, the sidebar and every dialog.
+pub const PRODUCT_NAME: &str = "YotoMediaManager";
+
 /// Plain-language text for a failure, in French, with the next step when there is one.
 pub fn failure_text(failure: &Failure) -> String {
     match failure {
