@@ -1,0 +1,81 @@
+name: Deploy site
+
+# Builds the public website (site/, Eleventy) and publishes it to Cloudflare
+# Pages. The Pages project is a direct-upload project with no Git provider
+# attached, so pushing to master publishes nothing on its own: this workflow
+# runs `wrangler pages deploy`.
+#
+# Path-filtered because master also carries app releases, and a Rust change
+# has no business redeploying the website. Pull requests that touch the site
+# get the build and its check, never a deploy.
+#
+# One-time setup, in the repository settings:
+#   Secrets   CLOUDFLARE_API_TOKEN   token with "Cloudflare Pages: Edit"
+#             CLOUDFLARE_ACCOUNT_ID  the account that owns the Pages project
+#   Variables CLOUDFLARE_PAGES_PROJECT  Pages project name (default below)
+#             SITE_URL                  public origin, e.g. https://example.org
+#                                       (canonical links, hreflang, Open Graph,
+#                                       sitemap); defaults to the project's
+#                                       pages.dev domain
+on:
+  push:
+    branches: [master]
+    paths:
+      - "site/**"
+      - ".github/workflows/deploy-site.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/deploy-site.yml"
+  workflow_dispatch:
+
+# Two pushes in a row would otherwise race to publish, and the loser could
+# land last and serve the older build. Never cancel in flight: a half-finished
+# upload is worse than a redundant one.
+concurrency:
+  group: deploy-site-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'yotomediamanager' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Build
+        working-directory: site
+        env:
+          SITE_URL: ${{ vars.SITE_URL || format('https://{0}.pages.dev', env.PAGES_PROJECT) }}
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
+      # A build that silently produced nothing would otherwise be published
+      # over a working site as an empty directory.
+      - name: Check the build produced a page
+        run: test -s site/_site/index.html
+
+      - name: Deploy to Cloudflare Pages
+        if: github.event_name != 'pull_request'
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --branch master is what makes this a Production deployment on a
+          # direct-upload project; without it the upload lands as a preview
+          # and the site keeps serving the previous build.
+          command: pages deploy site/_site --project-name ${{ env.PAGES_PROJECT }} --branch master
