@@ -1,5 +1,4 @@
 use crate::storage;
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path, time::Duration};
 use yoto_api_generated::apis::{
@@ -181,11 +180,14 @@ impl YotoGateway {
         digest: &str,
         filename: &str,
     ) -> Result<UploadReservation> {
+        // Yoto hashes the stored upload and compares it with this query as lowercase
+        // hexadecimal, the form its upload documentation computes; any other spelling of
+        // the same digest never matches.
         let bytes = hex::decode(digest).map_err(storage)?;
         if bytes.len() != 32 {
             return Err(Failure::Validation("Invalid local digest".into()));
         }
-        let hash = URL_SAFE_NO_PAD.encode(bytes);
+        let hash = hex::encode(bytes);
         let r =
             media_api::get_an_upload_url(&self.configuration(token), Some(&hash), Some(filename))
                 .await

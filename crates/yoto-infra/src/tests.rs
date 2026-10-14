@@ -452,6 +452,27 @@ fn rich_card_preserves_extensions_and_removes_icons() {
     assert_eq!(channels, AudioChannels::Stereo);
 }
 #[tokio::test]
+async fn upload_reservation_sends_the_digest_as_lowercase_hexadecimal() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    let digest = "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08";
+    Mock::given(method("GET"))
+        .and(path("/media/transcode/audio/uploadUrl"))
+        .and(query_param("sha256", digest.to_lowercase()))
+        .and(query_param("filename", "Chanson"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"upload":{"uploadId":"upload1","uploadUrl":"https://storage.test/put"}}),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let reservation = api.reserve("API-TOKEN", digest, "Chanson").await.unwrap();
+    assert_eq!(reservation.url.as_deref(), Some("https://storage.test/put"));
+    assert!(api.reserve("API-TOKEN", "abcd", "Chanson").await.is_err());
+}
+#[tokio::test]
 async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
     let server = MockServer::start().await;
@@ -460,7 +481,7 @@ async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
     Mock::given(method("GET"))
         .and(path("/media/transcode/audio/uploadUrl"))
         .and(header("authorization", "Bearer API-TOKEN"))
-        .and(query_param("sha256", base64url_zero()))
+        .and(query_param("sha256", "0".repeat(64)))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(
                 serde_json::json!({"upload":{"uploadId":"upload1","uploadUrl":null}}),
@@ -655,10 +676,6 @@ fn upload_time_grows_with_the_file_within_bounds() {
     assert_eq!(upload_timeout(40_000_000), Duration::from_secs(800));
     assert_eq!(upload_timeout(100_000_000), Duration::from_secs(2000));
     assert_eq!(upload_timeout(u64::MAX), Duration::from_secs(45 * 60));
-}
-fn base64url_zero() -> String {
-    use base64::Engine;
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([0; 32])
 }
 #[test]
 fn mcp_redacts_capabilities() {
