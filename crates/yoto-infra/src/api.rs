@@ -60,6 +60,13 @@ pub struct IngestedInfo {
     pub channels: AudioChannels,
     pub format: AudioFormat,
 }
+/// Yoto's answer while it converts an upload.
+#[derive(Debug, Clone)]
+pub enum Ingestion {
+    Ready(Ingested),
+    Working(crate::transcode::Progress),
+    Failed(crate::transcode::Progress),
+}
 impl Ingested {
     pub fn audio_info(&self) -> Result<AudioInfo> {
         let channels = match self.info.channels {
@@ -211,7 +218,8 @@ impl YotoGateway {
         }
         Ok(())
     }
-    pub async fn ingestion(&self, token: &str, id: &UploadId) -> Result<Option<Ingested>> {
+    /// Where Yoto's conversion of an upload stands.
+    pub async fn ingestion(&self, token: &str, id: &UploadId) -> Result<Ingestion> {
         let r = media_api::get_transcoded_upload(&self.configuration(token), id.as_str(), false)
             .await
             .map_err(classify)?;
@@ -221,9 +229,16 @@ impl YotoGateway {
             .ok_or_else(|| Failure::Compatibility("Transcode envelope missing".into()))?;
         match value.get("transcodedSha256") {
             Some(Value::String(_)) => serde_json::from_value(value.clone())
-                .map(Some)
+                .map(Ingestion::Ready)
                 .map_err(|e| Failure::Compatibility(format!("Transcoded media fields: {e}"))),
-            Some(Value::Null) | None => Ok(None),
+            Some(Value::Null) | None => {
+                let progress = crate::transcode::Progress::read(value);
+                Ok(if progress.failed() {
+                    Ingestion::Failed(progress)
+                } else {
+                    Ingestion::Working(progress)
+                })
+            }
             Some(_) => Err(Failure::Compatibility("Invalid transcodedSha256".into())),
         }
     }

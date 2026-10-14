@@ -526,10 +526,10 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
             spinner(),
             match &job.request {
                 JobRequest::Publish { snapshot, .. } => {
-                    format!("{} · « {} »", phase.label(), snapshot.title)
+                    format!("{} · « {} »", phase_text(phase), snapshot.title)
                 }
                 JobRequest::Import { .. } | JobRequest::Encode { .. } => {
-                    format!("{}…", phase.label())
+                    format!("{}…", phase_text(phase))
                 }
             },
             family.ink,

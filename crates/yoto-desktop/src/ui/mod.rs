@@ -20,7 +20,7 @@ use gpui_kit::component::{
 use gpui_kit::*;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 pub use theme::install as install_theme;
-pub use wording::{PRODUCT_NAME, failure_text};
+pub use wording::{PRODUCT_NAME, failure_text, phase_text};
 use wording::{confirm_destructive, duration_text};
 use yoto_domain::*;
 use yoto_infra::{Command, Reply, Session as Service, Snapshot};

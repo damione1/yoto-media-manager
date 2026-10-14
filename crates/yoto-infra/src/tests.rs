@@ -462,12 +462,29 @@ async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
         )
         .mount(&server)
         .await;
-    assert!(
-        api.ingestion("API-TOKEN", &reservation.id)
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert!(matches!(
+        api.ingestion("API-TOKEN", &reservation.id).await.unwrap(),
+        crate::api::Ingestion::Working(_)
+    ));
+}
+#[tokio::test]
+async fn a_failed_transcode_is_reported_with_its_progress() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("GET"))
+        .and(path("/media/upload/upload2/transcoded"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "transcode":{"transcodedSha256":null,"progress":{"phase":"failed","percent":37}}
+        })))
+        .mount(&server)
+        .await;
+    let upload = UploadId::new("upload2").unwrap();
+    match api.ingestion("API-TOKEN", &upload).await.unwrap() {
+        crate::api::Ingestion::Failed(progress) => assert_eq!(progress.percent, Some(37)),
+        other => panic!("expected a failed transcode, got {other:?}"),
+    }
 }
 #[test]
 fn upload_time_grows_with_the_file_within_bounds() {

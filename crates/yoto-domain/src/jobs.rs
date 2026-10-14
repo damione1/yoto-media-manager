@@ -38,6 +38,9 @@ pub enum JobPhase {
     Ingesting {
         recipe: RecipeId,
         upload: UploadId,
+        /// Conversion progress Yoto reports for this track, from 0 to 100.
+        #[serde(default)]
+        percent: Option<u8>,
     },
     Committing,
     Verifying {

@@ -39,6 +39,23 @@ pub enum Failure {
     Cancelled,
     #[error("Tool unavailable: {0}")]
     Tool(String),
+    #[error("Yoto could not transcode « {track} » ({problem:?}).")]
+    Transcode {
+        track: String,
+        problem: TranscodeProblem,
+        /// Last progress Yoto reported for this track, when it reported any.
+        percent: Option<u8>,
+    },
+}
+/// Why Yoto's conversion of an uploaded track did not finish.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum TranscodeProblem {
+    /// Yoto reported that the conversion failed or was cancelled.
+    Failed,
+    /// Progress stopped moving, even after sending the file again.
+    Stalled,
+    /// The conversion did not finish within the time allowed for this track.
+    TimedOut,
 }
 impl Failure {
     /// A write may have reached the server when transport or receipt decoding fails.
@@ -53,7 +70,8 @@ impl Failure {
             | Self::Conflict
             | Self::Ambiguous
             | Self::Cancelled
-            | Self::Tool(_)) => other,
+            | Self::Tool(_)
+            | Self::Transcode { .. }) => other,
         }
     }
     pub fn retry_seconds(&self) -> Option<u64> {
@@ -62,6 +80,10 @@ impl Failure {
             Self::RateLimit {
                 retry_after_seconds,
             } => Some(*retry_after_seconds),
+            Self::Transcode { problem, .. } => match problem {
+                TranscodeProblem::Stalled | TranscodeProblem::TimedOut => Some(60),
+                TranscodeProblem::Failed => None,
+            },
             Self::Validation(_)
             | Self::Storage(_)
             | Self::Media(_)

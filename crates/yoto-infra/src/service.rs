@@ -331,6 +331,13 @@ pub struct Service {
     update_gate: tokio::sync::RwLock<()>,
     update_shutdown: std::sync::atomic::AtomicBool,
 }
+/// How waiting for Yoto's conversion of one upload ended.
+enum TranscodeEnd {
+    Ready(Box<crate::api::Ingested>),
+    Stalled,
+    OutOfTime,
+    Failed,
+}
 struct AccountSession {
     cancelled: std::sync::atomic::AtomicBool,
     notify: Notify,
@@ -2346,64 +2353,60 @@ impl Service {
                                             .auth
                                             .access(&account, Scope::UserContentManage)
                                             .await?;
-                                        self.phase(
-                                            job,
-                                            JobPhase::Uploading {
-                                                recipe: *recipe,
-                                                upload: None,
-                                            },
-                                        )?;
-                                        let reservation = self
-                                            .api
-                                            .reserve(&token, &asset.sha256, &track.title)
+                                        let audio_seconds = self
+                                            .recipe(*recipe)?
+                                            .info
+                                            .map_or(0., |info| info.duration.seconds());
+                                        let budget =
+                                            crate::transcode::budget(audio_seconds, asset.bytes);
+                                        let mut reservation = self
+                                            .send_audio(job, &token, *recipe, &asset, &track.title)
                                             .await?;
-                                        self.phase(
-                                            job,
-                                            JobPhase::Uploading {
-                                                recipe: *recipe,
-                                                upload: Some(reservation.id.clone()),
-                                            },
-                                        )?;
-                                        if let Some(url) = reservation.url {
-                                            let service = self.clone();
-                                            let asset = asset.clone();
-                                            let lease = tokio::task::spawn_blocking(move || {
-                                                service.store.materialize(&asset)
-                                            })
-                                            .await
-                                            .map_err(storage)??;
-                                            self.api
-                                                .put_signed(
-                                                    &url,
-                                                    lease.path(),
-                                                    self.asset(asset_id)?.bytes,
+                                        let mut sent_again = false;
+                                        let ingested = loop {
+                                            let (end, percent) = self
+                                                .await_transcode(
+                                                    job,
+                                                    &account,
+                                                    *recipe,
+                                                    &reservation,
+                                                    budget,
+                                                    &cancel,
                                                 )
                                                 .await?;
-                                        }
-                                        self.phase(
-                                            job,
-                                            JobPhase::Ingesting {
-                                                recipe: *recipe,
-                                                upload: reservation.id.clone(),
-                                            },
-                                        )?;
-                                        let mut ingested = None;
-                                        for attempt in 0..30 {
-                                            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                                                return Err(Failure::Cancelled);
-                                            }
-                                            if let Some(info) =
-                                                self.api.ingestion(&token, &reservation.id).await?
-                                            {
-                                                ingested = Some(info);
-                                                break;
-                                            }
-                                            tokio::time::sleep(std::time::Duration::from_secs(
-                                                (1 + attempt / 5).min(6),
-                                            ))
-                                            .await;
-                                        }
-                                        let ingested = ingested.ok_or(Failure::Connection)?;
+                                            let problem = match end {
+                                                TranscodeEnd::Ready(ingested) => break ingested,
+                                                TranscodeEnd::Stalled if !sent_again => {
+                                                    sent_again = true;
+                                                    reservation = self
+                                                        .send_audio(
+                                                            job,
+                                                            &self
+                                                                .auth
+                                                                .access(
+                                                                    &account,
+                                                                    Scope::UserContentManage,
+                                                                )
+                                                                .await?,
+                                                            *recipe,
+                                                            &asset,
+                                                            &track.title,
+                                                        )
+                                                        .await?;
+                                                    continue;
+                                                }
+                                                TranscodeEnd::Stalled => TranscodeProblem::Stalled,
+                                                TranscodeEnd::OutOfTime => {
+                                                    TranscodeProblem::TimedOut
+                                                }
+                                                TranscodeEnd::Failed => TranscodeProblem::Failed,
+                                            };
+                                            return Err(Failure::Transcode {
+                                                track: track.title.clone(),
+                                                problem,
+                                                percent,
+                                            });
+                                        };
                                         let mapping = PublicationMapping {
                                             account: account.clone(),
                                             recipe: *recipe,
@@ -2574,6 +2577,90 @@ impl Service {
                     revision: snapshot.revision,
                 })
             }
+        }
+    }
+    /// Reserve an upload for a prepared track and send the file when Yoto does not have it.
+    async fn send_audio(
+        self: &Arc<Self>,
+        job: &mut Job,
+        token: &str,
+        recipe: RecipeId,
+        asset: &Asset,
+        title: &str,
+    ) -> Result<UploadId> {
+        self.phase(
+            job,
+            JobPhase::Uploading {
+                recipe,
+                upload: None,
+            },
+        )?;
+        let reservation = self.api.reserve(token, &asset.sha256, title).await?;
+        self.phase(
+            job,
+            JobPhase::Uploading {
+                recipe,
+                upload: Some(reservation.id.clone()),
+            },
+        )?;
+        if let Some(url) = reservation.url {
+            let service = self.clone();
+            let file = asset.clone();
+            let lease = tokio::task::spawn_blocking(move || service.store.materialize(&file))
+                .await
+                .map_err(storage)??;
+            self.api.put_signed(&url, lease.path(), asset.bytes).await?;
+        }
+        Ok(reservation.id)
+    }
+    /// Wait for Yoto to convert an upload, showing its progress on the job.
+    /// Returns how the wait ended and the last percentage Yoto reported.
+    async fn await_transcode(
+        self: &Arc<Self>,
+        job: &mut Job,
+        account: &AccountId,
+        recipe: RecipeId,
+        upload: &UploadId,
+        budget: std::time::Duration,
+        cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<(TranscodeEnd, Option<u8>)> {
+        use crate::{
+            api::Ingestion,
+            transcode::{Verdict, Watch, poll_interval},
+        };
+        let ingesting = |percent| JobPhase::Ingesting {
+            recipe,
+            upload: upload.clone(),
+            percent,
+        };
+        self.phase(job, ingesting(None))?;
+        let started = std::time::Instant::now();
+        let mut watch = Watch::new(budget);
+        loop {
+            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(Failure::Cancelled);
+            }
+            let token = self.auth.access(account, Scope::UserContentManage).await?;
+            let progress = match self.api.ingestion(&token, upload).await? {
+                Ingestion::Ready(ingested) => {
+                    return Ok((TranscodeEnd::Ready(Box::new(ingested)), Some(100)));
+                }
+                Ingestion::Failed(progress) => {
+                    return Ok((TranscodeEnd::Failed, progress.percent.or(watch.percent())));
+                }
+                Ingestion::Working(progress) => progress,
+            };
+            let shown = watch.percent();
+            let verdict = watch.observe(started.elapsed(), &progress);
+            if watch.percent() != shown {
+                self.phase(job, ingesting(watch.percent()))?;
+            }
+            match verdict {
+                Verdict::Wait => {}
+                Verdict::Stalled => return Ok((TranscodeEnd::Stalled, watch.percent())),
+                Verdict::OutOfTime => return Ok((TranscodeEnd::OutOfTime, watch.percent())),
+            }
+            tokio::time::sleep(poll_interval(started.elapsed())).await;
         }
     }
     async fn encode_recipe(

@@ -73,7 +73,7 @@ const DELETED_ON_YOTO: &str =
 fn pending_status(state: &JobState) -> String {
     match state {
         JobState::Queued => "Envoi sur Yoto en attente…".into(),
-        JobState::Running { phase } => format!("{}…", phase.label()),
+        JobState::Running { phase } => format!("{}…", phase_text(phase)),
         JobState::Retry { failure, .. } => {
             format!("Nouvel essai automatique : {}", failure_text(failure))
         }

@@ -44,6 +44,49 @@ pub fn failure_text(failure: &Failure) -> String {
         }
         Failure::Ambiguous => AMBIGUOUS.into(),
         Failure::Cancelled => "Opération annulée.".into(),
+        Failure::Transcode {
+            track,
+            problem,
+            percent,
+        } => transcode_text(track, *problem, *percent),
+    }
+}
+
+/// Why Yoto's conversion of a track did not finish, naming the track.
+fn transcode_text(track: &str, problem: TranscodeProblem, percent: Option<u8>) -> String {
+    match (problem, percent) {
+        (TranscodeProblem::Failed, _) => format!(
+            "Yoto n’a pas pu convertir la piste « {track} ». Préparez de nouveau l’audio, puis réessayez."
+        ),
+        (TranscodeProblem::Stalled, Some(percent)) => format!(
+            "La conversion de la piste « {track} » par Yoto est restée bloquée à {percent} %, même après un nouvel envoi. Réessayez plus tard."
+        ),
+        (TranscodeProblem::Stalled, None) => format!(
+            "La conversion de la piste « {track} » par Yoto est restée bloquée, même après un nouvel envoi. Réessayez plus tard."
+        ),
+        (TranscodeProblem::TimedOut, Some(percent)) => format!(
+            "Yoto n’a pas fini de convertir la piste « {track} » dans le temps prévu (arrêt à {percent} %). Réessayez plus tard."
+        ),
+        (TranscodeProblem::TimedOut, None) => format!(
+            "Yoto n’a pas fini de convertir la piste « {track} » dans le temps prévu. Réessayez plus tard."
+        ),
+    }
+}
+
+/// What a running job is doing, with Yoto's conversion progress when it reports one.
+pub fn phase_text(phase: &JobPhase) -> String {
+    match phase {
+        JobPhase::Ingesting {
+            percent: Some(percent),
+            ..
+        } => format!("Traitement par Yoto ({percent} %)"),
+        JobPhase::Acquiring
+        | JobPhase::Analyzing
+        | JobPhase::Encoding
+        | JobPhase::Uploading { .. }
+        | JobPhase::Ingesting { percent: None, .. }
+        | JobPhase::Committing
+        | JobPhase::Verifying { .. } => phase.label().into(),
     }
 }
 
@@ -336,6 +379,14 @@ mod tests {
             failure_text(&Failure::Validation("Choisissez au moins un média.".into())),
             "Choisissez au moins un média."
         );
+        let stuck = failure_text(&Failure::Transcode {
+            track: "La Belle au bois dormant".into(),
+            problem: TranscodeProblem::Stalled,
+            percent: Some(40),
+        });
+        assert!(stuck.contains("« La Belle au bois dormant »"));
+        assert!(stuck.contains("40 %"));
+        assert!(!stuck.contains("connexion"));
         let unknown = failure_text(&Failure::Storage("disk full".into()));
         assert!(unknown.starts_with("Un problème est survenu"));
         assert!(unknown.contains("disk full"));
