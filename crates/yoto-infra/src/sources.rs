@@ -94,7 +94,8 @@ enum YoutubeProblem {
 }
 impl YoutubeProblem {
     /// Recognise the failure from yt-dlp's error output. Order matters: YouTube's bot check
-    /// and age gate both say « Sign in to confirm ».
+    /// and age gate both say « Sign in to confirm », and its rate limit starts with
+    /// « Video unavailable ». A video is only called unavailable when the message says so.
     fn classify(stderr: &str) -> Self {
         let text = stderr.to_lowercase().replace('’', "'");
         let has = |needles: &[&str]| needles.iter().any(|n| text.contains(n));
@@ -103,6 +104,7 @@ impl YoutubeProblem {
             "confirm you are not",
             "http error 429",
             "too many requests",
+            "content isn't available, try again later",
         ]) {
             Self::BotCheck
         } else if has(&[
@@ -133,9 +135,6 @@ impl YoutubeProblem {
             "has been removed",
             "no longer available",
             "has been terminated",
-            "does not exist",
-            "http error 404",
-            "this video is not available",
             "unsupported url",
         ]) {
             Self::Unavailable
@@ -148,6 +147,9 @@ impl YoutubeProblem {
             "precondition check failed",
             "requested format is not available",
             "no video formats found",
+            // YouTube refuses the media itself once the downloader no longer signs its
+            // requests the way YouTube expects; the page and metadata still load.
+            "http error 403",
         ]) {
             Self::Outdated
         } else if has(&[
@@ -169,6 +171,18 @@ impl YoutubeProblem {
             Self::Network
         } else {
             Self::Unknown
+        }
+    }
+    /// How much the problem tells about the real cause. Each attempt uses another YouTube
+    /// client, and a later client often fails more vaguely than an earlier one, so the
+    /// strongest problem seen is the one reported.
+    fn weight(self) -> u8 {
+        match self {
+            Self::Unknown => 0,
+            Self::Network => 1,
+            Self::Outdated => 2,
+            Self::BotCheck => 3,
+            Self::Private | Self::AgeRestricted | Self::GeoRestricted | Self::Unavailable => 4,
         }
     }
     /// Another attempt, possibly with another YouTube client, may succeed.
@@ -194,6 +208,14 @@ impl YoutubeProblem {
         )
     }
 }
+/// What a yt-dlp run is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    /// Describe the video or playlist.
+    Metadata,
+    /// Fetch the audio of a video that was just described successfully.
+    Download,
+}
 /// YouTube player client used by each attempt; `None` keeps yt-dlp's own choice.
 const PLAYER_CLIENTS: [Option<&str>; 4] = [None, Some("android"), Some("ios"), Some("tv")];
 /// Pause before the second, third and fourth attempts.
@@ -206,6 +228,7 @@ const RETRY_DELAYS: [std::time::Duration; 3] = [
 /// and another YouTube player client each time. Returns standard output, capped at `limit`.
 fn run_youtube(
     tools: &Tools,
+    step: Step,
     limit: usize,
     prepare: impl Fn(&mut std::process::Command) -> Result<()>,
 ) -> Result<Vec<u8>> {
@@ -225,7 +248,15 @@ fn run_youtube(
         if output.status.success() {
             return Ok(output.stdout);
         }
-        problem = YoutubeProblem::classify(&String::from_utf8_lossy(&output.stderr));
+        let mut found = YoutubeProblem::classify(&String::from_utf8_lossy(&output.stderr));
+        if step == Step::Download && found == YoutubeProblem::Unavailable {
+            // The video was described a moment ago, so it still exists: a client that now
+            // calls it unavailable is refused by a downloader YouTube no longer accepts.
+            found = YoutubeProblem::Outdated;
+        }
+        if found.weight() > problem.weight() {
+            problem = found;
+        }
         if !problem.transient() {
             break;
         }
@@ -344,7 +375,7 @@ struct YoutubeInfo {
 }
 pub fn inspect_youtube(tools: &Tools, url: &str) -> Result<SourceInspection> {
     let u = youtube_url(url)?;
-    let stdout = run_youtube(tools, 4_000_000, |c| {
+    let stdout = run_youtube(tools, Step::Metadata, 4_000_000, |c| {
         c.args([
             "--flat-playlist",
             "--playlist-end",
@@ -411,7 +442,7 @@ impl SourceProvider for YoutubeSource<'_> {
                     }
                     None => u.into(),
                 };
-                let metadata = run_youtube(self.tools, 1_000_000, |c| {
+                let metadata = run_youtube(self.tools, Step::Metadata, 1_000_000, |c| {
                     c.args(["--no-playlist", "--dump-single-json", "--"])
                         .arg(&chosen);
                     Ok(())
@@ -422,7 +453,7 @@ impl SourceProvider for YoutubeSource<'_> {
                 }
                 let workspace = store.workspace()?;
                 let output = workspace.path().join("source.audio");
-                run_youtube(self.tools, 1_000_000, |c| {
+                run_youtube(self.tools, Step::Download, 1_000_000, |c| {
                     // A failed attempt must not leave a finished-looking output behind.
                     match std::fs::remove_file(&output) {
                         Ok(()) => {}
@@ -627,6 +658,94 @@ printf '{{"id":"video1","title":"Song","duration":3}}'
         assert!(failure.contains(messages::YOUTUBE_PRIVATE), "{failure}");
         assert_eq!(calls(root.path()).len(), 1);
     }
+    /// A stand-in downloader that describes the video, then fails each download attempt
+    /// with the matching line of `stderr`.
+    fn failing_download(root: &std::path::Path, stderr: &[&str]) -> Tools {
+        for (attempt, line) in stderr.iter().enumerate() {
+            std::fs::write(root.join(format!("stderr{}", attempt + 1)), line).unwrap();
+        }
+        let tool = root.join("downloader");
+        std::fs::write(
+            &tool,
+            format!(
+                r#"#!/bin/sh
+case "$*" in *--dump-single-json*) printf '{{"id":"video1","title":"Song","duration":3}}'; exit 0;; esac
+echo "$*" >> '{log}'
+count=$(wc -l < '{log}' | tr -d ' ')
+cat '{root}/stderr'"$count" >&2
+exit 1
+"#,
+                log = root.join("calls").display(),
+                root = root.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut tools = Tools::at(root.to_owned());
+        tools.youtube = tool;
+        tools
+    }
+    fn download(tools: &Tools, root: &std::path::Path) -> String {
+        let store = AssetStore::new(root.join("store"), [1; 32]).unwrap();
+        let failure = YoutubeSource { tools }
+            .acquire(
+                &ImportSelection::Youtube {
+                    url: "https://www.youtube.com/watch?v=video1".into(),
+                    entry: None,
+                },
+                &store,
+            )
+            .err()
+            .unwrap();
+        failure.to_string()
+    }
+    #[test]
+    fn an_outdated_downloader_is_reported_as_outdated_after_every_client() {
+        let root = tempfile::tempdir().unwrap();
+        // Output captured with an outdated downloader: a refused download for the default
+        // client, no audio for the others, and a vague last word from the last client.
+        let tools = failing_download(
+            root.path(),
+            &[
+                "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+                "ERROR: [youtube] video1: Requested format is not available. Use --list-formats for a list of available formats",
+                "ERROR: [youtube] video1: Requested format is not available. Use --list-formats for a list of available formats",
+                "ERROR: [youtube] video1: This video is not available",
+            ],
+        );
+        let failure = download(&tools, root.path());
+        assert!(failure.contains(messages::YOUTUBE_OUTDATED), "{failure}");
+        assert_eq!(calls(root.path()).len(), PLAYER_CLIENTS.len());
+    }
+    #[test]
+    fn a_vaguer_later_client_does_not_hide_a_bot_check() {
+        let root = tempfile::tempdir().unwrap();
+        let tools = failing_download(
+            root.path(),
+            &[
+                "ERROR: [youtube] video1: Sign in to confirm you're not a bot",
+                "ERROR: [youtube] video1: Requested format is not available",
+                "ERROR: unable to download video data: <urlopen error timed out>",
+                "",
+            ],
+        );
+        let failure = download(&tools, root.path());
+        assert!(failure.contains(messages::YOUTUBE_BOT_CHECK), "{failure}");
+    }
+    #[test]
+    fn a_video_just_described_is_not_called_removed_while_downloading() {
+        let root = tempfile::tempdir().unwrap();
+        let tools = failing_download(
+            root.path(),
+            &[
+                "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+                "ERROR: [youtube] video1: Video unavailable. This video has been removed by the uploader",
+            ],
+        );
+        let failure = download(&tools, root.path());
+        assert!(failure.contains(messages::YOUTUBE_OUTDATED), "{failure}");
+        assert_eq!(calls(root.path()).len(), PLAYER_CLIENTS.len());
+    }
 }
 #[cfg(test)]
 mod classification_tests {
@@ -678,11 +797,38 @@ mod classification_tests {
                 "ERROR: unable to download video data: HTTP Error 503: Service Unavailable",
                 P::Network,
             ),
+            (
+                "ERROR: [youtube] abc: Video unavailable. This content isn't available, try again later.",
+                P::BotCheck,
+            ),
+            (
+                "ERROR: [youtube] abc: This video is not available",
+                P::Unknown,
+            ),
             ("", P::Unknown),
         ];
         for (stderr, expected) in cases {
             assert_eq!(P::classify(stderr), expected, "{stderr}");
         }
+    }
+    /// Error output captured from an outdated downloader, after the video's description
+    /// had loaded: YouTube refused the media to the default client and offered no audio
+    /// to the other clients.
+    const OUTDATED_DEFAULT_CLIENT: &str =
+        "ERROR: unable to download video data: HTTP Error 403: Forbidden";
+    const OUTDATED_OTHER_CLIENTS: &str = "ERROR: [youtube] dQw4w9WgXcQ: Requested format is not available. Use --list-formats for a list of available formats";
+    #[test]
+    fn an_outdated_downloader_is_recognised_from_real_output() {
+        assert_eq!(P::classify(OUTDATED_DEFAULT_CLIENT), P::Outdated);
+        assert_eq!(P::classify(OUTDATED_OTHER_CLIENTS), P::Outdated);
+        assert_ne!(P::classify(OUTDATED_OTHER_CLIENTS), P::Unavailable);
+    }
+    #[test]
+    fn the_strongest_problem_outweighs_vaguer_later_ones() {
+        assert!(P::Outdated.weight() > P::Network.weight());
+        assert!(P::Network.weight() > P::Unknown.weight());
+        assert!(P::BotCheck.weight() > P::Outdated.weight());
+        assert!(P::Unavailable.weight() > P::BotCheck.weight());
     }
     #[test]
     fn only_passing_failures_are_retried() {
