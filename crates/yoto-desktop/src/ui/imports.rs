@@ -10,7 +10,7 @@ impl AppView {
         let url = self.youtube.read(cx).value().trim().to_owned();
         if url.is_empty() {
             self.report_error(
-                Failure::Validation("Collez un lien YouTube pour importer son audio.".into()),
+                Failure::Validation(tr!("Collez un lien YouTube pour importer son audio.").into()),
                 cx,
             );
             return;
@@ -22,7 +22,7 @@ impl AppView {
         self.youtube_selection_url = None;
         self.selected_entries.clear();
         self.error = None;
-        self.status = "Recherche du titre et des informations YouTube…".into();
+        self.status = tr!("Recherche du titre et des informations YouTube…").into();
         cx.notify();
         let service = self.service.clone();
         let rt = self.runtime.clone();
@@ -53,15 +53,15 @@ impl AppView {
                                     }]),
                                     cx,
                                 );
-                                view.status = format!(
-                                    "Import de « {} » lancé. Suivez sa progression dans « Imports ».",
-                                    entry.title
+                                view.status = tr!(
+                                    "Import de « {title} » lancé. Suivez sa progression dans « Imports ».",
+                                    title = entry.title
                                 );
                                 view.clear_youtube_link(cx);
                             } else {
                                 view.report_error(
                                     Failure::Validation(
-                                        "Cette vidéo n’est pas disponible. Vérifiez le lien et réessayez.".into(),
+                                        tr!("Cette vidéo n’est pas disponible. Vérifiez le lien et réessayez.").into(),
                                     ),
                                     cx,
                                 );
@@ -71,9 +71,9 @@ impl AppView {
                             view.youtube_selection_url = Some(url.clone());
                             view.youtube_entries = inspection.entries;
                             view.status = if view.youtube_entries.is_empty() {
-                                "Cette playlist ne contient aucune vidéo disponible.".into()
+                                tr!("Cette playlist ne contient aucune vidéo disponible.").into()
                             } else {
-                                "Cochez les vidéos de cette playlist à importer.".into()
+                                tr!("Cochez les vidéos de cette playlist à importer.").into()
                             };
                         }
                     },
@@ -114,7 +114,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                     36.,
                     12.,
                 ))
-                .child(theme::heading("Lien YouTube", 18.)),
+                .child(theme::heading(tr!("Lien YouTube"), 18.)),
         )
         .child(
             div()
@@ -128,7 +128,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                 )
                 .child(theme::pill(
                     Button::new("inspect-youtube")
-                        .label(if pending { "Recherche…" } else { "Importer" })
+                        .label(if pending { tr!("Recherche…") } else { tr!("Importer") })
                         .loading(pending)
                         .on_click(cx.listener(|v, _, _, cx| v.begin_youtube(cx))),
                     Look::Primary,
@@ -139,7 +139,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                 .h(px(50.))),
         )
         .child(theme::note(
-            "Une vidéo ou une playlist publique. On récupère seulement l’audio ; pour une playlist, vous choisirez les vidéos à garder.",
+            tr!("Une vidéo ou une playlist publique. On récupère seulement l’audio ; pour une playlist, vous choisirez les vidéos à garder."),
         ));
     let drop_zone = {
         use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
@@ -150,7 +150,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                     .hover(theme::c(theme::CREAM))
                     .active(theme::c(theme::SAND)),
             )
-            .accessibility_label("Ajouter un fichier audio depuis mon ordinateur")
+            .accessibility_label(tr!("Ajouter un fichier audio depuis mon ordinateur"))
             .bg(theme::c(theme::SAND))
             .rounded(ButtonRounded::Size(px(22.)))
             .border_2()
@@ -181,8 +181,10 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                                     .text_color(theme::c(theme::PEACH.icon)),
                             ),
                     )
-                    .child(theme::heading("Ajouter un fichier audio", 17.))
-                    .child(theme::meta("ou glissez-le ici · MP3, M4A, WAV…").text_size(px(14.))),
+                    .child(theme::heading(tr!("Ajouter un fichier audio"), 17.))
+                    .child(
+                        theme::meta(tr!("ou glissez-le ici · MP3, M4A, WAV…")).text_size(px(14.)),
+                    ),
             )
             .on_click(cx.listener(|v, _, _, cx| v.add_files(cx)))
     };
@@ -198,8 +200,8 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
         .flex_col()
         .gap(px(18.))
         .child(theme::screen_header(
-            "Importer de l’audio",
-            "Depuis YouTube ou depuis un fichier de votre ordinateur.",
+            tr!("Importer de l’audio"),
+            tr!("Depuis YouTube ou depuis un fichier de votre ordinateur."),
         ))
         .child(
             div()
@@ -285,15 +287,15 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                         .child(
                             div()
                                 .flex_1()
-                                .child(theme::heading("Vidéos de la playlist", 18.))
-                                .child(theme::meta("Choisissez les vidéos à importer.")),
+                                .child(theme::heading(tr!("Vidéos de la playlist"), 18.))
+                                .child(theme::meta(tr!("Choisissez les vidéos à importer."))),
                         )
                         .child(theme::pill(
                             Button::new("youtube-select-all")
                                 .label(if all_selected {
-                                    "Tout désélectionner"
+                                    tr!("Tout désélectionner")
                                 } else {
-                                    "Tout sélectionner"
+                                    tr!("Tout sélectionner")
                                 })
                                 .on_click(cx.listener(move |v, _, _, cx| {
                                     if all_selected {
@@ -318,7 +320,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                         .gap(px(8.))
                         .child(theme::pill(
                             Button::new("cancel-youtube-selection")
-                                .label("Annuler")
+                                .label(tr!("Annuler"))
                                 .on_click(cx.listener(|v, _, _, cx| {
                                     v.youtube_entries.clear();
                                     v.selected_entries.clear();
@@ -333,9 +335,9 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                         ))
                         .child(theme::pill(
                             Button::new("import-youtube")
-                                .label(format!(
-                                    "Importer la sélection ({})",
-                                    view.selected_entries.len()
+                                .label(tr!(
+                                    "Importer la sélection ({count})",
+                                    count = view.selected_entries.len()
                                 ))
                                 .on_click(cx.listener(|v, _, _, cx| {
                                     let chosen: Vec<_> = v
@@ -359,8 +361,10 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                                     v.selected_entries.clear();
                                     v.youtube_entries.clear();
                                     v.youtube_selection_url = None;
-                                    v.status = format!(
-                                        "{count} vidéo(s) en cours d’import. Suivez leur progression dans « Imports »."
+                                    v.status = trn!(
+                                        "{count} vidéo en cours d’import. Suivez sa progression dans « Imports ».",
+                                        "{count} vidéos en cours d’import. Suivez leur progression dans « Imports ».",
+                                        count
                                     );
                                     v.clear_youtube_link(cx);
                                     cx.notify();
@@ -404,7 +408,7 @@ fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                 .flex()
                 .items_end()
                 .justify_between()
-                .child(theme::heading("Activités", 22.))
+                .child(theme::heading(tr!("Activités"), 22.))
                 .children((!jobs.is_empty()).then(|| {
                     theme::meta(format!(
                         "{}–{}",
@@ -415,9 +419,9 @@ fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
         );
     if jobs.is_empty() {
         return aside
-            .child(div().px(px(22.)).child(theme::note(
-                "Vos imports apparaîtront ici, avec leur progression.",
-            )))
+            .child(div().px(px(22.)).child(theme::note(tr!(
+                "Vos imports apparaîtront ici, avec leur progression."
+            ))))
             .into_any_element();
     }
     let mut list = div()
@@ -443,7 +447,7 @@ fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                 .justify_between()
                 .child(theme::pill(
                     Button::new("jobs-newer")
-                        .label("Plus récentes")
+                        .label(tr!("Plus récentes"))
                         .on_click(cx.listener(|v, _, _, cx| {
                             v.load_job_page(v.job_offset.saturating_sub(200), cx)
                         })),
@@ -453,9 +457,11 @@ fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
                     cx,
                 ))
                 .child(theme::pill(
-                    Button::new("jobs-older").label("Plus anciennes").on_click(
-                        cx.listener(|v, _, _, cx| v.load_job_page(v.job_offset + 200, cx)),
-                    ),
+                    Button::new("jobs-older")
+                        .label(tr!("Plus anciennes"))
+                        .on_click(
+                            cx.listener(|v, _, _, cx| v.load_job_page(v.job_offset + 200, cx)),
+                        ),
                     Look::Soft(&theme::LIGHT_SAND),
                     Height::Small,
                     jobs.len() < 200,
@@ -475,7 +481,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
     };
     let details = theme::pill(
         Button::new(element_id("import-details", id))
-            .label("Détails")
+            .label(tr!("Détails"))
             .on_click(cx.listener(move |v, _, window, cx| show_details(v, id, window, cx))),
         Look::Ghost,
         Height::Tiny,
@@ -506,12 +512,12 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
     {
         JobState::Queued => (
             spinner(),
-            "En attente…".into(),
+            tr!("En attente…").into(),
             family.ink,
             vec![
                 theme::pill(
                     Button::new(element_id("cancel", id))
-                        .label("Annuler")
+                        .label(tr!("Annuler"))
                         .on_click(cx.listener(move |v, _, _, cx| v.send(Command::Cancel(id), cx))),
                     Look::Outline,
                     Height::Tiny,
@@ -536,7 +542,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
             vec![
                 theme::pill(
                     Button::new(element_id("cancel", id))
-                        .label("Annuler")
+                        .label(tr!("Annuler"))
                         .on_click(cx.listener(move |v, _, _, cx| v.send(Command::Cancel(id), cx))),
                     Look::Outline,
                     Height::Tiny,
@@ -562,7 +568,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
             vec![
                 theme::pill(
                     Button::new(element_id("retry", id))
-                        .label("Réessayer")
+                        .label(tr!("Réessayer"))
                         .on_click(cx.listener(move |v, _, _, cx| v.send(Command::Retry(id), cx))),
                     Look::Outline,
                     Height::Tiny,
@@ -580,7 +586,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
             vec![
                 theme::pill(
                     Button::new(element_id("connect-job", id))
-                        .label("Se connecter")
+                        .label(tr!("Se connecter"))
                         .on_click(cx.listener(|v, _, _, cx| v.send(Command::Connect, cx))),
                     Look::Primary,
                     Height::Tiny,
@@ -623,14 +629,14 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
                     .child(
                         div()
                             .font_weight(FontWeight::EXTRA_BOLD)
-                            .child(format!("Conflit sur « {playlist} »")),
+                            .child(tr!("Conflit sur « {playlist} »", playlist = playlist)),
                     )
                     .child(
                         div()
                             .text_size(px(13.))
                             .line_height(relative(1.45))
                             .text_color(theme::c(theme::INK_SOFT))
-                            .child("La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver."),
+                            .child(tr!("La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver.")),
                     )
                     .child(div().flex().flex_wrap().gap(px(6.)).children(actions))
                     .into_any_element();
@@ -642,7 +648,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
             vec![
                 theme::pill(
                     Button::new(element_id("resolve-job", id))
-                        .label("Vérifier la publication")
+                        .label(tr!("Vérifier la publication"))
                         .on_click(
                             cx.listener(move |v, _, window, cx| show_details(v, id, window, cx)),
                         ),
@@ -661,9 +667,9 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
                 (
                     theme::done_mark(26.).into_any_element(),
                     if present {
-                        "Prêt dans la médiathèque".into()
+                        tr!("Prêt dans la médiathèque").into()
                     } else {
-                        "Média retiré de votre médiathèque".into()
+                        tr!("Média retiré de votre médiathèque").into()
                     },
                     if present {
                         theme::MINT.ink
@@ -674,7 +680,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
                         vec![
                             theme::pill(
                                 Button::new(element_id("open-imported-media", id))
-                                    .label("Écouter")
+                                    .label(tr!("Écouter"))
                                     .on_click(cx.listener(move |v, _, window, cx| {
                                         v.navigate(Route::Library, cx);
                                         v.select_media(media, window, cx);
@@ -694,13 +700,13 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
             }
             JobOutput::Encoded { .. } => (
                 theme::done_mark(26.).into_any_element(),
-                "Version préparée".into(),
+                tr!("Version préparée").into(),
                 theme::MINT.ink,
                 vec![],
             ),
             JobOutput::Published { .. } => (
                 theme::done_mark(26.).into_any_element(),
-                "Enregistré sur Yoto".into(),
+                tr!("Enregistré sur Yoto").into(),
                 theme::MINT.ink,
                 vec![details.into_any_element()],
             ),
@@ -712,7 +718,7 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
                 .rounded_full()
                 .bg(theme::c(theme::SAND))
                 .into_any_element(),
-            "Annulé".into(),
+            tr!("Annulé").into(),
             theme::MUTED,
             vec![details.into_any_element()],
         ),
@@ -759,7 +765,7 @@ fn job_title(job: &Job, snapshot: &Snapshot, youtube_titles: &BTreeMap<String, S
                 .to_string_lossy()
                 .to_string(),
             ImportSelection::Youtube { url, .. } => youtube_titles.get(url).map_or_else(
-                || "Vidéo YouTube".into(),
+                || tr!("Vidéo YouTube").into(),
                 |title| format!("YouTube · {title}"),
             ),
         },
@@ -769,10 +775,12 @@ fn job_title(job: &Job, snapshot: &Snapshot, youtube_titles: &BTreeMap<String, S
             .find(|item| item.id == *recipe)
             .and_then(|recipe| snapshot.media.iter().find(|item| item.id == recipe.media))
             .map_or_else(
-                || "Préparation audio locale".into(),
-                |item| format!("Préparation · {}", item.title),
+                || tr!("Préparation audio locale").into(),
+                |item| tr!("Préparation · {title}", title = item.title),
             ),
-        JobRequest::Publish { snapshot, .. } => format!("Publication · {}", snapshot.title),
+        JobRequest::Publish { snapshot, .. } => {
+            tr!("Publication · {title}", title = snapshot.title)
+        }
     }
 }
 fn show_details(view: &mut AppView, id: JobId, window: &mut Window, cx: &mut Context<AppView>) {
@@ -793,7 +801,7 @@ fn show_details(view: &mut AppView, id: JobId, window: &mut Window, cx: &mut Con
             .update(cx, |view, cx| details_content(view, &job, cx))
             .unwrap_or_else(|_| {
                 div()
-                    .child("Cette médiathèque a été fermée.")
+                    .child(tr!("Cette médiathèque a été fermée."))
                     .into_any_element()
             });
         dialog.title(title.clone()).w(px(700.)).child(content)
@@ -808,9 +816,9 @@ const CONFLICT_CHOICES: [(ConflictChoice, theme::Look); 3] = [
 /// One label per conflict answer, shared by the job card and its details.
 fn conflict_label(choice: ConflictChoice) -> &'static str {
     match choice {
-        ConflictChoice::KeepLocal => "Publier ma version",
-        ConflictChoice::UseRemote => "Garder la version Yoto",
-        ConflictChoice::CreateCopy => "Créer une copie",
+        ConflictChoice::KeepLocal => tr!("Publier ma version"),
+        ConflictChoice::UseRemote => tr!("Garder la version Yoto"),
+        ConflictChoice::CreateCopy => tr!("Créer une copie"),
     }
 }
 fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement {
@@ -846,14 +854,14 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
                 .child(
                     div()
                         .font_weight(FontWeight::EXTRA_BOLD)
-                        .child("Vidéo YouTube d’origine"),
+                        .child(tr!("Vidéo YouTube d’origine")),
                 )
                 .child(theme::meta(url.clone()).truncate())
                 .child(
                     div().flex().child(theme::pill(
                         Button::new(element_id("copy-import-url", id))
                             .icon(IconName::Link)
-                            .label("Copier le lien")
+                            .label(tr!("Copier le lien"))
                             .on_click(cx.listener(move |_, _, _, cx| {
                                 cx.write_to_clipboard(ClipboardItem::new_string(source.clone()))
                             })),
@@ -879,7 +887,7 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
                 .child(
                     actions().child(theme::pill(
                         Button::new(element_id("retry-details", id))
-                            .label("Réessayer")
+                            .label(tr!("Réessayer"))
                             .on_click(cx.listener(move |v, _, window, cx| {
                                 v.send(Command::Retry(id), cx);
                                 window.close_dialog(cx);
@@ -909,19 +917,19 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
                 ));
             }
             body = body
-                .child(theme::note(
-                    "La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver.",
-                ))
+                .child(theme::note(tr!(
+                    "La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver."
+                )))
                 .child(choices);
         }
         JobState::Reconciling => {
             body = body
                 .child(theme::note(
-                    "Yoto n’a pas confirmé cet envoi. Vérifiez-le avant de le renvoyer, pour ne pas créer la playlist deux fois.",
+                    tr!("Yoto n’a pas confirmé cet envoi. Vérifiez-le avant de le renvoyer, pour ne pas créer la playlist deux fois."),
                 ))
                 .child(actions().child(theme::pill(
                     Button::new(element_id("reconcile", id))
-                        .label("Vérifier auprès de Yoto")
+                        .label(tr!("Vérifier auprès de Yoto"))
                         .on_click(cx.listener(move |v, _, window, cx| {
                             v.send(Command::Reconcile(id), cx);
                             window.close_dialog(cx);
@@ -937,15 +945,15 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
                         .child(
                             div()
                                 .font_weight(FontWeight::EXTRA_BOLD)
-                                .child("La carte existe déjà ?"),
+                                .child(tr!("La carte existe déjà ?")),
                         )
                         .child(theme::note(
-                            "Si l’envoi a créé une carte avant une déconnexion, collez son identifiant (affiché dans l’application Yoto) pour la relier à cet envoi.",
+                            tr!("Si l’envoi a créé une carte avant une déconnexion, collez son identifiant (affiché dans l’application Yoto) pour la relier à cet envoi."),
                         ))
                         .child(theme::small_field(Input::new(&view.receipt_card)))
                         .child(div().flex().child(theme::pill(
                             Button::new(element_id("attach-receipt", id))
-                                .label("Relier cette carte")
+                                .label(tr!("Relier cette carte"))
                                 .on_click(cx.listener(move |v, _, window, cx| {
                                     match CardId::new(v.receipt_card.read(cx).value().trim()) {
                                         Ok(card) => {
@@ -957,7 +965,7 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
                                         }
                                         Err(_) => v.report_error(
                                             Failure::Validation(
-                                                "Collez l’identifiant de la carte, tel qu’il apparaît dans l’application Yoto."
+                                                tr!("Collez l’identifiant de la carte, tel qu’il apparaît dans l’application Yoto.")
                                                     .into(),
                                             ),
                                             cx,
@@ -975,7 +983,7 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
         JobState::Completed { output } => match output {
             JobOutput::Published { .. } => {
                 body = body.child(theme::note(
-                    "Enregistré sur votre compte Yoto. Pour l’écouter sur une carte, associez cette playlist à une carte « Make Your Own » dans l’application Yoto.",
+                    tr!("Enregistré sur votre compte Yoto. Pour l’écouter sur une carte, associez cette playlist à une carte « Make Your Own » dans l’application Yoto."),
                 ));
             }
             JobOutput::Imported { .. } | JobOutput::Encoded { .. } => {}
@@ -990,7 +998,7 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
             .flex()
             .justify_end()
             .child(DialogClose::new().child(theme::pill(
-                Button::new(element_id("close-job-details", id)).label("Fermer"),
+                Button::new(element_id("close-job-details", id)).label(tr!("Fermer")),
                 Look::Outline,
                 Height::Medium,
                 false,

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:05-0400\n"
+"POT-Creation-Date: 2026-10-14 00:07-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,8 +18,9 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: src/i18n.rs src/ui/pixelart.rs src/ui/playlist_media_picker.rs
-#: src/ui/playlist_move_picker.rs src/ui/wording.rs
+#: src/i18n.rs src/ui/imports.rs src/ui/pixelart.rs
+#: src/ui/playlist_media_picker.rs src/ui/playlist_move_picker.rs
+#: src/ui/wording.rs
 msgid "Annuler"
 msgstr ""
 
@@ -256,7 +257,7 @@ msgstr ""
 msgid "Fermer l’éditeur de groupe"
 msgstr ""
 
-#: src/ui/group.rs src/ui/update.rs src/ui/wording.rs
+#: src/ui/group.rs src/ui/imports.rs src/ui/update.rs src/ui/wording.rs
 msgid "Fermer"
 msgstr ""
 
@@ -321,6 +322,246 @@ msgstr ""
 msgid "Enregistrer le groupe"
 msgstr ""
 
+#: src/ui/imports.rs
+msgid "Collez un lien YouTube pour importer son audio."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Recherche du titre et des informations YouTube…"
+msgstr ""
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Import de « {title} » lancé. Suivez sa progression dans « Imports »."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Cette vidéo n’est pas disponible. Vérifiez le lien et réessayez."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Cette playlist ne contient aucune vidéo disponible."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Cochez les vidéos de cette playlist à importer."
+msgstr ""
+
+#: src/ui/imports.rs src/ui/library.rs
+msgid "Lien YouTube"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Recherche…"
+msgstr ""
+
+#: src/ui/imports.rs src/ui/wording.rs
+msgid "Importer"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid ""
+"Une vidéo ou une playlist publique. On récupère seulement l’audio ; pour une "
+"playlist, vous choisirez les vidéos à garder."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Ajouter un fichier audio depuis mon ordinateur"
+msgstr ""
+
+#: src/ui/imports.rs src/ui/library.rs
+msgid "Ajouter un fichier audio"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "ou glissez-le ici · MP3, M4A, WAV…"
+msgstr ""
+
+#: src/ui/imports.rs src/ui/playlist_media_picker.rs
+msgid "Importer de l’audio"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Depuis YouTube ou depuis un fichier de votre ordinateur."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Vidéos de la playlist"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Choisissez les vidéos à importer."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Tout désélectionner"
+msgstr ""
+
+#: src/ui/imports.rs src/ui/library.rs
+msgid "Tout sélectionner"
+msgstr ""
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Importer la sélection ({count})"
+msgstr ""
+
+#: src/ui/imports.rs
+#, rust-format
+msgid ""
+"{count} vidéo en cours d’import. Suivez sa progression dans « Imports »."
+msgid_plural ""
+"{count} vidéos en cours d’import. Suivez leur progression dans « Imports »."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/imports.rs
+msgid "Activités"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Vos imports apparaîtront ici, avec leur progression."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Plus récentes"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Plus anciennes"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Détails"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "En attente…"
+msgstr ""
+
+#: src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
+msgid "Réessayer"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Se connecter"
+msgstr ""
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Conflit sur « {playlist} »"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid ""
+"La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Vérifier la publication"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Prêt dans la médiathèque"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Média retiré de votre médiathèque"
+msgstr ""
+
+#: src/ui/imports.rs src/ui/library.rs
+msgid "Écouter"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Version préparée"
+msgstr ""
+
+#: src/ui/imports.rs src/ui/wording.rs
+msgid "Enregistré sur Yoto"
+msgstr ""
+
+#: src/ui/imports.rs src/ui/wording.rs
+msgid "Annulé"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Vidéo YouTube"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Préparation audio locale"
+msgstr ""
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Préparation · {title}"
+msgstr ""
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Publication · {title}"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Cette médiathèque a été fermée."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Publier ma version"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Garder la version Yoto"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Créer une copie"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Vidéo YouTube d’origine"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Copier le lien"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid ""
+"Yoto n’a pas confirmé cet envoi. Vérifiez-le avant de le renvoyer, pour ne "
+"pas créer la playlist deux fois."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Vérifier auprès de Yoto"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "La carte existe déjà ?"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid ""
+"Si l’envoi a créé une carte avant une déconnexion, collez son identifiant "
+"(affiché dans l’application Yoto) pour la relier à cet envoi."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid "Relier cette carte"
+msgstr ""
+
+#: src/ui/imports.rs
+msgid ""
+"Collez l’identifiant de la carte, tel qu’il apparaît dans l’application Yoto."
+msgstr ""
+
+#: src/ui/imports.rs
+msgid ""
+"Enregistré sur votre compte Yoto. Pour l’écouter sur une carte, associez "
+"cette playlist à une carte « Make Your Own » dans l’application Yoto."
+msgstr ""
+
 #: src/ui/library.rs
 msgid "Fichier audio"
 msgstr ""
@@ -344,10 +585,6 @@ msgid "Écouter {title}"
 msgstr ""
 
 #: src/ui/library.rs
-msgid "Écouter"
-msgstr ""
-
-#: src/ui/library.rs
 msgid "Ouvrir et écouter"
 msgstr ""
 
@@ -359,10 +596,6 @@ msgstr ""
 msgid ""
 "Ajoutez un fichier audio ou un lien YouTube. Vous pourrez ensuite écouter, "
 "découper, puis ajouter l’audio à une playlist Yoto."
-msgstr ""
-
-#: src/ui/library.rs
-msgid "Ajouter un fichier audio"
 msgstr ""
 
 #: src/ui/library.rs
@@ -383,10 +616,6 @@ msgid "{count} audio · sur cet ordinateur"
 msgid_plural "{count} audios · sur cet ordinateur"
 msgstr[0] ""
 msgstr[1] ""
-
-#: src/ui/library.rs
-msgid "Lien YouTube"
-msgstr ""
 
 #: src/ui/library.rs
 msgid "Titre"
@@ -411,10 +640,6 @@ msgstr ""
 
 #: src/ui/library.rs
 msgid "Plus d’options"
-msgstr ""
-
-#: src/ui/library.rs
-msgid "Tout sélectionner"
 msgstr ""
 
 #: src/ui/library.rs
@@ -461,6 +686,10 @@ msgid "Ajouter à « {title} »"
 msgstr ""
 
 #: src/ui/mod.rs
+msgid "Prêt."
+msgstr ""
+
+#: src/ui/mod.rs
 msgid "Rechercher dans vos médias…"
 msgstr ""
 
@@ -470,6 +699,251 @@ msgstr ""
 
 #: src/ui/mod.rs
 msgid "Identifiant de la carte"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Votre collection personnelle, même hors ligne."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid ""
+"La connexion Yoto n’a pas abouti. Cliquez de nouveau sur « Connecter mon "
+"compte Yoto », terminez la connexion dans votre navigateur, puis revenez ici."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Playlist Yoto ouverte."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Enregistrement sur Yoto en cours…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Commande envoyée ; effet non confirmé."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Commande acceptée par le lecteur."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "État du lecteur reçu."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Opération terminée."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid ""
+"La médiathèque choisie s’ouvre dans une autre fenêtre ; celle-ci reste "
+"disponible."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid ""
+"Déposez des fichiers audio (MP3, M4A, WAV, FLAC, OGG…). Les autres fichiers "
+"sont ignorés."
+msgstr ""
+
+#: src/ui/mod.rs
+#, rust-format
+msgid ""
+"{count} fichier ignoré : seuls les fichiers audio (MP3, M4A, WAV, FLAC, "
+"OGG…) sont importés."
+msgid_plural ""
+"{count} fichiers ignorés : seuls les fichiers audio (MP3, M4A, WAV, FLAC, "
+"OGG…) sont importés."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/mod.rs
+msgid "Ajouter vos fichiers audio"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Audio"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Choisissez un profil Yoto existant contenant catalogue.db"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Votre audio. Vos histoires."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Connecté à Yoto"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Compte Yoto"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Non connecté"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Connexion Yoto en cours dans votre navigateur…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Compte connecté. Chargement de vos playlists Yoto…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Déconnexion du compte…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Compte déconnecté."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Changement de compte…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Compte sélectionné."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Chargement depuis Yoto…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Données Yoto actualisées."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Ajout à la file d’import…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Import lancé. Suivez sa progression dans « Imports »."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Création de la playlist sur Yoto…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Playlist créée sur Yoto."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Copie de la playlist sur Yoto…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Copie créée sur Yoto."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Ouverture de la playlist…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Suppression sur Yoto…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Playlist supprimée de votre compte Yoto."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Suppression du groupe…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Groupe supprimé."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Suppression…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Média supprimé de votre médiathèque."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Nettoyage…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Fichiers inutilisés supprimés."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Relance de la tâche…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Tâche relancée."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Annulation…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Tâche annulée."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Vérification auprès de Yoto…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Vérification lancée."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Export de la médiathèque…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Médiathèque exportée."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Import de la médiathèque…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Médiathèque importée."
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Traitement en cours…"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Terminé."
+msgstr ""
+
+#: src/ui/mod.rs
+#, rust-format
+msgid "{label} · Synchroniser pour actualiser les données Yoto."
+msgstr ""
+
+#: src/ui/mod.rs
+#, rust-format
+msgid "{label} · Synchronisation en cours…"
+msgstr ""
+
+#: src/ui/mod.rs
+#, rust-format
+msgid "{label} · À jour"
+msgstr ""
+
+#: src/ui/mod.rs
+#, rust-format
+msgid "{label} · Actualisation impossible : {reason}"
 msgstr ""
 
 #: src/ui/pixelart.rs
@@ -491,10 +965,6 @@ msgstr ""
 #: src/ui/pixelart.rs
 #, rust-format
 msgid "Chargement impossible : {failure}"
-msgstr ""
-
-#: src/ui/pixelart.rs src/ui/update.rs
-msgid "Réessayer"
 msgstr ""
 
 #: src/ui/pixelart.rs
@@ -615,10 +1085,6 @@ msgstr ""
 #: src/ui/playlist_media_picker.rs
 msgid ""
 "Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer."
-msgstr ""
-
-#: src/ui/playlist_media_picker.rs
-msgid "Importer de l’audio"
 msgstr ""
 
 #: src/ui/playlist_media_picker.rs
@@ -871,10 +1337,6 @@ msgid "Échec"
 msgstr ""
 
 #: src/ui/wording.rs
-msgid "Annulé"
-msgstr ""
-
-#: src/ui/wording.rs
 msgid "Playlists"
 msgstr ""
 
@@ -1003,10 +1465,6 @@ msgstr ""
 msgid ""
 "Trop long pour une seule piste Yoto (1 h au plus) : ajouté à une playlist, "
 "il sera découpé en {parts} parties."
-msgstr ""
-
-#: src/ui/wording.rs
-msgid "Enregistré sur Yoto"
 msgstr ""
 
 #: src/ui/wording.rs
@@ -1276,10 +1734,6 @@ msgstr ""
 
 #: src/ui/wording.rs
 msgid "Exporter"
-msgstr ""
-
-#: src/ui/wording.rs
-msgid "Importer"
 msgstr ""
 
 #: src/ui/wording.rs

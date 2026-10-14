@@ -92,7 +92,7 @@ impl AppView {
         let entering_playlists = self.route != Route::Playlists && route == Route::Playlists;
         self.route = route;
         self.error = None;
-        self.status = "Prêt.".into();
+        self.status = tr!("Prêt.").into();
         if entering_playlists {
             self.refresh_playlists(cx);
         }
@@ -218,7 +218,7 @@ impl AppView {
             youtube_import_pending: false,
             youtube_inspection_generation: 0,
             youtube_selection_url: None,
-            status: "Votre collection personnelle, même hors ligne.".into(),
+            status: tr!("Votre collection personnelle, même hors ligne.").into(),
             connecting: false,
             creating_playlist: false,
             error: None,
@@ -533,7 +533,7 @@ impl AppView {
                                 // The browser round trip timed out or was abandoned.
                                 view.report_error(
                                     Failure::Validation(
-                                        "La connexion Yoto n’a pas abouti. Cliquez de nouveau sur « Connecter mon compte Yoto », terminez la connexion dans votre navigateur, puis revenez ici.".into(),
+                                        tr!("La connexion Yoto n’a pas abouti. Cliquez de nouveau sur « Connecter mon compte Yoto », terminez la connexion dans votre navigateur, puis revenez ici.").into(),
                                     ),
                                     cx,
                                 );
@@ -564,7 +564,7 @@ impl AppView {
                                     view.route = Route::Playlists;
                                     view.selected_playlist = Some(id);
                                 }
-                                view.status = "Playlist Yoto ouverte.".into();
+                                view.status = tr!("Playlist Yoto ouverte.").into();
                             }
                             Reply::PlaylistOperation { playlist, .. } => {
                                 if clear_new_title.as_ref().is_some_and(|title| {
@@ -592,7 +592,7 @@ impl AppView {
                                     view.route = Route::Playlists;
                                     view.selected_playlist = Some(playlist);
                                 }
-                                view.status = "Enregistrement sur Yoto en cours…".into();
+                                view.status = tr!("Enregistrement sur Yoto en cours…").into();
                             }
                             Reply::Entries(entries) => {
                                 view.youtube_entries = entries.entries;
@@ -612,13 +612,13 @@ impl AppView {
                             Reply::Player(result) => {
                                 view.status = match result {
                                     yoto_infra::players::CommandResult::Sent => {
-                                        "Commande envoyée ; effet non confirmé.".into()
+                                        tr!("Commande envoyée ; effet non confirmé.").into()
                                     }
                                     yoto_infra::players::CommandResult::Accepted => {
-                                        "Commande acceptée par le lecteur.".into()
+                                        tr!("Commande acceptée par le lecteur.").into()
                                     }
                                     yoto_infra::players::CommandResult::Observed { .. } => {
-                                        "État du lecteur reçu.".into()
+                                        tr!("État du lecteur reçu.").into()
                                     }
                                 };
                             }
@@ -632,7 +632,7 @@ impl AppView {
                                         view.warn(view.status.clone(), cx);
                                     }
                                 } else {
-                                    view.status = "Opération terminée.".into();
+                                    view.status = tr!("Opération terminée.").into();
                                 }
                             }
                         }
@@ -661,7 +661,7 @@ impl AppView {
             let _ = weak.update(cx, |v, cx| {
                 match joined(result) {
                     Ok(()) => {
-                        v.status = "La médiathèque choisie s’ouvre dans une autre fenêtre ; celle-ci reste disponible.".into()
+                        v.status = tr!("La médiathèque choisie s’ouvre dans une autre fenêtre ; celle-ci reste disponible.").into()
                     }
                     Err(e) => v.report_error(e, cx),
                 }
@@ -689,7 +689,7 @@ impl AppView {
         if audio.is_empty() {
             self.report_error(
                 Failure::Validation(
-                    "Déposez des fichiers audio (MP3, M4A, WAV, FLAC, OGG…). Les autres fichiers sont ignorés.".into(),
+                    tr!("Déposez des fichiers audio (MP3, M4A, WAV, FLAC, OGG…). Les autres fichiers sont ignorés.").into(),
                 ),
                 cx,
             );
@@ -709,8 +709,9 @@ impl AppView {
             // The import's own completion text replaces the status line, so the skipped
             // files are reported in a toast that stays until dismissed.
             self.warn(
-                format!(
-                    "{} fichier(s) ignoré(s) : seuls les fichiers audio (MP3, M4A, WAV, FLAC, OGG…) sont importés.",
+                trn!(
+                    "{count} fichier ignoré : seuls les fichiers audio (MP3, M4A, WAV, FLAC, OGG…) sont importés.",
+                    "{count} fichiers ignorés : seuls les fichiers audio (MP3, M4A, WAV, FLAC, OGG…) sont importés.",
                     ignored.len()
                 ),
                 cx,
@@ -731,8 +732,8 @@ impl AppView {
     pub fn add_files(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |weak, cx| {
             let files = rfd::AsyncFileDialog::new()
-                .set_title("Ajouter vos fichiers audio")
-                .add_filter("Audio", AUDIO_EXTENSIONS)
+                .set_title(tr!("Ajouter vos fichiers audio"))
+                .add_filter(tr!("Audio"), AUDIO_EXTENSIONS)
                 .pick_files()
                 .await;
             if let Some(files) = files {
@@ -937,6 +938,8 @@ impl AppView {
         cx: &mut Context<Self>,
     ) {
         crate::i18n::set_language(language);
+        // The status line keeps its text until the next action; start it afresh.
+        self.status = tr!("Prêt.").into();
         self.settings.language = Some(language.code().into());
         self.save_settings();
         self.relabel(window, cx);
@@ -1010,7 +1013,7 @@ fn launch_profile(path: &std::path::Path) -> yoto_domain::Result<()> {
     let profile = yoto_infra::canonical_profile(path)?;
     if !profile.join("catalogue.db").is_file() {
         return Err(Failure::Validation(
-            "Choisissez un profil Yoto existant contenant catalogue.db".into(),
+            tr!("Choisissez un profil Yoto existant contenant catalogue.db").into(),
         ));
     }
     let executable = std::env::current_exe().map_err(|e| Failure::Storage(e.to_string()))?;
@@ -1188,7 +1191,7 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
                         .text_size(px(12.))
                         .font_weight(FontWeight::BOLD)
                         .text_color(theme::c(theme::MUTED_WARM))
-                        .child("Votre audio. Vos histoires."),
+                        .child(tr!("Votre audio. Vos histoires.")),
                 ),
         );
     let items = Route::ALL.iter().copied().map(|route| {
@@ -1280,10 +1283,15 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
                 .map(|c| c.to_uppercase().to_string())
                 .unwrap_or_else(|| "Y".into()),
             account.label.clone(),
-            "Connecté à Yoto",
+            tr!("Connecté à Yoto"),
             true,
         ),
-        None => ("?".into(), "Compte Yoto".into(), "Non connecté", false),
+        None => (
+            "?".into(),
+            tr!("Compte Yoto").into(),
+            tr!("Non connecté"),
+            false,
+        ),
     };
     let account_card = Button::new("sidebar-account")
         .custom(
@@ -1415,44 +1423,57 @@ fn element_id(label: &str, id: impl std::fmt::Display) -> ElementId {
 fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
     Some(match command {
         Command::Connect => (
-            "Connexion Yoto en cours dans votre navigateur…",
-            "Compte connecté. Chargement de vos playlists Yoto…",
+            tr!("Connexion Yoto en cours dans votre navigateur…"),
+            tr!("Compte connecté. Chargement de vos playlists Yoto…"),
         ),
-        Command::Disconnect(_) => ("Déconnexion du compte…", "Compte déconnecté."),
-        Command::SelectAccount(_) => ("Changement de compte…", "Compte sélectionné."),
-        Command::Sync(_) | Command::RefreshPlaylists(_) | Command::RefreshIcons(_) => {
-            ("Chargement depuis Yoto…", "Données Yoto actualisées.")
-        }
+        Command::Disconnect(_) => (tr!("Déconnexion du compte…"), tr!("Compte déconnecté.")),
+        Command::SelectAccount(_) => (tr!("Changement de compte…"), tr!("Compte sélectionné.")),
+        Command::Sync(_) | Command::RefreshPlaylists(_) | Command::RefreshIcons(_) => (
+            tr!("Chargement depuis Yoto…"),
+            tr!("Données Yoto actualisées."),
+        ),
         Command::Import(_) => (
-            "Ajout à la file d’import…",
-            "Import lancé. Suivez sa progression dans « Imports ».",
+            tr!("Ajout à la file d’import…"),
+            tr!("Import lancé. Suivez sa progression dans « Imports »."),
         ),
         Command::CreateYotoPlaylist { .. } => (
-            "Création de la playlist sur Yoto…",
-            "Playlist créée sur Yoto.",
+            tr!("Création de la playlist sur Yoto…"),
+            tr!("Playlist créée sur Yoto."),
         ),
-        Command::DuplicateYotoPlaylist { .. } => {
-            ("Copie de la playlist sur Yoto…", "Copie créée sur Yoto.")
-        }
-        Command::LoadRemote { .. } => ("Ouverture de la playlist…", "Playlist Yoto ouverte."),
+        Command::DuplicateYotoPlaylist { .. } => (
+            tr!("Copie de la playlist sur Yoto…"),
+            tr!("Copie créée sur Yoto."),
+        ),
+        Command::LoadRemote { .. } => (
+            tr!("Ouverture de la playlist…"),
+            tr!("Playlist Yoto ouverte."),
+        ),
         Command::DeleteRemote { .. } => (
-            "Suppression sur Yoto…",
-            "Playlist supprimée de votre compte Yoto.",
+            tr!("Suppression sur Yoto…"),
+            tr!("Playlist supprimée de votre compte Yoto."),
         ),
-        Command::DeleteGroup { .. } => ("Suppression du groupe…", "Groupe supprimé."),
-        Command::DeleteMedia { .. } | Command::DeleteMediaBatch { .. } => {
-            ("Suppression…", "Média supprimé de votre médiathèque.")
-        }
-        Command::CollectGarbage => ("Nettoyage…", "Fichiers inutilisés supprimés."),
-        Command::Retry(_) => ("Relance de la tâche…", "Tâche relancée."),
-        Command::Cancel(_) => ("Annulation…", "Tâche annulée."),
+        Command::DeleteGroup { .. } => (tr!("Suppression du groupe…"), tr!("Groupe supprimé.")),
+        Command::DeleteMedia { .. } | Command::DeleteMediaBatch { .. } => (
+            tr!("Suppression…"),
+            tr!("Média supprimé de votre médiathèque."),
+        ),
+        Command::CollectGarbage => (tr!("Nettoyage…"), tr!("Fichiers inutilisés supprimés.")),
+        Command::Retry(_) => (tr!("Relance de la tâche…"), tr!("Tâche relancée.")),
+        Command::Cancel(_) => (tr!("Annulation…"), tr!("Tâche annulée.")),
         Command::Resolve { .. }
         | Command::Reconcile(_)
-        | Command::AttachPublicationReceipt { .. } => {
-            ("Vérification auprès de Yoto…", "Vérification lancée.")
-        }
-        Command::Backup { .. } => ("Export de la médiathèque…", "Médiathèque exportée."),
-        Command::Restore { .. } => ("Import de la médiathèque…", "Médiathèque importée."),
+        | Command::AttachPublicationReceipt { .. } => (
+            tr!("Vérification auprès de Yoto…"),
+            tr!("Vérification lancée."),
+        ),
+        Command::Backup { .. } => (
+            tr!("Export de la médiathèque…"),
+            tr!("Médiathèque exportée."),
+        ),
+        Command::Restore { .. } => (
+            tr!("Import de la médiathèque…"),
+            tr!("Médiathèque importée."),
+        ),
         Command::Waveform(_)
         | Command::StopPreview
         | Command::PreviewStatus
@@ -1493,7 +1514,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::SavePixelArt(_)
         | Command::StoreImage { .. }
         | Command::ImportIcon { .. }
-        | Command::SetCover { .. } => ("Traitement en cours…", "Terminé."),
+        | Command::SetCover { .. } => (tr!("Traitement en cours…"), tr!("Terminé.")),
     })
 }
 fn remote_syncing(snapshot: &Snapshot) -> bool {
@@ -1505,13 +1526,17 @@ fn remote_syncing(snapshot: &Snapshot) -> bool {
 fn remote_sync_message(snapshot: &Snapshot, collection: RemoteCollection) -> String {
     let label = wording::labels::remote_collection(collection);
     match snapshot.remote_sync.get(&collection) {
-        None => format!("{label} · Synchroniser pour actualiser les données Yoto."),
-        Some(RemoteSyncState::Syncing) => format!("{label} · Synchronisation en cours…"),
-        Some(RemoteSyncState::Ready { .. }) => format!("{label} · À jour"),
+        None => tr!(
+            "{label} · Synchroniser pour actualiser les données Yoto.",
+            label = label
+        ),
+        Some(RemoteSyncState::Syncing) => tr!("{label} · Synchronisation en cours…", label = label),
+        Some(RemoteSyncState::Ready { .. }) => tr!("{label} · À jour", label = label),
         Some(RemoteSyncState::Failed { failure }) => {
-            format!(
-                "{label} · Actualisation impossible : {}",
-                failure_text(failure)
+            tr!(
+                "{label} · Actualisation impossible : {reason}",
+                label = label,
+                reason = failure_text(failure)
             )
         }
     }
