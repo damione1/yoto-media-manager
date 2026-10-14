@@ -28,7 +28,7 @@ If the preview works but conversion fails, open the task's `Détails` in `Import
 
 ## Yoto login does not complete
 
-Keep the app open during browser login. Return to `Compte` after confirmation. If the operation expired, start again with `Connecter mon compte Yoto`.
+Keep the app open during browser login. Return to `Compte` after confirmation. If the operation expired, start again with `Connecter mon compte Yoto`. If the browser shows an error page and the app keeps waiting, choose `Annuler` next to the connect button, then start again.
 
 Declining a permission may make some features unavailable. Reconnect the account to review the requested access.
 

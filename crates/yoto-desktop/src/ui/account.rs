@@ -163,20 +163,28 @@ fn accounts(view: &AppView, cx: &mut Context<AppView>) -> Vec<AnyElement> {
                     "Connectez Yoto pour retrouver vos playlists et les envoyer à vos lecteurs. Votre médiathèque reste disponible hors ligne.",
                 ))
                 .children(view.snapshot.accounts.is_empty().then(|| {
-                    theme::pill(
-                        Button::new("login")
-                            .label(if view.connecting {
-                                "Connexion dans votre navigateur…"
-                            } else {
-                                "Connecter mon compte Yoto"
-                            })
-                            .loading(view.connecting)
-                            .on_click(cx.listener(|v, _, _, cx| v.send(Command::Connect, cx))),
-                        Look::Primary,
-                        Height::Large,
-                        view.connecting,
-                        cx,
-                    )
+                    div()
+                        .flex()
+                        .gap(px(8.))
+                        .items_center()
+                        .child(theme::pill(
+                            Button::new("login")
+                                .label(if view.connecting {
+                                    wording::connect::WAITING
+                                } else {
+                                    "Connecter mon compte Yoto"
+                                })
+                                .loading(view.connecting)
+                                .on_click(cx.listener(|v, _, _, cx| v.send(Command::Connect, cx))),
+                            Look::Primary,
+                            Height::Large,
+                            view.connecting,
+                            cx,
+                        ))
+                        .children(
+                            view.connecting
+                                .then(|| cancel_connect("login-cancel", Height::Large, cx)),
+                        )
                 }))
                 .into_any_element(),
         ),
@@ -258,7 +266,7 @@ fn accounts(view: &AppView, cx: &mut Context<AppView>) -> Vec<AnyElement> {
                 .child(theme::pill(
                     Button::new("login")
                         .label(if view.connecting {
-                            "Connexion dans votre navigateur…"
+                            wording::connect::WAITING
                         } else {
                             "Ajouter un compte"
                         })
@@ -269,6 +277,10 @@ fn accounts(view: &AppView, cx: &mut Context<AppView>) -> Vec<AnyElement> {
                     view.connecting,
                     cx,
                 ))
+                .children(
+                    view.connecting
+                        .then(|| cancel_connect("login-cancel", Height::Medium, cx)),
+                )
                 .into_any_element(),
         );
     }

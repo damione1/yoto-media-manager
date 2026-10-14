@@ -106,6 +106,8 @@ pub enum Command {
         destination: PathBuf,
     },
     Connect,
+    /// Stop waiting for the browser sign-in started by `Connect`.
+    CancelConnect,
     Disconnect(AccountId),
     SelectAccount(AccountId),
     Sync(AccountId),
@@ -805,6 +807,7 @@ impl Service {
             | Command::PreviewStatus
             | Command::Export { .. }
             | Command::Connect
+            | Command::CancelConnect
             | Command::Disconnect(_)
             | Command::SavePixelArt(_)
             | Command::ReadPixelArt(_)
@@ -837,6 +840,13 @@ impl Service {
             return Ok(Reply::Data(
                 serde_json::to_value(&*self.playback.lock().map_err(storage)?).map_err(storage)?,
             ));
+        }
+        if matches!(&command, Command::CancelConnect) {
+            self.login_session.lock().map_err(storage)?.cancel();
+            // The running sign-in holds the gate until it has dropped its callback listener,
+            // so a new `Connect` sent after this reply finds the port free.
+            let _login = self.login_gate.write().await;
+            return Ok(Reply::Updated);
         }
         if matches!(&command, Command::Connect) {
             let _login = self.login_gate.read().await;
@@ -928,8 +938,8 @@ impl Service {
             None
         };
         match command {
-            Command::AppUpdate(_) | Command::YoutubeTool(_) => {
-                unreachable!("Updater command was handled before mutation admission")
+            Command::AppUpdate(_) | Command::YoutubeTool(_) | Command::CancelConnect => {
+                unreachable!("Updater and sign-in commands were handled before mutation admission")
             }
             Command::Connect => {
                 let account = self.auth.login().await?;
@@ -1592,6 +1602,7 @@ impl Service {
             | Command::Retry(_)
             | Command::Cancel(_)
             | Command::Connect
+            | Command::CancelConnect
             | Command::Disconnect(_)
             | Command::SelectAccount(_)
             | Command::Sync(_)
@@ -2049,6 +2060,7 @@ impl Service {
                 Ok(Reply::Updated)
             }
             Command::Connect
+            | Command::CancelConnect
             | Command::Disconnect(_)
             | Command::SelectAccount(_)
             | Command::DeviceConfig { .. }

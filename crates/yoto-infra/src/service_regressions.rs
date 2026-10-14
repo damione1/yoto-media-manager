@@ -1239,3 +1239,29 @@ async fn newer_sync_retains_progress_when_an_older_response_finishes_and_full_sy
     assert!(service.snapshot().unwrap().remote.is_empty());
     assert!(service.db.remote_cards(&account).unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn cancelling_a_sign_in_answers_once_the_sign_in_has_let_go_of_its_port() {
+    let root = tempfile::tempdir().unwrap();
+    let (service, _) = fixture(root.path().join("profile"), "http://127.0.0.1:9".into());
+    let session = service.login_session.lock().unwrap().clone();
+    let released = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (held, holding) = tokio::sync::oneshot::channel();
+    // Stands for a `Connect` waiting on a browser callback that never comes.
+    let sign_in = {
+        let service = service.clone();
+        let released = released.clone();
+        tokio::spawn(async move {
+            let _login = service.login_gate.read().await;
+            held.send(()).unwrap();
+            session.cancelled().await;
+            // Dropping the callback listener takes a moment.
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            released.store(true, std::sync::atomic::Ordering::SeqCst);
+        })
+    };
+    holding.await.unwrap();
+    service.execute(Command::CancelConnect).await.unwrap();
+    assert!(released.load(std::sync::atomic::Ordering::SeqCst));
+    sign_in.await.unwrap();
+}

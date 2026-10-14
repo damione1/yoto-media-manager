@@ -97,6 +97,17 @@ pub fn split_note(parts: usize) -> String {
     )
 }
 
+/// Signing in to Yoto in the browser, and giving up on a sign-in that never comes back.
+pub mod connect {
+    /// On the connect button while the browser sign-in runs.
+    pub const WAITING: &str = "Connexion dans votre navigateur…";
+    /// Next to it, to stop waiting.
+    pub const CANCEL: &str = "Annuler";
+    pub const CANCEL_HINT: &str = "Arrêter d’attendre la connexion dans le navigateur";
+    /// Once the sign-in was cancelled; the parent can connect again.
+    pub const CANCELLED: &str = "Connexion annulée.";
+}
+
 /// « Outil YouTube » in « Compte » (advanced mode): the tool imports use and its updates.
 pub mod youtube_tool {
     use yoto_infra::youtube_tool::{ToolActivity, ToolOrigin, ToolProblem, YoutubeToolStatus};

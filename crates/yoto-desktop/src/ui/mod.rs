@@ -506,6 +506,12 @@ impl AppView {
                         }
                         let reply = match reply {
                             Ok(reply) => reply,
+                            Err(Failure::Cancelled) if connecting => {
+                                // The parent gave up on the browser sign-in: nothing failed.
+                                view.status = wording::connect::CANCELLED.into();
+                                cx.notify();
+                                return;
+                            }
                             Err(Failure::Authentication) if connecting => {
                                 // The browser round trip timed out or was abandoned.
                                 view.report_error(
@@ -1314,6 +1320,20 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
         .child(account_card)
 }
 
+/// « Annuler » beside a connect button while the browser sign-in runs: a sign-in that
+/// failed on Yoto's side never comes back, and the parent must be able to start over.
+fn cancel_connect(id: &'static str, height: theme::Height, cx: &mut Context<AppView>) -> Button {
+    theme::pill(
+        Button::new(id)
+            .label(wording::connect::CANCEL)
+            .tooltip(wording::connect::CANCEL_HINT)
+            .on_click(cx.listener(|v, _, _, cx| v.send(Command::CancelConnect, cx))),
+        theme::Look::Ghost,
+        height,
+        false,
+        cx,
+    )
+}
 fn element_id(label: &str, id: impl std::fmt::Display) -> ElementId {
     SharedString::from(format!("{label}:{id}")).into()
 }
@@ -1370,6 +1390,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::Thumbnail(_)
         | Command::AppUpdate(_)
         | Command::YoutubeTool(_)
+        | Command::CancelConnect
         | Command::JobsPage { .. } => return None,
         Command::InspectYoutube(_)
         | Command::NewPlaylist(_)

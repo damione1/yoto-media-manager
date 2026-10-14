@@ -128,19 +128,30 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     .child(theme::note(
                         "Vous verrez alors vos lecteurs et pourrez lancer une playlist dessus.",
                     ))
-                    .child(theme::pill(
-                        Button::new("players-login")
-                            .label(if view.connecting {
-                                "Connexion dans votre navigateur…"
-                            } else {
-                                "Connecter Yoto"
-                            })
-                            .on_click(cx.listener(|v, _, _, cx| v.send(Command::Connect, cx))),
-                        Look::Primary,
-                        Height::Large,
-                        view.connecting,
-                        cx,
-                    )),
+                    .child(
+                        div()
+                            .flex()
+                            .gap(px(8.))
+                            .items_center()
+                            .child(theme::pill(
+                                Button::new("players-login")
+                                    .label(if view.connecting {
+                                        wording::connect::WAITING
+                                    } else {
+                                        "Connecter Yoto"
+                                    })
+                                    .on_click(
+                                        cx.listener(|v, _, _, cx| v.send(Command::Connect, cx)),
+                                    ),
+                                Look::Primary,
+                                Height::Large,
+                                view.connecting,
+                                cx,
+                            ))
+                            .children(view.connecting.then(|| {
+                                cancel_connect("players-login-cancel", Height::Large, cx)
+                            })),
+                    ),
             )
             .into_any_element();
     };
