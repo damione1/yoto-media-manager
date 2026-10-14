@@ -4,12 +4,16 @@
 The dedicated private key is accepted only from the process environment and
 written to a private temporary file, never printed or retained in artifacts.
 """
-import argparse, base64, json, os, pathlib, re, shutil, subprocess, tarfile, tempfile, tomllib, zipfile
+import argparse, base64, json, os, pathlib, subprocess, sys, tarfile, tempfile, zipfile
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from distribution_utils import app_version
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPOSITORY = 'damione1/yoto-media-manager'
 PLATFORMS = {'aarch64-apple-darwin': ('darwin-aarch64', 'tar.gz'), 'x86_64-apple-darwin': ('darwin-x86_64', 'tar.gz'), 'x86_64-pc-windows-msvc': ('windows-x86_64', 'zip')}
 def version():
-    return tomllib.loads((ROOT / 'Cargo.toml').read_text())['workspace']['package']['version']
+    current = app_version()
+    if current is None: raise SystemExit('Update archives require YOTO_APP_VERSION from the release tag')
+    return current
 def build(target):
     platform, extension = PLATFORMS[target]
     current = version()

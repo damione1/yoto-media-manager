@@ -16,7 +16,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Validate release tag
+      - name: Derive the version from the release tag
         id: version
         run: python3 scripts/release_version.py >> "$GITHUB_OUTPUT"
   apple:
@@ -31,6 +31,8 @@ jobs:
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
     env:
+      # Built into the binaries and written to the bundle, DMG and update archive.
+      YOTO_APP_VERSION: ${{ needs.version.outputs.version }}
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -100,6 +102,8 @@ jobs:
   windows:
     needs: version
     runs-on: windows-2025
+    env:
+      YOTO_APP_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Require OAuth and updater signing configuration
         env:
@@ -157,6 +161,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    env:
+      YOTO_APP_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-import argparse,hashlib,json,pathlib,plistlib,shutil,subprocess,tomllib
-from distribution_utils import write_manifest,stage_dmg
+import argparse,pathlib,plistlib,shutil,subprocess
+from distribution_utils import app_version,write_manifest,stage_dmg
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('--target',required=True);p.add_argument('--identity',required=True);p.add_argument('--dev',action='store_true');p.add_argument('--notarize-profile');p.add_argument('--output-dir',type=pathlib.Path,help='Directory for this build, leaving another running bundle untouched');a=p.parse_args()
 if a.identity in ['', '-']:raise SystemExit('A Developer ID signing identity is required')
 if not a.dev and not a.notarize_profile:raise SystemExit('Release requires a notarization keychain profile')
-version=tomllib.loads((ROOT/'Cargo.toml').read_text())['workspace']['package']['version']
+# The tag's version for a release; a nightly bundle still needs numeric Info.plist versions.
+version=app_version()
+if version is None and not a.dev:raise SystemExit('A release bundle requires YOTO_APP_VERSION from the release tag')
+bundle_version=version or '0.0.0'
 name='Yoto Dev' if a.dev else 'Yoto';out_dir=a.output_dir if a.output_dir is not None else ROOT/'dist'/a.target;out=out_dir/(name+'.app');out.parent.mkdir(parents=True,exist_ok=True)
 if out.exists():shutil.rmtree(out)
 mac=out/'Contents/MacOS';resources=out/'Contents/Resources';mac.mkdir(parents=True);resources.mkdir()
@@ -14,7 +17,7 @@ if a.dev and not build.exists():build=ROOT/'target/debug'
 for binary in ['yoto-desktop','yoto-mcp']:shutil.copy2(build/binary,mac/binary)
 shutil.copytree(ROOT/'tools'/a.target,resources/'tools',symlinks=True)
 shutil.copy2(ROOT/'assets/branding/app-icon.icns',resources/'app-icon.icns')
-info={'CFBundleName':name,'CFBundleDisplayName':name,'CFBundleIdentifier':'dev.yoto.desktop'+('.dev' if a.dev else ''),'CFBundleExecutable':'yoto-desktop','CFBundlePackageType':'APPL','CFBundleShortVersionString':version,'CFBundleVersion':version,'CFBundleIconFile':'app-icon.icns','LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True,'NSMicrophoneUsageDescription':'Audio output and local preview.'}
+info={'CFBundleName':name,'CFBundleDisplayName':name,'CFBundleIdentifier':'dev.yoto.desktop'+('.dev' if a.dev else ''),'CFBundleExecutable':'yoto-desktop','CFBundlePackageType':'APPL','CFBundleShortVersionString':bundle_version,'CFBundleVersion':bundle_version,'CFBundleIconFile':'app-icon.icns','LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True,'NSMicrophoneUsageDescription':'Audio output and local preview.'}
 with open(out/'Contents/Info.plist','wb') as f:plistlib.dump(info,f)
 def run(args):subprocess.run([str(v) for v in args],check=True)
 # The upstream ZIP flattened framework symlinks into copies. Restore the canonical
