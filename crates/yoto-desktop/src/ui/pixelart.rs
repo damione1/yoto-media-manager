@@ -242,11 +242,11 @@ impl Render for IconPicker {
                                         .accessibility_label(icon.title.clone())
                                         .tooltip(icon.title.clone())
                                         .disabled(disabled)
-                                        .children(icon.url.as_ref().map(|url| {
-                                            img(url.clone())
-                                                .size(px(32.))
-                                                .object_fit(ObjectFit::Contain)
-                                        }))
+                                        .children(
+                                            icon.url
+                                                .as_ref()
+                                                .map(|url| crisp_icon(url.clone(), 32.)),
+                                        )
                                         .children(icon.url.is_none().then(|| {
                                             theme::pixel_glyph(
                                                 theme::Glyph::for_seed(&icon.title),
@@ -412,6 +412,83 @@ impl Render for IconPicker {
     }
 }
 
+/// Most a Yoto icon is enlarged before display: 16 pixels become at most 256.
+const UPSCALE_MAX: u32 = 16;
+/// Enlarged icons, by address and factor, kept so each is sent to the GPU only once.
+type CrispIcons = std::collections::HashMap<(SharedString, u32), Arc<RenderImage>>;
+static CRISP: std::sync::LazyLock<std::sync::Mutex<CrispIcons>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// How many screen pixels each icon pixel needs to cover `size` points at `scale`.
+fn upscale_factor(size: f32, scale: f32) -> u32 {
+    let wanted = (size * scale / 16.).ceil();
+    if wanted.is_finite() && wanted >= 1. {
+        (wanted as u32).min(UPSCALE_MAX)
+    } else {
+        1
+    }
+}
+
+/// A `width` × `height` image enlarged by whole pixels: every source pixel becomes a
+/// `factor` × `factor` square of the same color. The channel order is kept as GPUI decoded it.
+fn upscale(bytes: &[u8], width: u32, height: u32, factor: u32) -> Option<image::RgbaImage> {
+    if bytes.len() != (width * height * 4) as usize {
+        return None;
+    }
+    Some(image::RgbaImage::from_fn(
+        width * factor,
+        height * factor,
+        |x, y| {
+            let at = (((y / factor) * width + x / factor) * 4) as usize;
+            image::Rgba([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
+        },
+    ))
+}
+
+/// A Yoto icon, a 16 × 16 pixel drawing, shown `size` points wide with hard pixel edges.
+/// GPUI samples images with linear smoothing, which turns a tiny bitmap stretched over many
+/// screen pixels into a blur. The bitmap is first enlarged by whole pixels to about its size
+/// on screen, so the smoothing only ever blends a pixel with copies of itself.
+pub fn crisp_icon(url: SharedString, size: f32) -> Img {
+    img(ImageSource::Custom(Arc::new(move |window, cx| {
+        let factor = upscale_factor(size, window.scale_factor());
+        let key = (url.clone(), factor);
+        if let Some(ready) = CRISP.lock().ok().and_then(|cache| cache.get(&key).cloned()) {
+            return Some(Ok(ready));
+        }
+        let source = match window
+            .use_asset::<ImgResourceLoader>(&Resource::Uri(SharedUri::from(url.clone())), cx)?
+        {
+            Ok(source) => source,
+            Err(error) => return Some(Err(error)),
+        };
+        let dimensions = source.size(0);
+        let (Ok(width), Ok(height)) = (
+            u32::try_from(dimensions.width.0),
+            u32::try_from(dimensions.height.0),
+        ) else {
+            return Some(Ok(source));
+        };
+        // Only pixel icons are enlarged; a larger picture is drawn as it is.
+        if factor == 1 || width > 32 || height > 32 || source.frame_count() != 1 {
+            return Some(Ok(source));
+        }
+        let Some(enlarged) = source
+            .as_bytes(0)
+            .and_then(|bytes| upscale(bytes, width, height, factor))
+        else {
+            return Some(Ok(source));
+        };
+        let ready = Arc::new(RenderImage::new(vec![image::Frame::new(enlarged)]));
+        if let Ok(mut cache) = CRISP.lock() {
+            cache.insert(key, ready.clone());
+        }
+        Some(Ok(ready))
+    })))
+    .size(px(size))
+    .flex_shrink_0()
+}
+
 pub fn thumbnail(art: &PixelArt, scale: f32, cx: &App) -> AnyElement {
     let mut image = div()
         .flex()
@@ -441,7 +518,26 @@ pub fn thumbnail(art: &PixelArt, scale: f32, cx: &App) -> AnyElement {
 
 #[cfg(test)]
 mod tests {
-    use super::prepare_icon_choices;
+    use super::{prepare_icon_choices, upscale, upscale_factor};
+    #[test]
+    fn icons_grow_by_whole_pixels_to_their_screen_size() {
+        assert_eq!(upscale_factor(32., 2.), 4);
+        assert_eq!(upscale_factor(32., 1.), 2);
+        assert_eq!(upscale_factor(30., 2.), 4);
+        assert_eq!(upscale_factor(4096., 2.), 16);
+        assert_eq!(upscale_factor(0., 2.), 1);
+        // Two pixels side by side keep hard edges: each becomes a block of its own color.
+        let bytes = [1, 2, 3, 255, 9, 8, 7, 0];
+        let big = upscale(&bytes, 2, 1, 3).unwrap();
+        assert_eq!(big.dimensions(), (6, 3));
+        for y in 0..3 {
+            for x in 0..3 {
+                assert_eq!(big.get_pixel(x, y).0, [1, 2, 3, 255]);
+                assert_eq!(big.get_pixel(x + 3, y).0, [9, 8, 7, 0]);
+            }
+        }
+        assert!(upscale(&bytes, 3, 1, 2).is_none());
+    }
     use yoto_domain::YotoMediaId;
     use yoto_infra::{
         Snapshot,

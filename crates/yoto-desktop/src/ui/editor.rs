@@ -2027,26 +2027,11 @@ impl PlaylistEditor {
                     if parent.snapshot.active_account.as_ref() != Some(account) {
                         return None;
                     }
+                    // Until Yoto's icon list names its picture, the tile keeps its glyph.
                     parent
                         .playlist_icon_choices
                         .url(media)
-                        .map(|url| {
-                            img(url.clone())
-                                .w(px(32.))
-                                .h(px(32.))
-                                .object_fit(ObjectFit::Contain)
-                                .into_any_element()
-                        })
-                        .or_else(|| {
-                            Some(
-                                div()
-                                    .w(px(32.))
-                                    .h(px(32.))
-                                    .text_sm()
-                                    .child("◇")
-                                    .into_any_element(),
-                            )
-                        })
+                        .map(|url| pixelart::crisp_icon(url.clone(), 32.).into_any_element())
                 })
             }
             None => None,
