@@ -8,6 +8,7 @@ pub mod process;
 pub mod service;
 pub mod sources;
 pub mod transcode;
+pub mod youtube_tool;
 pub use service::{Command, Reply, Service, Snapshot};
 use yoto_domain::Failure;
 fn storage(e: impl std::fmt::Display) -> Failure {
