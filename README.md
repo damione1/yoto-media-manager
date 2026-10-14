@@ -13,6 +13,7 @@
 
 <p>
   <a href="https://github.com/damione1/yoto-media-manager/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/damione1/yoto-media-manager?label=release&color=F26B3A"></a>
+  <a href="LICENSE"><img alt="License: GPL v3 or later" src="https://img.shields.io/badge/License-GPLv3%2B-blue.svg"></a>
   <a href="https://github.com/damione1/yoto-media-manager/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/damione1/yoto-media-manager/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Rust" src="https://img.shields.io/badge/Rust-native-B7410E?logo=rust&logoColor=white">
   <img alt="GPUI" src="https://img.shields.io/badge/UI-GPUI-7B61FF">
@@ -72,6 +73,6 @@ Use `x86_64-apple-darwin` on an Intel Mac and `x86_64-pc-windows-msvc` on Window
 
 A build you make yourself shows the version **nightly** and never updates itself.
 
-## Thanks
+## License
 
-[Third-party notices](distribution/THIRD-PARTY-NOTICES.md)
+YotoMediaManager is free software under the [GNU General Public License v3.0 or later](LICENSE). The bundled tools and typefaces keep their own licences: see the [third-party notices](distribution/THIRD-PARTY-NOTICES.md).

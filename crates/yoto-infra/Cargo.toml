@@ -2,6 +2,7 @@
 name = "yoto-infra"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 [dependencies]
 yoto-domain = { path = "../yoto-domain" }
 yoto-updater = { path = "../yoto-updater" }
