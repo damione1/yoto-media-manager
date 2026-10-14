@@ -97,6 +97,32 @@ pub fn split_note(parts: usize) -> String {
     )
 }
 
+/// Grouped autosave of the playlist editor.
+pub mod autosave {
+    /// Tag by the title while changes wait for their write or are being written.
+    pub const SAVING: &str = "Enregistrement…";
+    /// Tag by the title once Yoto holds what is shown.
+    pub const SAVED: &str = "Enregistré sur Yoto";
+    /// Tag when the last changes could not be written.
+    pub const UNSAVED: &str = "Non enregistré";
+    /// Tag when something needs the parent (uncertain write, newer Yoto version).
+    pub const TO_CHECK: &str = "À vérifier";
+    /// Tags on the tracks while the playlist is being written, and once it is.
+    pub const TRACK_SENDING: &str = "Envoi sur Yoto…";
+    pub const TRACK_ON_YOTO: &str = "Sur Yoto";
+    /// While media are added on Yoto.
+    pub const WRITING: &str = "Enregistrement sur Yoto…";
+    pub const WRITING_AND_CHECKING: &str = "Envoi et vérification sur Yoto…";
+    /// Under the playlist options.
+    pub const AUTOMATIC: &str = "Les modifications sont enregistrées automatiquement sur Yoto, dès que vous faites une pause ou quittez un champ.";
+    /// A write that failed, naming the playlist (the parent may be elsewhere in the app).
+    pub fn not_saved(title: &str, reason: &str) -> String {
+        format!(
+            "Les modifications de « {title} » n’ont pas pu être enregistrées sur Yoto. {reason}"
+        )
+    }
+}
+
 /// Signing in to Yoto in the browser, and giving up on a sign-in that never comes back.
 pub mod connect {
     /// On the connect button while the browser sign-in runs.

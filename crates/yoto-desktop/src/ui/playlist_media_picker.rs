@@ -19,7 +19,6 @@ struct MediaChoice {
 pub(crate) struct MediaChoices {
     rows: Vec<MediaChoice>,
     positions: BTreeMap<MediaId, usize>,
-    pub(super) chapters: BTreeMap<PlaylistId, Arc<Vec<ChapterChoice>>>,
 }
 pub(super) struct ChapterChoice {
     pub(super) id: ChapterId,
@@ -33,31 +32,7 @@ pub(in crate::ui) fn prepare_media_choices(snapshot: &Snapshot) -> Arc<MediaChoi
         .enumerate()
         .map(|(index, row)| (row.id, index))
         .collect();
-    let chapters = snapshot
-        .playlists
-        .iter()
-        .map(|playlist| {
-            (
-                playlist.id,
-                Arc::new(
-                    playlist
-                        .chapters
-                        .iter()
-                        .map(|chapter| ChapterChoice {
-                            id: chapter.id,
-                            title: chapter.title.clone(),
-                            tracks: chapter.tracks.len(),
-                        })
-                        .collect(),
-                ),
-            )
-        })
-        .collect();
-    Arc::new(MediaChoices {
-        rows,
-        positions,
-        chapters,
-    })
+    Arc::new(MediaChoices { rows, positions })
 }
 fn choices(snapshot: &Snapshot) -> Vec<MediaChoice> {
     let recipes: BTreeMap<_, _> = snapshot.recipes.iter().map(|r| (r.id, r)).collect();

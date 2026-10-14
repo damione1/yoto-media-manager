@@ -27,7 +27,7 @@ impl MovePicker {
     }
 }
 impl MovePicker {
-    /// Move the track at the end of the chosen chapter and save.
+    /// Move the track at the end of the chosen chapter; it is written with the next group.
     fn confirm(&mut self, cx: &mut Context<Self>) {
         let Some((chapter, end)) = self.selected else {
             return;
@@ -42,7 +42,8 @@ impl MovePicker {
                 cx.notify();
                 return;
             }
-            owner.persist(CommitTarget::MovePicker, cx);
+            owner.close_picker(cx);
+            owner.changed(Change::Discrete, cx);
         });
     }
     fn chapter_row(&self, chapter: &media_picker::ChapterChoice, cx: &mut Context<Self>) -> Div {

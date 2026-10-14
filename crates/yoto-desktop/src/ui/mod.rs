@@ -1,4 +1,5 @@
 mod account;
+mod autosave;
 mod device;
 mod editor;
 mod group;
@@ -366,6 +367,17 @@ impl AppView {
             });
         })
         .detach();
+    }
+    /// An error toast that stays until the parent dismisses it.
+    pub fn alert(&self, text: String, cx: &mut Context<Self>) {
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    use gpui_kit::component::{WindowExt, notification::Notification};
+                    window.push_notification(Notification::error(text).autohide(false), cx);
+                });
+            });
+        }
     }
     /// Show a failure where a parent will see it: the status line and a toast.
     pub fn report_error(&mut self, failure: Failure, cx: &mut Context<Self>) {

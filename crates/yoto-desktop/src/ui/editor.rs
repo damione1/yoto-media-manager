@@ -4,18 +4,26 @@ use gpui_kit::prelude::FluentBuilder;
 mod media_picker;
 #[path = "playlist_move_picker.rs"]
 mod move_picker;
+use super::autosave::{Autosave, Change};
+use super::wording::autosave as text;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::{WindowExt, spinner::Spinner};
 pub(super) use media_picker::{MediaChoices, prepare_media_choices};
-#[derive(Clone, Copy)]
+use std::time::Instant;
+/// What a write to Yoto was started for.
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum CommitTarget {
+    /// The grouped autosave of the editor's draft.
     Editor,
+    /// Media added from the library or the « Ajouter des médias » picker.
     MediaPicker,
-    IconPicker,
-    MovePicker,
+    /// Deleting the playlist from the Yoto account.
+    Delete,
 }
 enum PlaylistOperation {
-    Submitting,
+    Submitting {
+        target: CommitTarget,
+    },
     Pending {
         job: JobId,
         state: JobState,
@@ -26,41 +34,48 @@ enum PlaylistOperation {
 /// Where the open playlist stands with Yoto, as its tags show it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SyncState {
-    /// A save is on its way to Yoto.
+    /// Changes wait for their write, or a write is on its way to Yoto.
     Sending,
     /// Something needs the parent: a blocked upload, a newer or deleted Yoto version.
     ToCheck,
+    /// The last changes could not be written (invalid entry or failed write).
+    Unsaved,
     /// What is shown is what Yoto has.
     OnYoto,
 }
 impl SyncState {
-    /// A running save wins over anything to check, which wins over « on Yoto ».
-    fn of(busy: bool, needs_attention: bool) -> Self {
-        if busy {
+    /// A running save wins over anything to check, which wins over changes left unsaved,
+    /// which win over « on Yoto ».
+    fn of(sending: bool, needs_attention: bool, unsaved: bool) -> Self {
+        if sending {
             Self::Sending
         } else if needs_attention {
             Self::ToCheck
+        } else if unsaved {
+            Self::Unsaved
         } else {
             Self::OnYoto
         }
     }
     fn track_label(self) -> &'static str {
         match self {
-            Self::Sending => "Envoi sur Yoto…",
-            Self::ToCheck => "À vérifier",
-            Self::OnYoto => "Sur Yoto",
+            Self::Sending => text::TRACK_SENDING,
+            Self::ToCheck => text::TO_CHECK,
+            Self::Unsaved => text::UNSAVED,
+            Self::OnYoto => text::TRACK_ON_YOTO,
         }
     }
     fn playlist_label(self) -> &'static str {
         match self {
-            Self::Sending | Self::ToCheck => self.track_label(),
-            Self::OnYoto => "Enregistré sur Yoto",
+            Self::Sending => text::SAVING,
+            Self::ToCheck | Self::Unsaved => self.track_label(),
+            Self::OnYoto => text::SAVED,
         }
     }
     fn family(self) -> &'static theme::Family {
         match self {
             Self::Sending => &theme::BUTTER,
-            Self::ToCheck => &theme::ROSE,
+            Self::ToCheck | Self::Unsaved => &theme::ROSE,
             Self::OnYoto => &theme::MINT,
         }
     }
@@ -121,6 +136,22 @@ pub struct PlaylistEditor {
     deleted: bool,
     save_updates: reconciliation::SaveUpdates,
     operation: Option<PlaylistOperation>,
+    /// When local changes are written; one write in flight at a time.
+    autosave: Autosave,
+    /// Only the latest scheduled autosave timer acts.
+    timer_generation: u64,
+    /// The playlist the write in flight was based on, to merge edits made meanwhile.
+    sent: Option<Playlist>,
+    /// Media to add once the pending changes are written.
+    queued_media: Option<Vec<(MediaId, RecipeId)>>,
+    /// Why the last changes could not be written, until a later write succeeds.
+    unsaved: Option<String>,
+    /// Tell the parent in a toast when the next write fails (they are leaving the playlist).
+    report_failures: bool,
+    /// Yoto's icon list to refresh once a new icon is written.
+    refresh_icons: Option<AccountId>,
+    /// The playlist is being deleted on Yoto.
+    deleting: bool,
     picker_window: Option<AnyWindowHandle>,
     _subscriptions: Vec<Subscription>,
     options_open: bool,
@@ -181,37 +212,17 @@ impl PlaylistEditor {
         let min_age = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Âge minimum")
-                .default_value(
-                    draft
-                        .metadata
-                        .min_age
-                        .map(|v| v.to_string())
-                        .unwrap_or_default(),
-                )
+                .default_value(age_text(draft.metadata.min_age))
         });
         let max_age = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Âge maximum")
-                .default_value(
-                    draft
-                        .metadata
-                        .max_age
-                        .map(|v| v.to_string())
-                        .unwrap_or_default(),
-                )
+                .default_value(age_text(draft.metadata.max_age))
         });
         let shuffle = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Aléatoire : début-fin-limite (chapitres dès 1)")
-                .default_value(
-                    draft
-                        .playback
-                        .shuffle
-                        .iter()
-                        .map(|g| format!("{}-{}-{}", g.start + 1, g.end + 1, g.limit))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                )
+                .default_value(shuffle_text(&draft))
         });
         let stream =
             cx.new(|cx| InputState::new(window, cx).placeholder("URL audio HTTPS de streaming"));
@@ -262,6 +273,14 @@ impl PlaylistEditor {
             deleted: false,
             save_updates: Default::default(),
             operation: None,
+            autosave: Autosave::default(),
+            timer_generation: 0,
+            sent: None,
+            queued_media: None,
+            unsaved: None,
+            report_failures: false,
+            refresh_icons: None,
+            deleting: false,
             picker_window: None,
             _subscriptions: vec![],
             options_open: false,
@@ -354,6 +373,13 @@ impl PlaylistEditor {
             .into();
         }
         cx.notify();
+    }
+    /// Whether the draft differs from what was last written or is on its way (a draft that
+    /// does not validate counts as edited).
+    fn edited_since_last_write(&mut self, cx: &App) -> bool {
+        let valid = self.gather(cx).is_ok();
+        let reference = self.sent.as_ref().unwrap_or(&self.base);
+        !valid || !same_content(&self.draft, reference)
     }
     /// Whether the draft still equals the last saved playlist (a draft that does not
     /// validate counts as changed).
@@ -552,8 +578,76 @@ impl PlaylistEditor {
             }
         }));
     }
-    pub fn save(&mut self, cx: &mut Context<Self>) {
-        self.persist(CommitTarget::Editor, cx);
+    /// The draft changed: write it once the burst of edits is over.
+    fn changed(&mut self, change: Change, cx: &mut Context<Self>) {
+        self.autosave.record(change, Instant::now());
+        self.schedule(cx);
+        cx.notify();
+    }
+    /// Write pending changes now (a field lost focus, Enter was pressed). Changes not yet
+    /// recorded, such as a failed write's, are picked up from the draft.
+    pub(super) fn flush(&mut self, cx: &mut Context<Self>) {
+        let now = Instant::now();
+        if !self.autosave.has_pending() && !self.deleting && self.edited_since_last_write(cx) {
+            self.autosave.record(Change::Discrete, now);
+        }
+        self.autosave.flush(now);
+        self.schedule(cx);
+        cx.notify();
+    }
+    /// Writes wait while something needs the parent first.
+    fn held(&self) -> bool {
+        self.blocked() || self.external.is_some() || self.deleted
+    }
+    /// Run [`Self::pump`] when the next write is due. Only the latest timer acts, and it
+    /// always runs later on its own, never inside the caller's update.
+    fn schedule(&mut self, cx: &mut Context<Self>) {
+        self.timer_generation = self.timer_generation.wrapping_add(1);
+        let generation = self.timer_generation;
+        let now = Instant::now();
+        let due = if self.held() {
+            None
+        } else if self.queued_media.is_some() && !self.autosave.in_flight() {
+            Some(now)
+        } else {
+            self.autosave.next_due()
+        };
+        let Some(due) = due else {
+            return;
+        };
+        let delay = due.saturating_duration_since(now);
+        cx.spawn(async move |weak, cx| {
+            if !delay.is_zero() {
+                cx.background_executor().timer(delay).await;
+            }
+            let _ = weak.update(cx, |v, cx| {
+                if v.timer_generation == generation {
+                    v.pump(cx);
+                }
+            });
+        })
+        .detach();
+    }
+    /// Start whatever write is due: the grouped changes first, then media waiting for them.
+    fn pump(&mut self, cx: &mut Context<Self>) {
+        if self.held() {
+            return;
+        }
+        let now = Instant::now();
+        if self.queued_media.is_some() {
+            self.autosave.flush(now);
+        }
+        if self.autosave.take_due(now) {
+            self.write_draft(cx);
+        }
+        if !self.autosave.in_flight()
+            && !self.autosave.has_pending()
+            && let Some(media) = self.queued_media.take()
+        {
+            self.write_media(media, cx);
+        }
+        self.schedule(cx);
+        cx.notify();
     }
     fn abandon_images(&mut self, cx: &mut Context<Self>) {
         let saved = self.base.image_assets();
@@ -617,21 +711,29 @@ impl PlaylistEditor {
         }
         Ok((account, card))
     }
+    /// Something needs the parent before this playlist can change again: an uncertain or
+    /// conflicting write, a sign-in to renew, or its deletion under way.
     pub(super) fn blocked(&self) -> bool {
-        if self.save_updates.is_saving() {
+        if self.deleting {
             return true;
         }
         match &self.operation {
-            Some(PlaylistOperation::Submitting | PlaylistOperation::Pending { .. }) => true,
+            Some(PlaylistOperation::Pending { state, .. }) => matches!(
+                state,
+                JobState::WaitingForAuthentication
+                    | JobState::Conflict { .. }
+                    | JobState::Reconciling
+            ),
             Some(PlaylistOperation::Failed(failure)) => {
                 matches!(failure, Failure::Ambiguous | Failure::Conflict)
             }
-            None => false,
+            Some(PlaylistOperation::Submitting { .. }) | None => false,
         }
     }
-    pub(super) fn busy(&self) -> bool {
+    /// A write is on its way to Yoto.
+    fn write_running(&self) -> bool {
         match &self.operation {
-            Some(PlaylistOperation::Submitting) => true,
+            Some(PlaylistOperation::Submitting { .. }) => true,
             Some(PlaylistOperation::Pending { state, .. }) => match state {
                 JobState::Queued | JobState::Running { .. } | JobState::Retry { .. } => true,
                 JobState::WaitingForAuthentication
@@ -644,61 +746,117 @@ impl PlaylistEditor {
             Some(PlaylistOperation::Failed(_)) | None => false,
         }
     }
-    fn persist(&mut self, target: CommitTarget, cx: &mut Context<Self>) {
-        if self.blocked() {
+    /// Media are being added: the media picker waits for them.
+    pub(super) fn busy(&self) -> bool {
+        let adding = match &self.operation {
+            Some(
+                PlaylistOperation::Submitting { target }
+                | PlaylistOperation::Pending { target, .. },
+            ) => *target == CommitTarget::MediaPicker,
+            Some(PlaylistOperation::Failed(_)) | None => false,
+        };
+        self.queued_media.is_some() || (adding && self.write_running())
+    }
+    /// Write the draft as it stands. `autosave` already counts this write as in flight.
+    fn write_draft(&mut self, cx: &mut Context<Self>) {
+        let ready = self.owning_remote(cx).and_then(|(account, _)| {
+            self.gather(cx)?;
+            Ok(account)
+        });
+        let account = match ready {
+            Ok(account) => account,
+            Err(failure) => {
+                self.autosave.finish();
+                self.not_written(failure_text(&failure), cx);
+                return;
+            }
+        };
+        self.draft.revision = self.base_revision;
+        if same_content(&self.draft, &self.base) {
+            self.autosave.finish();
+            self.unsaved = None;
             return;
         }
-        let account = match self.owning_remote(cx) {
-            Ok((account, _)) => account,
-            Err(e) => {
-                self.status = failure_text(&e);
+        if let Err(failure) = self.draft.touch() {
+            self.autosave.finish();
+            self.not_written(failure_text(&failure), cx);
+            return;
+        }
+        let sent = self.draft.clone();
+        self.start_operation(
+            Command::UpdateYotoPlaylist {
+                account,
+                draft: Box::new(sent.clone()),
+                expected: self.base_revision,
+            },
+            CommitTarget::Editor,
+            sent,
+            cx,
+        );
+    }
+    /// Add media from the library on Yoto, now that nothing else is being written.
+    fn write_media(&mut self, media: Vec<(MediaId, RecipeId)>, cx: &mut Context<Self>) {
+        let (account, card) = match self.owning_remote(cx) {
+            Ok(remote) => remote,
+            Err(failure) => {
+                self.status = failure_text(&failure);
                 cx.notify();
                 return;
             }
         };
-        if let Err(e) = self.gather(cx) {
-            self.status = failure_text(&e);
-            cx.notify();
-            return;
-        }
-        self.draft.revision = self.base_revision;
-        if serde_json::to_value(&self.draft).ok() == serde_json::to_value(&self.base).ok() {
-            let picker = match target {
-                CommitTarget::Editor => None,
-                CommitTarget::MediaPicker | CommitTarget::IconPicker | CommitTarget::MovePicker => {
-                    self.picker_window.take()
-                }
-            };
-            if let Some(handle) = picker {
-                self.replacement = None;
-                cx.defer(move |cx| {
-                    let _ = cx.update_window(handle, |_, window, cx| window.close_dialog(cx));
-                });
-            }
-            return;
-        }
-        if let Err(e) = self.draft.touch() {
-            self.status = failure_text(&e);
-            cx.notify();
-            return;
-        }
+        self.autosave.begin();
+        // Yoto adds them to the version it holds, which is the last one written.
+        let sent = self.base.clone();
         self.start_operation(
-            Command::UpdateYotoPlaylist {
+            Command::AddYotoMedia {
                 account,
-                draft: Box::new(self.draft.clone()),
-                expected: self.base_revision,
+                card,
+                media,
             },
-            target,
+            CommitTarget::MediaPicker,
+            sent,
             cx,
         );
     }
-    fn start_operation(&mut self, command: Command, target: CommitTarget, cx: &mut Context<Self>) {
-        if self.blocked() {
-            return;
+    /// Changes could not be written: say why in the editor, and in a toast when the parent
+    /// has left the playlist.
+    fn not_written(&mut self, reason: String, cx: &mut Context<Self>) {
+        if self.report_failures {
+            self.report(text::not_saved(&self.base.title, &reason), cx);
         }
-        self.operation = Some(PlaylistOperation::Submitting);
+        self.status = reason.clone();
+        self.unsaved = Some(reason);
+        cx.notify();
+    }
+    /// A failure toast that stays until the parent dismisses it.
+    fn report(&self, message: String, cx: &mut Context<Self>) {
+        let parent = self.parent.clone();
+        cx.defer(move |cx| {
+            let _ = parent.update(cx, |view, cx| view.alert(message, cx));
+        });
+    }
+    /// Close the picker dialog this editor opened, if one is open.
+    fn close_picker(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.picker_window.take() {
+            self.replacement = None;
+            cx.defer(move |cx| {
+                let _ = cx.update_window(handle, |_, window, cx| window.close_dialog(cx));
+            });
+        }
+    }
+    fn start_operation(
+        &mut self,
+        command: Command,
+        target: CommitTarget,
+        sent: Playlist,
+        cx: &mut Context<Self>,
+    ) {
+        self.operation = Some(PlaylistOperation::Submitting { target });
+        self.sent = Some(sent);
         self.save_updates.begin();
-        self.status = "Enregistrement sur Yoto…".into();
+        if target != CommitTarget::Editor {
+            self.status = text::WRITING.into();
+        }
         self.notify_parent(cx);
         cx.notify();
         let service = self.service.clone();
@@ -715,7 +873,9 @@ impl PlaylistEditor {
                             state: JobState::Queued,
                             target,
                         });
-                        v.status = "Envoi et vérification sur Yoto…".into();
+                        if target != CommitTarget::Editor {
+                            v.status = text::WRITING_AND_CHECKING.into();
+                        }
                     }
                     Err(e) => v.fail_operation(e, cx),
                 }
@@ -728,10 +888,26 @@ impl PlaylistEditor {
         }));
     }
     fn fail_operation(&mut self, failure: Failure, cx: &mut Context<Self>) {
-        self.status = failure_text(&failure);
+        let reason = failure_text(&failure);
+        self.status = reason.clone();
         let needs_verification = matches!(failure, Failure::Ambiguous | Failure::Conflict);
+        let target = match &self.operation {
+            Some(
+                PlaylistOperation::Submitting { target }
+                | PlaylistOperation::Pending { target, .. },
+            ) => Some(*target),
+            Some(PlaylistOperation::Failed(_)) | None => None,
+        };
         self.operation = Some(PlaylistOperation::Failed(failure));
         self.draft = self.base.clone();
+        self.sent = None;
+        self.deleting = false;
+        self.queued_media = None;
+        self.autosave.finish();
+        if target == Some(CommitTarget::Editor) {
+            self.report(text::not_saved(&self.base.title, &reason), cx);
+            self.unsaved = Some(reason);
+        }
         let queued = self.save_updates.finish();
         if let Some(update) = queued {
             if needs_verification {
@@ -740,13 +916,16 @@ impl PlaylistEditor {
                 self.reconcile(update.into_playlist(), cx);
             }
         }
+        self.schedule(cx);
         self.notify_parent(cx);
         cx.notify();
     }
     pub fn apply_snapshot(&mut self, snapshot: &Snapshot, cx: &mut Context<Self>) {
         let (job, target) = match &self.operation {
             Some(PlaylistOperation::Pending { job, target, .. }) => (*job, *target),
-            Some(PlaylistOperation::Submitting | PlaylistOperation::Failed(_)) | None => return,
+            Some(PlaylistOperation::Submitting { .. } | PlaylistOperation::Failed(_)) | None => {
+                return;
+            }
         };
         let Some(job) = snapshot.jobs.iter().find(|j| j.id == job) else {
             return;
@@ -763,47 +942,7 @@ impl PlaylistEditor {
                 else {
                     return;
                 };
-                self.save_updates.finish();
-                self.operation = None;
-                self.base_revision = canonical.revision;
-                self.base = canonical.clone();
-                self.draft = canonical.clone();
-                self.external = None;
-                let picker_window = match target {
-                    CommitTarget::MediaPicker
-                    | CommitTarget::IconPicker
-                    | CommitTarget::MovePicker => self.picker_window.take(),
-                    CommitTarget::Editor => None,
-                };
-                let retained_picker = self.picker_window;
-                let refresh_icons = if matches!(target, CommitTarget::IconPicker)
-                    && let DraftOrigin::Existing { base } = &canonical.origin
-                {
-                    Some(base.account.clone())
-                } else {
-                    None
-                };
-                let parent = self.parent.clone();
-                let entity = cx.entity().downgrade();
-                cx.defer(move |cx| {
-                    if let Some(handle) = picker_window.or_else(|| cx.windows().first().copied()) {
-                        let _ = cx.update_window(handle, move |_, window, cx| {
-                            if picker_window.is_some() {
-                                window.close_dialog(cx);
-                            }
-                            let _ = entity.update(cx, |v, cx| {
-                                v.adopt(canonical, window, cx);
-                                v.picker_window = retained_picker;
-                                v.status = "Enregistré sur Yoto.".into();
-                            });
-                            if let Some(account) = refresh_icons {
-                                let _ = parent.update(cx, |view, cx| {
-                                    view.send(Command::RefreshIcons(account), cx);
-                                });
-                            }
-                        });
-                    }
-                });
+                self.complete(canonical, target, cx);
             }
             JobState::Completed {
                 output: JobOutput::Imported { .. } | JobOutput::Encoded { .. },
@@ -819,13 +958,147 @@ impl PlaylistEditor {
             | JobState::WaitingForAuthentication
             | JobState::Conflict { .. }
             | JobState::Reconciling) => {
-                self.status = pending_status(state);
+                let attention = matches!(
+                    state,
+                    JobState::WaitingForAuthentication
+                        | JobState::Conflict { .. }
+                        | JobState::Reconciling
+                );
+                // Routine progress of an autosave shows in the tag by the title only.
+                if attention || target != CommitTarget::Editor {
+                    self.status = pending_status(state);
+                }
+                if attention && !self.blocked() {
+                    self.notify_parent(cx);
+                }
                 self.operation = Some(PlaylistOperation::Pending {
                     job: job.id,
                     state: state.clone(),
                     target,
                 });
             }
+        }
+        cx.notify();
+    }
+    /// A write reached Yoto. The editor keeps what the parent typed or moved meanwhile, on
+    /// top of the confirmed version, without rebuilding its fields (focus and scroll stay).
+    fn complete(&mut self, canonical: Playlist, target: CommitTarget, cx: &mut Context<Self>) {
+        self.save_updates.finish();
+        self.autosave.finish();
+        self.operation = None;
+        let sent = self.sent.take().unwrap_or_else(|| self.base.clone());
+        let _ = self.gather(cx);
+        let local = self.draft.clone();
+        self.draft = if self.autosave.has_pending() || !same_content(&local, &sent) {
+            reconciliation::merge_local_edits(&sent, &canonical, &local)
+        } else {
+            canonical.clone()
+        };
+        let inputs = self.input_updates(&sent, &canonical, &local);
+        self.base_revision = canonical.revision;
+        self.base = canonical;
+        self.external = None;
+        self.unsaved = None;
+        self.report_failures = false;
+        self.status.clear();
+        let picker_window = match target {
+            CommitTarget::MediaPicker => self.picker_window.take(),
+            CommitTarget::Editor | CommitTarget::Delete => None,
+        };
+        let refresh_icons = self.refresh_icons.take();
+        let parent = self.parent.clone();
+        let entity = cx.entity().downgrade();
+        cx.defer(move |cx| {
+            let Some(handle) = picker_window.or_else(|| cx.windows().first().copied()) else {
+                return;
+            };
+            let _ = cx.update_window(handle, move |_, window, cx| {
+                if picker_window.is_some() {
+                    window.close_dialog(cx);
+                }
+                let _ = entity.update(cx, |v, cx| v.hydrate(inputs, window, cx));
+                if let Some(account) = refresh_icons {
+                    let _ = parent.update(cx, |view, cx| {
+                        view.send(Command::RefreshIcons(account), cx);
+                    });
+                }
+            });
+        });
+        self.schedule(cx);
+        self.notify_parent(cx);
+        cx.notify();
+    }
+    /// Fields whose value Yoto changed while the parent left them alone, with Yoto's value.
+    fn input_updates(
+        &self,
+        sent: &Playlist,
+        canonical: &Playlist,
+        local: &Playlist,
+    ) -> Vec<(Entity<InputState>, String)> {
+        let mut updates = vec![];
+        let mut field = |input: &Entity<InputState>, before: String, after: String, now: String| {
+            if before != after && now == before {
+                updates.push((input.clone(), after));
+            }
+        };
+        let fields: [(&Entity<InputState>, FieldText); 9] = [
+            (&self.title, |p| p.title.clone()),
+            (&self.description, |p| p.metadata.description.clone()),
+            (&self.author, |p| p.metadata.author.clone()),
+            (&self.narrator, |p| p.metadata.narrator.clone()),
+            (&self.languages, |p| p.metadata.languages.join(", ")),
+            (&self.resume, |p| p.playback.resume_seconds.to_string()),
+            (&self.min_age, |p| age_text(p.metadata.min_age)),
+            (&self.max_age, |p| age_text(p.metadata.max_age)),
+            (&self.shuffle, shuffle_text),
+        ];
+        for (input, text) in fields {
+            field(input, text(sent), text(canonical), text(local));
+        }
+        let chapter = |p: &Playlist, id: ChapterId| {
+            p.chapters
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| c.title.clone())
+        };
+        for (id, input) in &self.chapter_titles {
+            if let (Some(before), Some(after), Some(now)) = (
+                chapter(sent, *id),
+                chapter(canonical, *id),
+                chapter(local, *id),
+            ) {
+                field(input, before, after, now);
+            }
+        }
+        let track = |p: &Playlist, id: TrackId| {
+            p.chapters
+                .iter()
+                .flat_map(|c| &c.tracks)
+                .find(|t| t.id == id)
+                .map(|t| t.title.clone())
+        };
+        for (id, input) in &self.track_titles {
+            if let (Some(before), Some(after), Some(now)) =
+                (track(sent, *id), track(canonical, *id), track(local, *id))
+            {
+                field(input, before, after, now);
+            }
+        }
+        updates
+    }
+    /// Give new chapters and tracks their fields, and show what Yoto changed in the others.
+    fn hydrate(
+        &mut self,
+        inputs: Vec<(Entity<InputState>, String)>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_inputs(window, cx);
+        for (input, value) in inputs {
+            if input == self.shuffle {
+                self.shuffle_projection = value.clone();
+            }
+            input.update(cx, |input, cx| input.set_value(value, window, cx));
         }
         cx.notify();
     }
@@ -919,12 +1192,12 @@ impl PlaylistEditor {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         use theme::{Height, Look};
-        let Some(chapter) = self.base.chapters.get(index) else {
+        let Some(chapter) = self.draft.chapters.get(index) else {
             return div().into_any_element();
         };
         let id = chapter.id;
         let single = chapter.tracks.len() == 1;
-        let count = self.base.chapters.len();
+        let count = self.draft.chapters.len();
         let mut group = div().w_full().flex().flex_col().gap(px(8.));
         if !single {
             let owner = cx.entity().downgrade();
@@ -983,7 +1256,7 @@ impl PlaylistEditor {
                                             v.status = failure_text(&error);
                                             return;
                                         }
-                                        v.save(cx);
+                                        v.changed(Change::Discrete, cx);
                                     },
                                 )
                                 .disabled(index == 0),
@@ -997,7 +1270,7 @@ impl PlaylistEditor {
                                             v.status = failure_text(&error);
                                             return;
                                         }
-                                        v.save(cx);
+                                        v.changed(Change::Discrete, cx);
                                     },
                                 )
                                 .disabled(index + 1 == count),
@@ -1012,7 +1285,7 @@ impl PlaylistEditor {
                                         return;
                                     }
                                     v.refresh_inputs(window, cx);
-                                    v.save(cx);
+                                    v.changed(Change::Discrete, cx);
                                 },
                             ))
                         }),
@@ -1081,7 +1354,7 @@ impl PlaylistEditor {
                         move |v, _, cx| {
                             if let Some(target) = removal {
                                 v.assign_icon(id, target, None);
-                                v.save(cx);
+                                v.changed(Change::Discrete, cx);
                             }
                         },
                     )
@@ -1113,7 +1386,7 @@ impl PlaylistEditor {
                             v.status = failure_text(&error);
                             return;
                         }
-                        v.save(cx);
+                        v.changed(Change::Discrete, cx);
                     })
                     .disabled(if single {
                         index == 0
@@ -1132,7 +1405,7 @@ impl PlaylistEditor {
                             v.status = failure_text(&error);
                             return;
                         }
-                        v.save(cx);
+                        v.changed(Change::Discrete, cx);
                     })
                     .disabled(if single {
                         index + 1 == count
@@ -1159,7 +1432,7 @@ impl PlaylistEditor {
                             v.status = failure_text(&error);
                             return;
                         }
-                        v.save(cx);
+                        v.changed(Change::Discrete, cx);
                     },
                 ))
             });
@@ -1283,7 +1556,7 @@ impl PlaylistEditor {
                                     "Retirer l’icône du chapitre",
                                     move |v, _, cx| {
                                         v.assign_icon(id, None, None);
-                                        v.save(cx);
+                                        v.changed(Change::Discrete, cx);
                                     },
                                 ))
                             }),
@@ -1329,7 +1602,7 @@ impl PlaylistEditor {
                                                     "Aucun",
                                                     move |v, _, cx| {
                                                         v.change_event(tid, trigger, None);
-                                                        v.save(cx);
+                                                        v.changed(Change::Discrete, cx);
                                                     },
                                                 )
                                                 .checked(selected.is_none()),
@@ -1346,7 +1619,7 @@ impl PlaylistEditor {
                                                                 trigger,
                                                                 Some(command),
                                                             );
-                                                            v.save(cx);
+                                                            v.changed(Change::Discrete, cx);
                                                         },
                                                     )
                                                     .checked(selected == Some(command)),
@@ -1449,7 +1722,9 @@ impl PlaylistEditor {
             self.cache_icon(*asset, cx);
         }
         self.assign_icon(chapter, track, Some(icon));
-        self.persist(CommitTarget::IconPicker, cx);
+        self.refresh_icons = Some(account.clone());
+        self.close_picker(cx);
+        self.changed(Change::Discrete, cx);
     }
     fn open_move_picker(
         &mut self,
@@ -1461,18 +1736,19 @@ impl PlaylistEditor {
         if self.blocked() || self.owning_remote(cx).is_err() {
             return;
         }
-        let Some(parent) = self.parent.upgrade() else {
-            return;
-        };
-        let Some(choices) = parent
-            .read(cx)
-            .playlist_media_choices
-            .chapters
-            .get(&self.base.id)
-            .cloned()
-        else {
-            return;
-        };
+        // The chapters as the editor shows them, with moves not written yet.
+        let _ = self.gather(cx);
+        let choices = Arc::new(
+            self.draft
+                .chapters
+                .iter()
+                .map(|chapter| media_picker::ChapterChoice {
+                    id: chapter.id,
+                    title: chapter.title.clone(),
+                    tracks: chapter.tracks.len(),
+                })
+                .collect::<Vec<_>>(),
+        );
         let editor = cx.entity();
         let picker =
             cx.new(|cx| move_picker::MovePicker::new(editor.clone(), choices, chapter, track, cx));
@@ -1496,6 +1772,8 @@ impl PlaylistEditor {
                 })
         });
     }
+    /// Media chosen in the picker or the library: a replacement is a local edit written
+    /// with the next group; new media are added on Yoto once pending changes are written.
     pub(super) fn add_media_batch(
         &mut self,
         media: Vec<(MediaId, RecipeId)>,
@@ -1504,14 +1782,11 @@ impl PlaylistEditor {
         if media.is_empty() || self.blocked() {
             return;
         }
-        let (account, card) = match self.owning_remote(cx) {
-            Ok(remote) => remote,
-            Err(e) => {
-                self.status = failure_text(&e);
-                cx.notify();
-                return;
-            }
-        };
+        if let Err(e) = self.owning_remote(cx) {
+            self.status = failure_text(&e);
+            cx.notify();
+            return;
+        }
         if let Some(track) = self.replacement.take() {
             if media.len() != 1 {
                 self.status = "Sélectionnez un seul média pour remplacer cette piste.".into();
@@ -1527,7 +1802,8 @@ impl PlaylistEditor {
                 .find(|t| t.id == track)
             {
                 t.media = TrackMedia::Local { media, recipe };
-                self.persist(CommitTarget::MediaPicker, cx);
+                self.close_picker(cx);
+                self.changed(Change::Discrete, cx);
             } else {
                 self.status =
                     "Cette piste n’existe plus dans la playlist ; l’audio n’a pas été remplacé."
@@ -1535,19 +1811,14 @@ impl PlaylistEditor {
                 cx.notify();
             }
         } else {
-            self.start_operation(
-                Command::AddYotoMedia {
-                    account,
-                    card,
-                    media,
-                },
-                CommitTarget::MediaPicker,
-                cx,
-            );
+            self.queued_media.get_or_insert_with(Vec::new).extend(media);
+            self.status = text::WRITING.into();
+            self.schedule(cx);
+            cx.notify();
         }
     }
     pub fn delete_remote(&mut self, cx: &mut Context<Self>) {
-        if self.blocked() {
+        if self.blocked() || self.autosave.in_flight() {
             return;
         }
         let (account, card) = match self.owning_remote(cx) {
@@ -1558,7 +1829,14 @@ impl PlaylistEditor {
                 return;
             }
         };
-        self.operation = Some(PlaylistOperation::Submitting);
+        // Deleting wins over changes not written yet.
+        self.autosave.discard();
+        self.queued_media = None;
+        self.autosave.begin();
+        self.deleting = true;
+        self.operation = Some(PlaylistOperation::Submitting {
+            target: CommitTarget::Delete,
+        });
         self.save_updates.begin();
         self.status = "Suppression sur Yoto…".into();
         self.notify_parent(cx);
@@ -1578,6 +1856,7 @@ impl PlaylistEditor {
                 match joined(result).and_then(Reply::into_unit) {
                     Ok(()) => {
                         v.save_updates.finish();
+                        v.autosave.finish();
                         v.operation = None;
                         let _ = v.parent.update(cx, |parent, cx| {
                             if parent.selected_playlist == Some(id) {
@@ -1615,9 +1894,11 @@ impl PlaylistEditor {
                 .push(
                     cx.subscribe_in(&input, window, |v, _, event, _, cx| match event {
                         gpui_kit::component::input::InputEvent::Blur
-                        | gpui_kit::component::input::InputEvent::PressEnter { .. } => v.save(cx),
-                        gpui_kit::component::input::InputEvent::Change
-                        | gpui_kit::component::input::InputEvent::Focus => {}
+                        | gpui_kit::component::input::InputEvent::PressEnter { .. } => v.flush(cx),
+                        gpui_kit::component::input::InputEvent::Change => {
+                            v.changed(Change::Text, cx)
+                        }
+                        gpui_kit::component::input::InputEvent::Focus => {}
                     }),
                 );
         }
@@ -1735,7 +2016,7 @@ impl PlaylistEditor {
                     match joined(r).and_then(Reply::into_asset) {
                         Ok(id) => {
                             v.draft.metadata.cover = Some(id);
-                            v.save(cx);
+                            v.changed(Change::Discrete, cx);
                         }
                         Err(e) => v.status = failure_text(&e),
                     }
@@ -1746,6 +2027,34 @@ impl PlaylistEditor {
     }
 }
 
+/// How a playlist value reads in its text field.
+type FieldText = fn(&Playlist) -> String;
+/// Whether two versions of a playlist hold the same content, whatever their revisions.
+fn same_content(a: &Playlist, b: &Playlist) -> bool {
+    let value = |p: &Playlist| {
+        serde_json::to_value(p).ok().map(|mut v| {
+            if let Some(map) = v.as_object_mut() {
+                map.remove("revision");
+            }
+            v
+        })
+    };
+    value(a) == value(b)
+}
+/// An age as its field shows it.
+fn age_text(age: Option<u8>) -> String {
+    age.map(|v| v.to_string()).unwrap_or_default()
+}
+/// The shuffle ranges as their field shows them, chapters counted from 1.
+fn shuffle_text(playlist: &Playlist) -> String {
+    playlist
+        .playback
+        .shuffle
+        .iter()
+        .map(|g| format!("{}-{}-{}", g.start + 1, g.end + 1, g.limit))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 /// An inline-editable title: reads as heading text, shows its frame only when focused.
 fn title_field(input: Input, size: f32) -> Input {
     input
@@ -1758,18 +2067,28 @@ fn title_field(input: Input, size: f32) -> Input {
         .px(px(8.))
 }
 impl PlaylistEditor {
-    /// The sending state shown on every track and in the header.
+    /// The state in the tag by the title: changes waiting for their write count as sending.
     fn sync_state(&self) -> SyncState {
+        let waiting = (self.autosave.has_pending() || self.queued_media.is_some()) && !self.held();
         SyncState::of(
-            self.busy(),
+            self.write_running() || waiting,
             self.blocked() || self.external.is_some() || self.deleted,
+            self.unsaved.is_some(),
+        )
+    }
+    /// The state on every track: only an actual write to Yoto shows there, not typing.
+    fn track_state(&self) -> SyncState {
+        SyncState::of(
+            self.write_running(),
+            self.blocked() || self.external.is_some() || self.deleted,
+            false,
         )
     }
     fn header(&self, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
         use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
         use theme::{Height, Look};
         let tracks = self
-            .base
+            .draft
             .chapters
             .iter()
             .flat_map(|c| &c.tracks)
@@ -1793,6 +2112,8 @@ impl PlaylistEditor {
             n => format!("{n} pistes · {}", duration_text(seconds)),
         };
         let blocked = self.blocked();
+        // Duplicating copies what Yoto holds and deleting must not race a write.
+        let writing = self.autosave.in_flight() || self.autosave.has_pending();
         let state = self.sync_state();
         let seed = self.base.id.to_string();
         let cover_family = theme::family_for(&seed);
@@ -1815,7 +2136,7 @@ impl PlaylistEditor {
             .size(px(120.))
             .shadow(theme::step(cover_family.step, 3.))
             .accessibility_label("Choisir une couverture")
-            .tooltip(if self.base.metadata.cover.is_some() {
+            .tooltip(if self.draft.metadata.cover.is_some() {
                 "Changer la couverture"
             } else {
                 "Choisir une couverture"
@@ -1828,9 +2149,9 @@ impl PlaylistEditor {
             ))
             .on_click(cx.listener(|v, _, _, cx| v.cover(cx)));
         let mut tags = div().flex().gap(px(6.));
-        if self.base.metadata.category != Category::None {
+        if self.draft.metadata.category != Category::None {
             tags = tags.child(theme::tag(
-                category_label(self.base.metadata.category),
+                category_label(self.draft.metadata.category),
                 &theme::LILAC,
             ));
         }
@@ -1878,7 +2199,7 @@ impl PlaylistEditor {
                             let remove = remove.clone();
                             menu.item(
                                 PopupMenuItem::new("Dupliquer la playlist")
-                                    .disabled(blocked || creating)
+                                    .disabled(blocked || creating || writing)
                                     .on_click(move |_, _, cx| {
                                         let _ = duplicate.update(cx, |e, cx| e.duplicate(cx));
                                     }),
@@ -1886,7 +2207,7 @@ impl PlaylistEditor {
                             .separator()
                             .item(
                                 PopupMenuItem::new("Supprimer la playlist de mon compte Yoto")
-                                    .disabled(blocked)
+                                    .disabled(blocked || writing)
                                     .on_click(move |_, window, cx| {
                                         let Some(title) =
                                             remove.upgrade().map(|e| e.read(cx).draft.title.clone())
@@ -2027,7 +2348,7 @@ impl PlaylistEditor {
                                         category_label(choice),
                                         move |v, _, cx| {
                                             v.draft.metadata.category = choice;
-                                            v.save(cx);
+                                            v.changed(Change::Discrete, cx);
                                         },
                                     )
                                     .checked(category == choice),
@@ -2057,7 +2378,7 @@ impl PlaylistEditor {
                                         advance_label(choice),
                                         move |v, _, cx| {
                                             v.draft.playback.autoadvance = choice;
-                                            v.save(cx);
+                                            v.changed(Change::Discrete, cx);
                                         },
                                     )
                                     .checked(advance == choice),
@@ -2068,9 +2389,7 @@ impl PlaylistEditor {
                         .into_any_element(),
                     )),
             )
-            .child(theme::note(
-                "Les modifications sont enregistrées sur Yoto quand vous quittez un champ ou appuyez sur Entrée.",
-            ))
+            .child(theme::note(text::AUTOMATIC))
     }
     fn advanced_panel(&self, cx: &mut Context<Self>) -> Div {
         use theme::{Height, Look};
@@ -2102,7 +2421,7 @@ impl PlaylistEditor {
                                         playback_label(choice),
                                         move |v, _, cx| {
                                             v.draft.playback.kind = choice;
-                                            v.save(cx);
+                                            v.changed(Change::Discrete, cx);
                                         },
                                     )
                                     .checked(kind == choice),
@@ -2118,7 +2437,7 @@ impl PlaylistEditor {
                     .checked(self.draft.playback.online_only)
                     .on_click(cx.listener(|v, checked, _, cx| {
                         v.draft.playback.online_only = *checked;
-                        v.save(cx);
+                        v.changed(Change::Discrete, cx);
                     })),
             )
             .child(theme::note(
@@ -2186,11 +2505,33 @@ impl PlaylistEditor {
             });
             self.draft.chapters.extend(p.chapters);
             self.refresh_inputs(window, cx);
-            self.save(cx);
+            self.changed(Change::Discrete, cx);
         }
     }
 }
 
+impl PlaylistEditor {
+    /// « Recharger la version Yoto »: drop local changes and show what Yoto holds. Not while
+    /// a write is on its way, whose outcome would be forgotten.
+    fn reload_button(&self, cx: &mut Context<Self>) -> Button {
+        use theme::{Height, Look};
+        theme::pill(
+            Button::new("reload-playlist")
+                .label("Recharger la version Yoto")
+                .on_click(cx.listener(|v, _, window, cx| {
+                    if !v.write_running()
+                        && let Some(p) = v.external.take()
+                    {
+                        v.adopt(p, window, cx);
+                    }
+                })),
+            Look::Primary,
+            Height::Medium,
+            self.write_running(),
+            cx,
+        )
+    }
+}
 impl Render for PlaylistEditor {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         use theme::{Height, Look};
@@ -2215,7 +2556,7 @@ impl Render for PlaylistEditor {
                     .flex()
                     .gap(px(10.))
                     .items_center()
-                    .children(self.busy().then(|| {
+                    .children(self.write_running().then(|| {
                         Spinner::new()
                             .color(theme::c(theme::BUTTER.accent))
                             .into_any_element()
@@ -2229,20 +2570,25 @@ impl Render for PlaylistEditor {
             );
             let parent = self.parent.clone();
             pending = pending.child(
-                div().child(theme::pill(
-                    Button::new("remote-operation-details")
-                        .label("Voir le suivi")
-                        .on_click(move |_, _, cx| {
-                            let _ = parent.update(cx, |p, cx| p.navigate(Route::Imports, cx));
-                        }),
-                    Look::Link(&theme::PEACH),
-                    Height::Small,
-                    false,
-                    cx,
-                )),
+                div()
+                    .flex()
+                    .gap(px(8.))
+                    .items_center()
+                    .children(self.external.is_some().then(|| self.reload_button(cx)))
+                    .child(theme::pill(
+                        Button::new("remote-operation-details")
+                            .label("Voir le suivi")
+                            .on_click(move |_, _, cx| {
+                                let _ = parent.update(cx, |p, cx| p.navigate(Route::Imports, cx));
+                            }),
+                        Look::Link(&theme::PEACH),
+                        Height::Small,
+                        false,
+                        cx,
+                    )),
             );
             body = body.child(pending);
-            let state = self.sync_state();
+            let state = self.track_state();
             for (index, chapter) in self.base.chapters.iter().enumerate() {
                 for track in &chapter.tracks {
                     body = body.child(
@@ -2280,9 +2626,9 @@ impl Render for PlaylistEditor {
                     )),
             );
         }
-        let state = self.sync_state();
+        let state = self.track_state();
         let mut tracks = div().flex().flex_col().gap(px(8.));
-        for index in 0..self.base.chapters.len() {
+        for index in 0..self.draft.chapters.len() {
             tracks = tracks.child(self.render_chapter(index, &snapshot, state, cx));
         }
         body = body.child(tracks);
@@ -2295,21 +2641,11 @@ impl Render for PlaylistEditor {
                             .font_weight(FontWeight::BOLD)
                             .child(self.status.clone()),
                     )
-                    .children(self.external.is_some().then(|| {
-                        div().flex().gap(px(8.)).child(theme::pill(
-                            Button::new("reload-playlist")
-                                .label("Recharger la version Yoto")
-                                .on_click(cx.listener(|v, _, window, cx| {
-                                    if let Some(p) = v.external.take() {
-                                        v.adopt(p, window, cx);
-                                    }
-                                })),
-                            Look::Primary,
-                            Height::Medium,
-                            false,
-                            cx,
-                        ))
-                    })),
+                    .children(
+                        self.external
+                            .is_some()
+                            .then(|| div().flex().gap(px(8.)).child(self.reload_button(cx))),
+                    ),
             );
         }
         body = body
@@ -3004,10 +3340,12 @@ mod parent_input_tests {
     }
     #[test]
     fn a_running_save_outranks_anything_to_check() {
-        assert_eq!(SyncState::of(true, true), SyncState::Sending);
-        assert_eq!(SyncState::of(true, false), SyncState::Sending);
-        assert_eq!(SyncState::of(false, true), SyncState::ToCheck);
-        assert_eq!(SyncState::of(false, false), SyncState::OnYoto);
+        assert_eq!(SyncState::of(true, true, true), SyncState::Sending);
+        assert_eq!(SyncState::of(true, false, false), SyncState::Sending);
+        assert_eq!(SyncState::of(false, true, true), SyncState::ToCheck);
+        assert_eq!(SyncState::of(false, false, true), SyncState::Unsaved);
+        assert_eq!(SyncState::of(false, false, false), SyncState::OnYoto);
+        assert_eq!(SyncState::Sending.playlist_label(), "Enregistrement…");
         assert_eq!(SyncState::OnYoto.playlist_label(), "Enregistré sur Yoto");
         assert_eq!(SyncState::OnYoto.track_label(), "Sur Yoto");
     }
