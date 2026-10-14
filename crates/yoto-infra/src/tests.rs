@@ -688,6 +688,7 @@ pub(crate) fn catalogue_fixture(
         result: None,
         info: None,
         tool_version: "fixture".into(),
+        part: None,
     };
     service.db.add_recipe(&recipe).unwrap();
     (media, recipe)
@@ -1006,6 +1007,7 @@ fn migration_failure_keeps_v1_and_recoverable_encrypted_snapshot() {
         result: None,
         info: None,
         tool_version: "v1".into(),
+        part: None,
     };
     for (table, id, value) in [
         (

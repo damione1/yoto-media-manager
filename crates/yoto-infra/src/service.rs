@@ -1726,6 +1726,7 @@ impl Service {
                     result: None,
                     info: None,
                     tool_version: self.tools.validate()?,
+                    part: None,
                 };
                 self.db.add_recipe(&r)?;
                 self.enqueue(JobRequest::Encode { recipe: r.id })?;

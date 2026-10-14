@@ -388,6 +388,7 @@ mod tests {
             result,
             info: None,
             tool_version: String::new(),
+            part: None,
         };
         let snapshot = Snapshot {
             media: vec![media],

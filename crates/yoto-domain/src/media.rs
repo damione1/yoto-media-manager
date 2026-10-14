@@ -123,6 +123,54 @@ pub struct MediaRecipe {
     pub result: Option<AssetId>,
     pub info: Option<AudioInfo>,
     pub tool_version: String,
+    /// Set when this recipe is one part of a longer version cut for Yoto's track limit.
+    /// Parts are not versions of the media: they are absent from `MediaItem::recipes`.
+    #[serde(default)]
+    pub part: Option<RecipePart>,
+}
+/// Where a part recipe belongs: part `index` (from 1) of `count` of version `of`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct RecipePart {
+    pub of: RecipeId,
+    pub index: u16,
+    pub count: u16,
+}
+/// Cut `range` into the fewest equal parts no longer than [`Rules::PART_MICROS_MAX`].
+/// A range that already fits is returned whole.
+pub fn plan_parts(range: TrimRange) -> Vec<TrimRange> {
+    let start = range.start().micros();
+    let length = range.duration().micros();
+    let count = length.div_ceil(Rules::PART_MICROS_MAX).max(1);
+    let bound = |k: u64| {
+        // Integer boundaries: the last part ends exactly where the range does.
+        let offset = (u128::from(length) * u128::from(k) / u128::from(count)) as u64;
+        MediaTime::try_from(start + offset).expect("within the validated range")
+    };
+    (0..count)
+        .map(|k| {
+            TrimRange::new(bound(k), bound(k + 1), range.end()).expect("non-empty ordered part")
+        })
+        .collect()
+}
+/// Title of each part of a long audio; `{title}`, `{part}` and `{parts}` are replaced.
+pub const PART_TITLE: &str = "{title} — partie {part}/{parts}";
+/// Title for part `part` of `parts`, shortening `title` so the whole fits
+/// [`Rules::TITLE_MAX`].
+pub fn part_title(title: &str, part: usize, parts: usize) -> String {
+    let fill = |title: &str| {
+        PART_TITLE
+            .replace("{part}", &part.to_string())
+            .replace("{parts}", &parts.to_string())
+            .replace("{title}", title)
+    };
+    let room = Rules::TITLE_MAX.saturating_sub(fill("").chars().count());
+    let title = title.trim();
+    if title.chars().count() <= room {
+        fill(title)
+    } else {
+        let short: String = title.chars().take(room.saturating_sub(1)).collect();
+        fill(&format!("{}…", short.trim_end()))
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Waveform {

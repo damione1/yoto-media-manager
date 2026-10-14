@@ -106,6 +106,9 @@ impl Rules {
     pub const TRACK_BYTES_MAX: u64 = 100_000_000;
     pub const CARD_BYTES_MAX: u64 = 500_000_000;
     pub const TRACK_MICROS_MAX: u64 = 3_600_000_000;
+    /// Longest part a long audio is cut into when added to a playlist: 55 minutes, a
+    /// margin under Yoto's one-hour track limit.
+    pub const PART_MICROS_MAX: u64 = 3_300_000_000;
     pub const CARD_MICROS_MAX: u64 = 18_000_000_000;
     pub const MP3_BITRATE: u32 = 192;
     pub const SAMPLE_RATE: u32 = 44_100;

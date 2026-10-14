@@ -201,3 +201,84 @@ fn messages_quote_the_current_limits() {
         format!("A playlist supports at most {} tracks.", Rules::TRACKS_MAX)
     );
 }
+#[test]
+fn long_ranges_are_cut_into_equal_contiguous_parts() {
+    let minutes = |m: u64| MediaTime::try_from(m * 60_000_000).unwrap();
+    let range = |a: u64, b: u64| TrimRange::new(minutes(a), minutes(b), minutes(b)).unwrap();
+    assert_eq!(plan_parts(range(0, 30)), vec![range(0, 30)]);
+    assert_eq!(plan_parts(range(0, 55)), vec![range(0, 55)]);
+    let just_over = TrimRange::new(
+        MediaTime::ZERO,
+        MediaTime::try_from(Rules::PART_MICROS_MAX + 1).unwrap(),
+        minutes(60),
+    )
+    .unwrap();
+    assert_eq!(plan_parts(just_over).len(), 2);
+    assert_eq!(
+        plan_parts(range(0, 120)),
+        vec![range(0, 40), range(40, 80), range(80, 120)]
+    );
+    // An odd length starting mid-file: parts touch, cover it exactly and stay short enough.
+    let odd = TrimRange::new(
+        MediaTime::try_from(1_234_567).unwrap(),
+        MediaTime::try_from(7_777_777_777).unwrap(),
+        minutes(200),
+    )
+    .unwrap();
+    let parts = plan_parts(odd);
+    assert_eq!(parts.len(), 3);
+    assert_eq!(parts[0].start(), odd.start());
+    assert_eq!(parts[2].end(), odd.end());
+    for pair in parts.windows(2) {
+        assert_eq!(pair[0].end(), pair[1].start());
+    }
+    assert!(
+        parts
+            .iter()
+            .all(|p| p.duration().micros() <= Rules::PART_MICROS_MAX)
+    );
+}
+#[test]
+fn part_titles_number_the_parts_and_fit_the_title_limit() {
+    assert_eq!(
+        part_title("Le Petit Prince", 1, 3),
+        "Le Petit Prince — partie 1/3"
+    );
+    let long = "Une très longue histoire ".repeat(10);
+    let title = part_title(&long, 12, 12);
+    assert_eq!(title.chars().count(), Rules::TITLE_MAX);
+    assert!(title.ends_with("… — partie 12/12"), "{title}");
+    assert!(Rules::title(&title).is_ok());
+}
+#[test]
+fn a_long_media_becomes_one_chapter_of_ordered_parts() {
+    let media = MediaItem {
+        id: MediaId::new(),
+        title: "Histoire".into(),
+        author: String::new(),
+        tags: vec![],
+        original: AssetId::new(),
+        info: AudioInfo {
+            duration: MediaTime::try_from(7_200_000_000).unwrap(),
+            bytes: 1,
+            codec: "mp3".into(),
+            sample_rate: 44_100,
+            channels: 2,
+        },
+        provenance: Provenance::LocalFile {
+            name: "histoire.mp3".into(),
+        },
+        recipes: vec![],
+    };
+    let parts = [RecipeId::new(), RecipeId::new()];
+    let mut playlist = Playlist::new("Soir".into()).unwrap();
+    playlist.add_media_parts(&media, &parts).unwrap();
+    let chapter = &playlist.chapters[0];
+    assert_eq!(chapter.title, "Histoire");
+    let titles: Vec<_> = chapter.tracks.iter().map(|t| t.title.as_str()).collect();
+    assert_eq!(titles, ["Histoire — partie 1/2", "Histoire — partie 2/2"]);
+    for (track, recipe) in chapter.tracks.iter().zip(parts) {
+        assert!(matches!(track.media, TrackMedia::Local { recipe: r, .. } if r == recipe));
+    }
+    playlist.validate().unwrap();
+}

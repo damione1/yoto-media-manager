@@ -504,6 +504,7 @@ pub fn import(
         result: None,
         info: None,
         tool_version: tools.validate()?,
+        part: None,
     };
     let media = MediaItem {
         id,
