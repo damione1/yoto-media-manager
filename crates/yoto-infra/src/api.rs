@@ -252,9 +252,10 @@ impl YotoGateway {
             .into_iter()
             .map(|d| {
                 let extra = d.extra.clone();
+                let name = device_name(&d);
                 Ok(Device {
                     id: DeviceId::new(d.device_id)?,
-                    name: d.name,
+                    name,
                     online: d.online,
                     firmware: extra
                         .get("fwVersion")
@@ -540,6 +541,22 @@ impl YotoGateway {
         }
         Ok(bytes)
     }
+}
+/// The name a player is shown under: the one its family gave it in the Yoto app. A name
+/// field that is empty or merely repeats the player's identifier does not count; a
+/// display name Yoto may send beside it is preferred; the identifier is the last resort.
+pub fn device_name(device: &yoto_api_generated::models::DeviceInfo) -> String {
+    let id = device.device_id.trim();
+    let named = |value: &str| {
+        let value = value.split_whitespace().collect::<Vec<_>>().join(" ");
+        (!value.is_empty() && !value.eq_ignore_ascii_case(id)).then_some(value)
+    };
+    ["nickname", "displayName", "deviceName"]
+        .into_iter()
+        .filter_map(|key| device.extra.get(key).and_then(Value::as_str))
+        .chain(std::iter::once(device.name.as_str()))
+        .find_map(named)
+        .unwrap_or_else(|| id.to_owned())
 }
 pub fn classify<T>(e: apis::Error<T>) -> Failure {
     match e {

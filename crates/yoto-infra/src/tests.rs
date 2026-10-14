@@ -687,6 +687,26 @@ fn refusal_excerpts_are_bounded_and_plain() {
     );
 }
 #[test]
+fn players_are_shown_under_their_given_name() {
+    use crate::api::device_name;
+    let device = |value: serde_json::Value| -> yoto_api_generated::models::DeviceInfo {
+        serde_json::from_value(value).unwrap()
+    };
+    let base = |name: &str| serde_json::json!({"deviceId":"t2iumaiU2bEmyQJ4JSXZQZPh","name":name,"online":true,"description":"late.smoke"});
+    assert_eq!(
+        device_name(&device(base("Chambre  de Léa"))),
+        "Chambre de Léa"
+    );
+    assert_eq!(device_name(&device(base(""))), "t2iumaiU2bEmyQJ4JSXZQZPh");
+    assert_eq!(
+        device_name(&device(base("t2iumaiU2bEmyQJ4JSXZQZPh"))),
+        "t2iumaiU2bEmyQJ4JSXZQZPh"
+    );
+    let mut named = base("t2iumaiU2bEmyQJ4JSXZQZPh");
+    named["displayName"] = serde_json::json!("Salon");
+    assert_eq!(device_name(&device(named)), "Salon");
+}
+#[test]
 fn retry_after_accepts_seconds_and_dates_within_bounds() {
     use crate::api::retry_after_seconds as wait;
     use std::time::Duration;
