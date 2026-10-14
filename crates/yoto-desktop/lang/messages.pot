@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:13-0400\n"
+"POT-Creation-Date: 2026-10-14 00:14-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1325,6 +1325,11 @@ msgstr ""
 
 #: src/ui/imports.rs
 msgid "En attente…"
+msgstr ""
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "{phase} · « {title} »"
 msgstr ""
 
 #: src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs

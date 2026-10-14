@@ -532,7 +532,11 @@ fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement 
             spinner(),
             match &job.request {
                 JobRequest::Publish { snapshot, .. } => {
-                    format!("{} · « {} »", phase_text(phase), snapshot.title)
+                    tr!(
+                        "{phase} · « {title} »",
+                        phase = phase_text(phase),
+                        title = snapshot.title
+                    )
                 }
                 JobRequest::Import { .. } | JobRequest::Encode { .. } => {
                     format!("{}…", phase_text(phase))
