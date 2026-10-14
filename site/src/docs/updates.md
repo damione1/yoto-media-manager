@@ -5,7 +5,7 @@ order: 10
 
 # Keeping the app up to date
 
-YotoMediaManager checks for new releases when you open it. When a new version is available, **Mises à jour** in the sidebar lets you download it without leaving the app.
+YotoMediaManager checks for new releases when you open it. When a new version is available, **Mises à jour**, at the right of the status bar at the bottom of the window, shows a dot and lets you download it without leaving the app.
 
 You can also open **Mises à jour** and choose **Rechercher une mise à jour** at any time.
 

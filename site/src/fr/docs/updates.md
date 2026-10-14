@@ -5,7 +5,7 @@ order: 10
 
 # Garder l’application à jour
 
-YotoMediaManager cherche les nouvelles versions à son ouverture. Quand une nouvelle version est disponible, **Mises à jour** dans la barre latérale permet de la télécharger sans quitter l’application.
+YotoMediaManager cherche les nouvelles versions à son ouverture. Quand une nouvelle version est disponible, **Mises à jour**, à droite de la barre d’état en bas de la fenêtre, affiche un point et permet de la télécharger sans quitter l’application.
 
 Vous pouvez aussi ouvrir **Mises à jour** et choisir **Rechercher une mise à jour** à tout moment.
 
