@@ -29,6 +29,8 @@
 
 </div>
 
+<p align="center"><img src="assets/readme/playlist.gif" width="820" alt="The YotoMediaManager playlist editor: a song is dropped into the playlist Evening songs, gets a moon icon, and the playlist goes from Saving to Saved on Yoto."></p>
+
 ## Why it exists
 
 Yoto has a wonderful catalogue, with hundreds of stories, songs and adventures to discover. But my two-year-old had a much shorter wish list: a few favourite nursery rhymes, on repeat. The ones we loved were on YouTube, and I wanted to hear them coming from our Yoto.
