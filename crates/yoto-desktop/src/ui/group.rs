@@ -18,6 +18,12 @@ pub struct GroupEditor {
     status: String,
     saving: bool,
 }
+/// What the group editor tells the screen that holds it.
+pub enum GroupEditorEvent {
+    /// A new group was created on Yoto; the editor now edits that group.
+    Created(GroupId),
+}
+impl EventEmitter<GroupEditorEvent> for GroupEditor {}
 impl GroupEditor {
     pub fn new(
         account: AccountId,
@@ -76,13 +82,20 @@ impl GroupEditor {
             let _ = weak.update(cx, |v, cx| {
                 v.saving = false;
                 let mut refresh_failure = None;
+                let mut created = None;
                 let result = result.map(|r| {
                     r.map(|(reply, refresh_error)| {
-                        if writing && let Reply::Data(data) = &reply {
-                            v.id = data
+                        if writing
+                            && let Reply::Data(data) = &reply
+                            && let Some(id) = data
                                 .get("id")
                                 .and_then(serde_json::Value::as_str)
-                                .and_then(|id| GroupId::new(id).ok());
+                                .and_then(|id| GroupId::new(id).ok())
+                        {
+                            if v.id.is_none() {
+                                created = Some(id.clone());
+                            }
+                            v.id = Some(id);
                         }
                         refresh_failure = refresh_error;
                         reply
@@ -127,6 +140,9 @@ impl GroupEditor {
                         "Groupe enregistré. Actualisation impossible : {}",
                         failure_text(&error)
                     );
+                }
+                if let Some(id) = created {
+                    cx.emit(GroupEditorEvent::Created(id));
                 }
                 cx.notify();
             });

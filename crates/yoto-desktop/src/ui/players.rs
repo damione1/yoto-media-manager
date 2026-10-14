@@ -61,10 +61,39 @@ impl AppView {
                     cx,
                 )
             });
+            let owner = key.0.clone();
+            self._subscriptions
+                .push(cx.subscribe(&panel, move |v, _, event, cx| {
+                    match event {
+                        group::GroupEditorEvent::Created(id) => rekey_created_group(
+                            &mut v.group_editors,
+                            &mut v.selected_group,
+                            &owner,
+                            id.clone(),
+                        ),
+                    }
+                    cx.notify();
+                }));
             self.group_editors.insert(key, panel);
         }
         self.selected_group = Some(group);
         cx.notify();
+    }
+}
+
+/// Once a new group is saved, its editor edits that group: it moves to the group's own key,
+/// so « Créer un groupe » opens a blank editor next time instead of overwriting this group.
+fn rekey_created_group<T>(
+    editors: &mut BTreeMap<(AccountId, Option<GroupId>), T>,
+    selected: &mut Option<Option<GroupId>>,
+    account: &AccountId,
+    id: GroupId,
+) {
+    if let Some(editor) = editors.remove(&(account.clone(), None)) {
+        editors.insert((account.clone(), Some(id.clone())), editor);
+        if *selected == Some(None) {
+            *selected = Some(Some(id));
+        }
     }
 }
 
@@ -393,4 +422,35 @@ fn groups(view: &AppView, account: AccountId, cx: &mut Context<AppView>) -> AnyE
         card = card.child(panel.clone());
     }
     card.into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[core::prelude::v1::test]
+    fn a_created_group_frees_the_new_group_slot() {
+        let account = AccountId::new("account").unwrap();
+        let first = GroupId::new("group-1").unwrap();
+        let mut editors = BTreeMap::new();
+        editors.insert((account.clone(), None), "draft");
+        let mut selected = Some(None);
+        rekey_created_group(&mut editors, &mut selected, &account, first.clone());
+        assert!(!editors.contains_key(&(account.clone(), None)));
+        assert_eq!(
+            editors.get(&(account.clone(), Some(first.clone()))),
+            Some(&"draft")
+        );
+        assert_eq!(selected, Some(Some(first.clone())));
+        // Another group being edited stays selected when an older draft is saved.
+        editors.insert((account.clone(), None), "second");
+        let mut selected = Some(Some(first));
+        rekey_created_group(
+            &mut editors,
+            &mut selected,
+            &account,
+            GroupId::new("group-2").unwrap(),
+        );
+        assert_eq!(selected.flatten().unwrap().as_str(), "group-1");
+        assert_eq!(editors.len(), 2);
+    }
 }
