@@ -97,7 +97,7 @@ impl Render for MovePicker {
             .items_center()
             .child(div().flex_1())
             .child(DialogClose::new().child(theme::pill(
-                Button::new("cancel-move").label("Annuler"),
+                Button::new("cancel-move").label(tr!("Annuler")),
                 Look::Ghost,
                 Height::Medium,
                 busy,
@@ -105,7 +105,7 @@ impl Render for MovePicker {
             )))
             .child(theme::pill(
                 Button::new("confirm-move")
-                    .label("Déplacer")
+                    .label(tr!("Déplacer"))
                     .on_click(cx.listener(|v, _, _, cx| v.confirm(cx))),
                 Look::Primary,
                 Height::Medium,
@@ -117,7 +117,7 @@ impl Render for MovePicker {
             .flex_col()
             .gap_4()
             .child(theme::note(
-                "Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses références sont conservés.",
+                tr!("Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses références sont conservés."),
             ))
             .child(targets)
             .child(actions)

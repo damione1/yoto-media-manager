@@ -3,14 +3,14 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-13 23:59-0400\n"
+"POT-Creation-Date: 2026-10-14 00:03-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: src/i18n.rs src/ui/wording.rs
+#: src/i18n.rs src/ui/playlist_move_picker.rs src/ui/wording.rs
 msgid "Annuler"
 msgstr "Annuler"
 
@@ -236,6 +236,105 @@ msgstr "Titre de la playlist"
 #: src/ui/mod.rs
 msgid "Identifiant de la carte"
 msgstr "Identifiant de la carte"
+
+#: src/ui/playlist_move_picker.rs
+msgid "Déplacer"
+msgstr "Déplacer"
+
+#: src/ui/playlist_move_picker.rs
+msgid ""
+"Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses "
+"références sont conservés."
+msgstr ""
+"Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses "
+"références sont conservés."
+
+#: src/ui/update.rs
+msgid "Mises à jour"
+msgstr "Mises à jour"
+
+#: src/ui/update.rs
+msgid "Mise à jour disponible"
+msgstr "Mise à jour disponible"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "Version installée : {version}"
+msgstr "Version installée : {version}"
+
+#: src/ui/update.rs
+#, rust-format
+msgid ""
+"Recevez les nouvelles versions de {product} directement dans l’application."
+msgstr ""
+"Recevez les nouvelles versions de {product} directement dans l’application."
+
+#: src/ui/update.rs
+msgid "Rechercher une mise à jour"
+msgstr "Rechercher une mise à jour"
+
+#: src/ui/update.rs
+msgid "Recherche de mises à jour…"
+msgstr "Recherche de mises à jour…"
+
+#: src/ui/update.rs
+msgid "Vous utilisez la dernière version disponible."
+msgstr "Vous utilisez la dernière version disponible."
+
+#: src/ui/update.rs
+msgid "Vérifier à nouveau"
+msgstr "Vérifier à nouveau"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "La version {version} est disponible."
+msgstr "La version {version} est disponible."
+
+#: src/ui/update.rs
+msgid "Télécharger la mise à jour"
+msgstr "Télécharger la mise à jour"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "Téléchargement : {percent} % ({received} / {total} Mo)"
+msgstr "Téléchargement : {percent} % ({received} / {total} Mo)"
+
+#: src/ui/update.rs
+msgid "Annuler le téléchargement"
+msgstr "Annuler le téléchargement"
+
+#: src/ui/update.rs
+msgid "Vérification et préparation de la mise à jour…"
+msgstr "Vérification et préparation de la mise à jour…"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "La version {version} est prête à être installée."
+msgstr "La version {version} est prête à être installée."
+
+#: src/ui/update.rs
+msgid ""
+"Votre médiathèque est conservée. Terminez vos imports et envois avant de "
+"redémarrer."
+msgstr ""
+"Votre médiathèque est conservée. Terminez vos imports et envois avant de "
+"redémarrer."
+
+#: src/ui/update.rs
+msgid "Installer et redémarrer"
+msgstr "Installer et redémarrer"
+
+#: src/ui/update.rs
+msgid "Redémarrage de l’application…"
+msgstr "Redémarrage de l’application…"
+
+#: src/ui/update.rs
+msgid "Réessayer"
+msgstr "Réessayer"
+
+#: src/ui/update.rs src/ui/wording.rs
+msgid "Fermer"
+msgstr "Fermer"
 
 #: src/ui/wording.rs
 #, rust-format
@@ -851,10 +950,6 @@ msgstr "Exporter"
 #: src/ui/wording.rs
 msgid "Importer"
 msgstr "Importer"
-
-#: src/ui/wording.rs
-msgid "Fermer"
-msgstr "Fermer"
 
 #: src/ui/wording.rs
 msgid ""

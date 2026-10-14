@@ -82,7 +82,7 @@ impl UpdatePanel {
     pub fn open(entity: Entity<Self>, window: &mut Window, cx: &mut App) {
         window.open_dialog(cx, move |dialog, _, _| {
             dialog
-                .title("Mises à jour")
+                .title(tr!("Mises à jour"))
                 .w(px(520.))
                 .child(entity.clone())
         });
@@ -92,12 +92,12 @@ impl UpdatePanel {
             UpdateState::Available(_)
             | UpdateState::Downloading { .. }
             | UpdateState::Verifying(_)
-            | UpdateState::Ready { .. } => "Mise à jour disponible",
+            | UpdateState::Ready { .. } => tr!("Mise à jour disponible"),
             UpdateState::Idle
             | UpdateState::Checking
             | UpdateState::Current
             | UpdateState::Installing
-            | UpdateState::Failed(_) => "Mises à jour",
+            | UpdateState::Failed(_) => tr!("Mises à jour"),
         }
     }
     fn request(&self, action: UpdateAction) {
@@ -170,20 +170,22 @@ impl Render for UpdatePanel {
                 .child(
                     div()
                         .child(theme::heading(PRODUCT_NAME, 19.))
-                        .child(theme::meta(format!(
-                            "Version installée : {CURRENT_VERSION}"
+                        .child(theme::meta(tr!(
+                            "Version installée : {version}",
+                            version = CURRENT_VERSION
                         ))),
                 ),
         );
         let mut action = None;
         match self.state.as_ref() {
             UpdateState::Idle => {
-                body = body.child(theme::note(format!(
-                    "Recevez les nouvelles versions de {PRODUCT_NAME} directement dans l’application."
+                body = body.child(theme::note(tr!(
+                    "Recevez les nouvelles versions de {product} directement dans l’application.",
+                    product = PRODUCT_NAME
                 )));
                 action = Some(theme::pill(
                     Button::new("check-update")
-                        .label("Rechercher une mise à jour")
+                        .label(tr!("Rechercher une mise à jour"))
                         .on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))),
                     Look::Primary,
                     Height::Medium,
@@ -192,7 +194,7 @@ impl Render for UpdatePanel {
                 ));
             }
             UpdateState::Checking => {
-                body = body.child(busy("Recherche de mises à jour…".into()));
+                body = body.child(busy(tr!("Recherche de mises à jour…").into()));
             }
             UpdateState::Current => {
                 body = body.child(
@@ -204,12 +206,12 @@ impl Render for UpdatePanel {
                         .child(
                             div()
                                 .font_weight(FontWeight::BOLD)
-                                .child("Vous utilisez la dernière version disponible."),
+                                .child(tr!("Vous utilisez la dernière version disponible.")),
                         ),
                 );
                 action = Some(theme::pill(
                     Button::new("recheck-update")
-                        .label("Vérifier à nouveau")
+                        .label(tr!("Vérifier à nouveau"))
                         .on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))),
                     Look::Outline,
                     Height::Medium,
@@ -219,15 +221,14 @@ impl Render for UpdatePanel {
             }
             UpdateState::Available(release) => {
                 body = body
-                    .child(
-                        div()
-                            .font_weight(FontWeight::EXTRA_BOLD)
-                            .child(format!("La version {} est disponible.", release.version)),
-                    )
+                    .child(div().font_weight(FontWeight::EXTRA_BOLD).child(tr!(
+                        "La version {version} est disponible.",
+                        version = release.version
+                    )))
                     .child(release_notes(&release.notes));
                 action = Some(theme::pill(
                     Button::new("download-update")
-                        .label("Télécharger la mise à jour")
+                        .label(tr!("Télécharger la mise à jour"))
                         .on_click(
                             cx.listener(|view, _, _, _| view.request(UpdateAction::Download)),
                         ),
@@ -245,14 +246,15 @@ impl Render for UpdatePanel {
                 } else {
                     received.saturating_mul(100) / total
                 };
-                body = body.child(busy(format!(
-                    "Téléchargement : {percent} % ({:.1} / {:.1} Mo)",
-                    *received as f64 / 1_000_000.,
-                    *total as f64 / 1_000_000.
+                body = body.child(busy(tr!(
+                    "Téléchargement : {percent} % ({received} / {total} Mo)",
+                    percent = percent,
+                    received = format!("{:.1}", *received as f64 / 1_000_000.),
+                    total = format!("{:.1}", *total as f64 / 1_000_000.)
                 )));
                 action = Some(theme::pill(
                     Button::new("cancel-update")
-                        .label("Annuler le téléchargement")
+                        .label(tr!("Annuler le téléchargement"))
                         .on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Cancel))),
                     Look::Outline,
                     Height::Medium,
@@ -262,7 +264,7 @@ impl Render for UpdatePanel {
             }
             UpdateState::Verifying(_) => {
                 body = body.child(busy(
-                    "Vérification et préparation de la mise à jour…".into(),
+                    tr!("Vérification et préparation de la mise à jour…").into(),
                 ));
             }
             UpdateState::Ready { release, issue } => {
@@ -272,16 +274,16 @@ impl Render for UpdatePanel {
                             .clone()
                             .map(|message| problem(failure_text(&Failure::Validation(message)))),
                     )
-                    .child(div().font_weight(FontWeight::EXTRA_BOLD).child(format!(
-                        "La version {} est prête à être installée.",
-                        release.version
+                    .child(div().font_weight(FontWeight::EXTRA_BOLD).child(tr!(
+                        "La version {version} est prête à être installée.",
+                        version = release.version
                     )))
                     .child(theme::note(
-                        "Votre médiathèque est conservée. Terminez vos imports et envois avant de redémarrer.",
+                        tr!("Votre médiathèque est conservée. Terminez vos imports et envois avant de redémarrer."),
                     ));
                 action = Some(theme::pill(
                     Button::new("install-update")
-                        .label("Installer et redémarrer")
+                        .label(tr!("Installer et redémarrer"))
                         .on_click(cx.listener(|view, _, _, cx| view.install(cx))),
                     Look::Primary,
                     Height::Medium,
@@ -290,13 +292,13 @@ impl Render for UpdatePanel {
                 ));
             }
             UpdateState::Installing => {
-                body = body.child(busy("Redémarrage de l’application…".into()));
+                body = body.child(busy(tr!("Redémarrage de l’application…").into()));
             }
             UpdateState::Failed(error) => {
                 body = body.child(problem(wording::update_failure_text(error)));
                 action = Some(theme::pill(
                     Button::new("retry-update")
-                        .label("Réessayer")
+                        .label(tr!("Réessayer"))
                         .on_click(cx.listener(|view, _, _, _| view.request(UpdateAction::Check))),
                     Look::Primary,
                     Height::Medium,
@@ -317,7 +319,7 @@ impl Render for UpdatePanel {
                 .justify_end()
                 .gap(px(8.))
                 .child(DialogClose::new().child(theme::pill(
-                    Button::new("close-update").label("Fermer"),
+                    Button::new("close-update").label(tr!("Fermer")),
                     Look::Outline,
                     Height::Medium,
                     installing,

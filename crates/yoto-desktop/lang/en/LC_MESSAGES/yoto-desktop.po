@@ -3,14 +3,14 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-13 23:59-0400\n"
+"POT-Creation-Date: 2026-10-14 00:03-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/i18n.rs src/ui/wording.rs
+#: src/i18n.rs src/ui/playlist_move_picker.rs src/ui/wording.rs
 msgid "Annuler"
 msgstr "Cancel"
 
@@ -231,6 +231,102 @@ msgstr "Playlist title"
 #: src/ui/mod.rs
 msgid "Identifiant de la carte"
 msgstr "Card ID"
+
+#: src/ui/playlist_move_picker.rs
+msgid "Déplacer"
+msgstr "Move"
+
+#: src/ui/playlist_move_picker.rs
+msgid ""
+"Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses "
+"références sont conservés."
+msgstr ""
+"Choose the chapter to put this track in. Its title and references are kept."
+
+#: src/ui/update.rs
+msgid "Mises à jour"
+msgstr "Updates"
+
+#: src/ui/update.rs
+msgid "Mise à jour disponible"
+msgstr "Update available"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "Version installée : {version}"
+msgstr "Installed version: {version}"
+
+#: src/ui/update.rs
+#, rust-format
+msgid ""
+"Recevez les nouvelles versions de {product} directement dans l’application."
+msgstr "Get new versions of {product} right in the app."
+
+#: src/ui/update.rs
+msgid "Rechercher une mise à jour"
+msgstr "Check for updates"
+
+#: src/ui/update.rs
+msgid "Recherche de mises à jour…"
+msgstr "Checking for updates…"
+
+#: src/ui/update.rs
+msgid "Vous utilisez la dernière version disponible."
+msgstr "You are using the latest version."
+
+#: src/ui/update.rs
+msgid "Vérifier à nouveau"
+msgstr "Check again"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "La version {version} est disponible."
+msgstr "Version {version} is available."
+
+#: src/ui/update.rs
+msgid "Télécharger la mise à jour"
+msgstr "Download the update"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "Téléchargement : {percent} % ({received} / {total} Mo)"
+msgstr "Downloading: {percent}% ({received} / {total} MB)"
+
+#: src/ui/update.rs
+msgid "Annuler le téléchargement"
+msgstr "Cancel the download"
+
+#: src/ui/update.rs
+msgid "Vérification et préparation de la mise à jour…"
+msgstr "Checking and preparing the update…"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "La version {version} est prête à être installée."
+msgstr "Version {version} is ready to install."
+
+#: src/ui/update.rs
+msgid ""
+"Votre médiathèque est conservée. Terminez vos imports et envois avant de "
+"redémarrer."
+msgstr ""
+"Your library is kept. Finish your imports and uploads before restarting."
+
+#: src/ui/update.rs
+msgid "Installer et redémarrer"
+msgstr "Install and restart"
+
+#: src/ui/update.rs
+msgid "Redémarrage de l’application…"
+msgstr "Restarting the app…"
+
+#: src/ui/update.rs
+msgid "Réessayer"
+msgstr "Try again"
+
+#: src/ui/update.rs src/ui/wording.rs
+msgid "Fermer"
+msgstr "Close"
 
 #: src/ui/wording.rs
 #, rust-format
@@ -837,10 +933,6 @@ msgstr "Export"
 #: src/ui/wording.rs
 msgid "Importer"
 msgstr "Import"
-
-#: src/ui/wording.rs
-msgid "Fermer"
-msgstr "Close"
 
 #: src/ui/wording.rs
 msgid ""
