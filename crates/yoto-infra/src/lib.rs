@@ -7,6 +7,7 @@ pub mod pipeline;
 pub mod players;
 pub mod process;
 pub mod service;
+pub mod settings;
 pub mod sources;
 pub mod transcode;
 pub mod youtube_tool;

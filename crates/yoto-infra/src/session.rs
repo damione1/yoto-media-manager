@@ -242,6 +242,10 @@ impl Session {
             }
         }
     }
+    /// The profile directory this session opened, after resolving aliases.
+    pub fn profile(&self) -> &std::path::Path {
+        &self.profile
+    }
     pub fn is_owner(&self) -> bool {
         self.owner.is_some()
     }
