@@ -61,6 +61,7 @@ impl AppView {
                     cx,
                 )
             });
+            panel.update(cx, |p, cx| p.load(cx));
             let owner = key.0.clone();
             self._subscriptions
                 .push(cx.subscribe(&panel, move |v, _, event, cx| {
@@ -71,6 +72,7 @@ impl AppView {
                             &owner,
                             id.clone(),
                         ),
+                        group::GroupEditorEvent::Close => v.selected_group = None,
                     }
                     cx.notify();
                 }));

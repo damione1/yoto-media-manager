@@ -32,6 +32,6 @@ Day and night shortcuts are shown separately. Changing one does not erase the ot
 
 In `Groupes familiaux`, create a group or choose `Modifier`. Give it a name, select the creations to include, and use the arrows to adjust their order. Save the group when your selection is complete.
 
-You can add an image or choose from your family's images. Removing an image may be unavailable depending on Yoto's documented capabilities.
+Choose `Ajouter une image` to send an image from your computer, or `Choisir parmi vos images` to pick one of your family's images from their previews. Yoto does not allow removing the image of an existing group, so `Retirer l’image` is only offered while creating one. `Fermer` closes the editor without saving.
 
 Deleting a group removes that organization. It does not delete your original audio from the local library.
