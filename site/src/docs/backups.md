@@ -1,7 +1,6 @@
 ---
 title: Export and import your library
-slug: /backups
-sidebar_position: 8
+order: 8
 ---
 
 # Export and import your library

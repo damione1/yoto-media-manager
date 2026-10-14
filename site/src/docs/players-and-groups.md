@@ -1,7 +1,6 @@
 ---
 title: Players and groups
-slug: /players-and-groups
-sidebar_position: 7
+order: 7
 ---
 
 # Players and groups

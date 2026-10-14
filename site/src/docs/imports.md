@@ -1,7 +1,6 @@
 ---
 title: Import media
-slug: /imports
-sidebar_position: 3
+order: 3
 ---
 
 # Import media

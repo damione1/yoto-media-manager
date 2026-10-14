@@ -1,7 +1,6 @@
 ---
 title: Trim and listen
-slug: /prepare-audio
-sidebar_position: 4
+order: 4
 ---
 
 # Trim and listen

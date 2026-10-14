@@ -1,3 +1,8 @@
+---
+title: Keep the app up to date
+order: 10
+---
+
 # Keeping the app up to date
 
 YotoMediaManager checks for new releases when you open it. When a new version is available, **Mises à jour** in the sidebar lets you download it without leaving the app.

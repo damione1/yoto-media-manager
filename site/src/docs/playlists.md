@@ -1,7 +1,6 @@
 ---
 title: Build a playlist
-slug: /playlists
-sidebar_position: 5
+order: 5
 ---
 
 # Build a playlist

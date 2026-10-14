@@ -1,7 +1,6 @@
 ---
 title: Troubleshooting
-slug: /troubleshooting
-sidebar_position: 9
+order: 9
 ---
 
 # Troubleshooting

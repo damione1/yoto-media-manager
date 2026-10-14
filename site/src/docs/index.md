@@ -1,7 +1,6 @@
 ---
 title: Your audio library
-slug: /
-sidebar_position: 1
+order: 1
 ---
 
 # YotoMediaManager

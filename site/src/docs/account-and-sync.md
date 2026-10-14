@@ -1,7 +1,6 @@
 ---
 title: Yoto account and sync
-slug: /account-and-sync
-sidebar_position: 6
+order: 6
 ---
 
 # Yoto account and sync

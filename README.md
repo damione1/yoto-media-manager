@@ -22,4 +22,4 @@ With YotoMediaManager, you can:
 
 For **macOS and Windows**. Follow [Releases](https://github.com/damione1/yoto-media-manager/releases) for downloads.
 
-[User guide](docs/user/index.md) · [Third-party notices](distribution/THIRD-PARTY-NOTICES.md)
+[User guide](site/src/docs/index.md) · [Third-party notices](distribution/THIRD-PARTY-NOTICES.md)

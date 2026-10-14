@@ -1,7 +1,6 @@
 ---
 title: Your first playlist
-slug: /getting-started
-sidebar_position: 2
+order: 2
 ---
 
 # Your first playlist
