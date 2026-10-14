@@ -10,7 +10,7 @@ YotoMediaManager helps you collect audio, prepare excerpts, and manage playlists
 
 Import an audio file or a publicly accessible YouTube video, remove an introduction or credits, rename the content, and choose a small illustration for each chapter.
 
-The current app interface uses French labels. This guide keeps those labels in `code` so you can find the right controls.
+The app is available in English and French. It follows your computer's language, and you can change it under `Compte` (`Account`) → `Langue / Language`. This guide shows the French labels in `code`; in English the same controls sit in the same places.
 
 ## A five-step workflow
 
