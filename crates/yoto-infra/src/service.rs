@@ -3198,6 +3198,76 @@ fn is_empty(value: &serde_json::Value) -> bool {
 fn excerpt(value: &serde_json::Value) -> String {
     value.to_string().chars().take(120).collect()
 }
+/// Where previews play: a sink on the OS default output, with the device it was opened on
+/// and whether its stream has reported an error since.
+struct PreviewOutput {
+    sink: rodio::MixerDeviceSink,
+    device: rodio::Device,
+    failed: Arc<std::sync::atomic::AtomicBool>,
+}
+impl PreviewOutput {
+    /// `current` while it still plays to the default device and has not failed, otherwise a
+    /// sink opened on today's default: a headset put on or taken off since the last preview
+    /// is followed on the next play, without reopening the output on every play.
+    fn current_or_open(current: Option<Self>) -> std::result::Result<Self, rodio::DeviceSinkError> {
+        use rodio::cpal::traits::{DeviceTrait, HostTrait};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let device = rodio::cpal::default_host()
+            .default_output_device()
+            .ok_or(rodio::DeviceSinkError::NoDevice)?;
+        if let Some(output) = current
+            && output.device == device
+            && !output.failed.load(Ordering::SeqCst)
+        {
+            return Ok(output);
+        }
+        let config = device
+            .default_output_config()
+            .map_err(rodio::DeviceSinkError::DefaultSinkConfigError)?;
+        let failed = Arc::new(AtomicBool::new(false));
+        let flag = failed.clone();
+        let mut sink = rodio::DeviceSinkBuilder::default()
+            .with_device(device.clone())
+            .with_supported_config(&config)
+            .with_buffer_size(output_buffer_size(
+                config.sample_rate(),
+                config.buffer_size(),
+            ))
+            .with_error_callback(move |e| {
+                eprintln!("Audio output error: {e}");
+                flag.store(true, Ordering::SeqCst);
+            })
+            .open_stream()?;
+        sink.log_on_drop(false);
+        Ok(Self {
+            sink,
+            device,
+            failed,
+        })
+    }
+}
+/// About 50 ms of audio per buffer, as rodio aims for, rounded to a power of two and kept
+/// within what the device accepts; the OS picks when the device does not say. Rodio's own
+/// choice ignores the range, which some headsets refuse.
+fn output_buffer_size(
+    sample_rate: u32,
+    supported: &rodio::cpal::SupportedBufferSize,
+) -> rodio::cpal::BufferSize {
+    use rodio::cpal::{BufferSize, SupportedBufferSize};
+    match *supported {
+        SupportedBufferSize::Range { min, max } if (1..=max).contains(&min) => {
+            let wanted = sample_rate / 20;
+            let above = wanted.next_power_of_two();
+            let nearest = if above - wanted <= wanted - above / 2 {
+                above
+            } else {
+                above / 2
+            };
+            BufferSize::Fixed(nearest.clamp(min, max))
+        }
+        SupportedBufferSize::Range { .. } | SupportedBufferSize::Unknown => BufferSize::Default,
+    }
+}
 fn preview_loop(
     receiver: std::sync::mpsc::Receiver<PreviewCommand>,
     status: Arc<Mutex<PreviewStatus>>,
@@ -3249,31 +3319,29 @@ fn preview_loop(
                     if cancel.load(std::sync::atomic::Ordering::SeqCst) {
                         return Err(Failure::Cancelled);
                     }
-                    if stream.is_none() {
-                        stream =
-                            Some(rodio::DeviceSinkBuilder::open_default_sink().map_err(|e| {
-                                eprintln!("Audio output unavailable: {e:?}");
-                                Failure::Media(format!("Audio output unavailable: {e}"))
-                            })?);
-                    }
-                    if let Some(s) = &stream {
-                        let file = File::open(next.path()).map_err(storage)?;
-                        let decoder = rodio::Decoder::try_from(file)
-                            .map_err(|e| Failure::Media(format!("Preview decoding failed: {e}")))?;
-                        let p = rodio::Player::connect_new(s.mixer());
-                        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                            return Err(Failure::Cancelled);
+                    let output = match PreviewOutput::current_or_open(stream.take()) {
+                        Ok(output) => stream.insert(output),
+                        Err(e) => {
+                            eprintln!("Audio output unavailable: {e:?}");
+                            return Err(Failure::Media(format!("Audio output unavailable: {e}")));
                         }
-                        p.append(decoder);
-                        player = Some(p);
-                        lease = Some(next);
-                        active_cancel = Some(cancel);
-                        timeline = Some((media, start));
-                        *status.lock().map_err(storage)? = PreviewStatus::Playing {
-                            media,
-                            position: start,
-                        };
+                    };
+                    let file = File::open(next.path()).map_err(storage)?;
+                    let decoder = rodio::Decoder::try_from(file)
+                        .map_err(|e| Failure::Media(format!("Preview decoding failed: {e}")))?;
+                    let p = rodio::Player::connect_new(output.sink.mixer());
+                    if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                        return Err(Failure::Cancelled);
                     }
+                    p.append(decoder);
+                    player = Some(p);
+                    lease = Some(next);
+                    active_cancel = Some(cancel);
+                    timeline = Some((media, start));
+                    *status.lock().map_err(storage)? = PreviewStatus::Playing {
+                        media,
+                        position: start,
+                    };
                     Ok(())
                 })();
                 let _ = reply.send(result);
@@ -3324,6 +3392,35 @@ mod tests {
             document_difference(&changed, &sent, "").as_deref(),
             Some(".content.chapters[0].tracks[0].trackUrl: \"yoto:#b\", expected \"yoto:#a\"")
         );
+    }
+    #[test]
+    fn preview_buffer_stays_within_what_the_output_device_accepts() {
+        use rodio::cpal::{BufferSize, SupportedBufferSize};
+        let headset = SupportedBufferSize::Range { min: 14, max: 1024 };
+        assert_eq!(
+            output_buffer_size(44_100, &headset),
+            BufferSize::Fixed(1024)
+        );
+        let speakers = SupportedBufferSize::Range { min: 14, max: 4096 };
+        assert_eq!(
+            output_buffer_size(44_100, &speakers),
+            BufferSize::Fixed(2048)
+        );
+        assert_eq!(
+            output_buffer_size(48_000, &speakers),
+            BufferSize::Fixed(2048)
+        );
+        let coarse = SupportedBufferSize::Range {
+            min: 4096,
+            max: 8192,
+        };
+        assert_eq!(output_buffer_size(44_100, &coarse), BufferSize::Fixed(4096));
+        assert_eq!(
+            output_buffer_size(44_100, &SupportedBufferSize::Unknown),
+            BufferSize::Default
+        );
+        let empty = SupportedBufferSize::Range { min: 0, max: 0 };
+        assert_eq!(output_buffer_size(44_100, &empty), BufferSize::Default);
     }
     pub(super) fn streaming() -> Playlist {
         let mut p = Playlist::new("Publication test".into()).unwrap();
