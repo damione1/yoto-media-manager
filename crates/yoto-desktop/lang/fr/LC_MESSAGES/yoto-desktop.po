@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 09:09-0400\n"
+"POT-Creation-Date: 2026-10-14 09:15-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -753,8 +753,20 @@ msgid "Changer l’icône du chapitre"
 msgstr "Changer l’icône du chapitre"
 
 #: src/ui/editor.rs
+msgid "Choisir une icône pour la piste"
+msgstr "Choisir une icône pour la piste"
+
+#: src/ui/editor.rs
+msgid "Choisir une icône pour le chapitre"
+msgstr "Choisir une icône pour le chapitre"
+
+#: src/ui/editor.rs src/ui/trim.rs
 msgid "Changer l’icône"
 msgstr "Changer l’icône"
+
+#: src/ui/editor.rs src/ui/trim.rs
+msgid "Choisir une icône"
+msgstr "Choisir une icône"
 
 #: src/ui/editor.rs
 msgid "Options du chapitre"
@@ -788,7 +800,7 @@ msgstr "Options de la piste"
 msgid "Retirer l’icône du chapitre"
 msgstr "Retirer l’icône du chapitre"
 
-#: src/ui/editor.rs
+#: src/ui/editor.rs src/ui/trim.rs
 msgid "Retirer l’icône"
 msgstr "Retirer l’icône"
 
@@ -853,10 +865,6 @@ msgid ""
 msgstr ""
 "Les événements de piste s’activent avec la lecture interactive, dans les "
 "réglages avancés de la playlist."
-
-#: src/ui/editor.rs
-msgid "Choisir une icône"
-msgstr "Choisir une icône"
 
 #: src/ui/editor.rs
 msgid "Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes."
@@ -1900,6 +1908,14 @@ msgid "Mes icônes"
 msgstr "Mes icônes"
 
 #: src/ui/pixelart.rs
+msgid ""
+"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez aussi "
+"importer une image."
+msgstr ""
+"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez aussi "
+"importer une image."
+
+#: src/ui/pixelart.rs
 msgid "Chargement des icônes…"
 msgstr "Chargement des icônes…"
 
@@ -2050,8 +2066,12 @@ msgid "Sélectionnez vos médias et la version à envoyer."
 msgstr "Sélectionnez vos médias et la version à envoyer."
 
 #: src/ui/playlist_media_picker.rs
-msgid "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
-msgstr "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
+msgid ""
+"L’audio est envoyé à Yoto avant d’apparaître dans votre playlist. Pas "
+"d’icône ? Choisissez-la dans la Médiathèque, ou plus tard dans la playlist."
+msgstr ""
+"L’audio est envoyé à Yoto avant d’apparaître dans votre playlist. Pas "
+"d’icône ? Choisissez-la dans la Médiathèque, ou plus tard dans la playlist."
 
 #: src/ui/playlist_move_picker.rs
 msgid "Déplacer"
@@ -2184,6 +2204,20 @@ msgstr "Appliquer"
 #: src/ui/trim.rs
 msgid "Ce média n’est plus disponible."
 msgstr "Ce média n’est plus disponible."
+
+#: src/ui/trim.rs
+msgid "Enregistrement de l’icône…"
+msgstr "Enregistrement de l’icône…"
+
+#: src/ui/trim.rs
+msgid ""
+"Icône enregistrée : elle accompagnera ce média dans vos prochaines playlists."
+msgstr ""
+"Icône enregistrée : elle accompagnera ce média dans vos prochaines playlists."
+
+#: src/ui/trim.rs
+msgid "Icône retirée."
+msgstr "Icône retirée."
 
 #: src/ui/trim.rs
 #, rust-format

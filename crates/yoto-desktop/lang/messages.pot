@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 09:09-0400\n"
+"POT-Creation-Date: 2026-10-14 09:15-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -717,7 +717,19 @@ msgid "Changer l’icône du chapitre"
 msgstr ""
 
 #: src/ui/editor.rs
+msgid "Choisir une icône pour la piste"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Choisir une icône pour le chapitre"
+msgstr ""
+
+#: src/ui/editor.rs src/ui/trim.rs
 msgid "Changer l’icône"
+msgstr ""
+
+#: src/ui/editor.rs src/ui/trim.rs
+msgid "Choisir une icône"
 msgstr ""
 
 #: src/ui/editor.rs
@@ -752,7 +764,7 @@ msgstr ""
 msgid "Retirer l’icône du chapitre"
 msgstr ""
 
-#: src/ui/editor.rs
+#: src/ui/editor.rs src/ui/trim.rs
 msgid "Retirer l’icône"
 msgstr ""
 
@@ -814,10 +826,6 @@ msgstr ""
 msgid ""
 "Les événements de piste s’activent avec la lecture interactive, dans les "
 "réglages avancés de la playlist."
-msgstr ""
-
-#: src/ui/editor.rs
-msgid "Choisir une icône"
 msgstr ""
 
 #: src/ui/editor.rs
@@ -1823,6 +1831,12 @@ msgid "Mes icônes"
 msgstr ""
 
 #: src/ui/pixelart.rs
+msgid ""
+"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez aussi "
+"importer une image."
+msgstr ""
+
+#: src/ui/pixelart.rs
 msgid "Chargement des icônes…"
 msgstr ""
 
@@ -1961,7 +1975,9 @@ msgid "Sélectionnez vos médias et la version à envoyer."
 msgstr ""
 
 #: src/ui/playlist_media_picker.rs
-msgid "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
+msgid ""
+"L’audio est envoyé à Yoto avant d’apparaître dans votre playlist. Pas "
+"d’icône ? Choisissez-la dans la Médiathèque, ou plus tard dans la playlist."
 msgstr ""
 
 #: src/ui/playlist_move_picker.rs
@@ -2089,6 +2105,19 @@ msgstr ""
 
 #: src/ui/trim.rs
 msgid "Ce média n’est plus disponible."
+msgstr ""
+
+#: src/ui/trim.rs
+msgid "Enregistrement de l’icône…"
+msgstr ""
+
+#: src/ui/trim.rs
+msgid ""
+"Icône enregistrée : elle accompagnera ce média dans vos prochaines playlists."
+msgstr ""
+
+#: src/ui/trim.rs
+msgid "Icône retirée."
 msgstr ""
 
 #: src/ui/trim.rs

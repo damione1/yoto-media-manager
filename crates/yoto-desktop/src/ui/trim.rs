@@ -43,6 +43,7 @@ struct TrimDraft {
 /// Retained player state. The modal observes this entity instead of duplicating its recipe or inputs.
 pub struct TrimPanel {
     media: MediaItem,
+    parent: WeakEntity<AppView>,
     service: Arc<Service>,
     runtime: Arc<tokio::runtime::Runtime>,
     title: Entity<InputState>,
@@ -62,6 +63,10 @@ pub struct TrimPanel {
     selected_version: Option<TrimRange>,
     editing: Option<TrimDraft>,
     editor_window: Option<AnyWindowHandle>,
+    /// The icon picker, while it is open.
+    icon_window: Option<AnyWindowHandle>,
+    /// A new icon for the media is being saved.
+    saving_icon: bool,
     tasks: Vec<Task<()>>,
     status: String,
     more_open: bool,
@@ -73,6 +78,7 @@ pub struct TrimPanel {
 impl TrimPanel {
     pub fn new(
         media: MediaItem,
+        parent: WeakEntity<AppView>,
         service: Arc<Service>,
         runtime: Arc<tokio::runtime::Runtime>,
         window: &mut Window,
@@ -173,6 +179,7 @@ impl TrimPanel {
             selection,
             _subscriptions: subscriptions,
             media,
+            parent,
             service,
             runtime,
             title,
@@ -187,6 +194,8 @@ impl TrimPanel {
             selected_version: None,
             editing: None,
             editor_window: None,
+            icon_window: None,
+            saving_icon: false,
             tasks: vec![],
             status: String::new(),
             more_open: false,
@@ -1087,6 +1096,181 @@ impl Render for AudioEditorView {
     }
 }
 impl TrimPanel {
+    pub(super) fn saving_icon(&self) -> bool {
+        self.saving_icon
+    }
+    pub(super) fn status(&self) -> &str {
+        &self.status
+    }
+    pub(super) fn backend(&self) -> (Arc<Service>, Arc<tokio::runtime::Runtime>) {
+        (self.service.clone(), self.runtime.clone())
+    }
+    /// Open the playlist editor's icon picker for this media, with the Yoto icons of the
+    /// connected account when there is one.
+    fn open_icon_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.saving_icon {
+            return;
+        }
+        let Some(parent) = self.parent.upgrade() else {
+            return;
+        };
+        let account = parent.read(cx).snapshot.active_account.clone();
+        let panel = cx.entity();
+        let picker = cx.new(|cx| {
+            pixelart::IconPicker::new(
+                pixelart::IconTarget::Media(panel.downgrade()),
+                parent,
+                account.clone(),
+                cx,
+            )
+        });
+        self.icon_window = Some(window.window_handle());
+        self.status.clear();
+        let weak = panel.downgrade();
+        window.open_dialog(cx, move |dialog, _, _| {
+            let cancel = picker.downgrade();
+            let close = weak.clone();
+            dialog
+                .title(tr!("Choisir une icône"))
+                .w(px(440.))
+                .child(picker.clone())
+                .on_cancel(move |_, _, cx| {
+                    cancel
+                        .upgrade()
+                        .is_none_or(|picker| picker.read(cx).can_cancel(cx))
+                })
+                .on_close(move |_, _, cx| {
+                    let _ = close.update(cx, |v, cx| {
+                        v.icon_window = None;
+                        cx.notify();
+                    });
+                })
+        });
+        if let Some(account) = account {
+            self.send(Command::RefreshIcons(account), cx);
+        }
+    }
+    /// Keep the icon chosen in the picker; an image nobody keeps is released.
+    pub(super) fn choose_icon(&mut self, icon: IconReference, cx: &mut Context<Self>) {
+        if self.icon_window.is_none() || self.saving_icon {
+            if let IconReference::Local { asset } = icon {
+                self.send(Command::ReleaseAsset(asset), cx);
+            }
+            return;
+        }
+        self.set_icon(Some(icon), cx);
+    }
+    /// Save the media's icon (`None` removes it). The chapters it is added to from now on
+    /// get this icon; playlists that already hold it keep theirs.
+    fn set_icon(&mut self, icon: Option<IconReference>, cx: &mut Context<Self>) {
+        self.saving_icon = true;
+        self.status = tr!("Enregistrement de l’icône…").into();
+        cx.notify();
+        let service = self.service.clone();
+        let runtime = self.runtime.clone();
+        let media = self.media.id;
+        let saved = icon.clone();
+        self.tasks.push(cx.spawn(async move |weak, cx| {
+            let command = Command::SetMediaIcon {
+                media,
+                icon: saved.clone(),
+            };
+            let request = service.clone();
+            let result = runtime
+                .spawn(async move { request.execute(command).await })
+                .await;
+            let outcome = joined(result);
+            if outcome.is_err()
+                && let Some(IconReference::Local { asset }) = saved
+            {
+                runtime.spawn(async move {
+                    let _ = service.execute(Command::ReleaseAsset(asset)).await;
+                });
+            }
+            let _ = weak.update(cx, |v, cx| {
+                v.saving_icon = false;
+                match outcome {
+                    Ok(_) => {
+                        if let Some(IconReference::Local { asset }) = &icon {
+                            let asset = *asset;
+                            let _ = v
+                                .parent
+                                .update(cx, |parent, cx| parent.load_icon_preview(asset, cx));
+                        }
+                        v.status = if icon.is_some() {
+                            tr!("Icône enregistrée : elle accompagnera ce média dans vos prochaines playlists.")
+                                .into()
+                        } else {
+                            tr!("Icône retirée.").into()
+                        };
+                        v.media.icon = icon;
+                        if let Some(handle) = v.icon_window.take() {
+                            let _ = cx
+                                .update_window(handle, |_, window, cx| window.close_dialog(cx));
+                        }
+                    }
+                    Err(error) => v.status = failure_text(&error),
+                }
+                cx.notify();
+            });
+        }));
+    }
+    /// The media's icon, large: what its chapters will show on the player, or an empty slot
+    /// inviting the parent to choose one.
+    fn icon_slot(&self, cx: &mut Context<Self>) -> AnyElement {
+        use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
+        let tile =
+            match (&self.media.icon, self.parent.upgrade()) {
+                (Some(icon), Some(parent)) => {
+                    let parent = parent.read(cx);
+                    theme::icon_frame(&self.media.id.to_string(), 96., 22.).child(
+                        pixelart::icon_image(icon, &parent.icon_previews, parent, 64., cx),
+                    )
+                }
+                (Some(_), None) | (None, _) => theme::empty_icon_slot(96., 22., true),
+            };
+        let label = if self.media.icon.is_some() {
+            tr!("Changer l’icône")
+        } else {
+            tr!("Choisir une icône")
+        };
+        let variant = ButtonCustomVariant::new(cx)
+            .color(theme::c(theme::SURFACE).opacity(0.))
+            .hover(theme::c(theme::CREAM))
+            .active(theme::c(theme::SAND));
+        div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(6.))
+            .child(
+                Button::new("media-icon")
+                    .custom(variant)
+                    .rounded(ButtonRounded::Size(px(22.)))
+                    .size(px(96.))
+                    .p(px(0.))
+                    .accessibility_label(label)
+                    .tooltip(label)
+                    .disabled(self.saving_icon)
+                    .child(tile)
+                    .on_click(cx.listener(|v, _, window, cx| v.open_icon_picker(window, cx))),
+            )
+            .child(if self.media.icon.is_some() {
+                theme::pill(
+                    Button::new("remove-media-icon")
+                        .label(tr!("Retirer l’icône"))
+                        .on_click(cx.listener(|v, _, _, cx| v.set_icon(None, cx))),
+                    theme::Look::Link(&theme::ROSE),
+                    theme::Height::Small,
+                    self.saving_icon,
+                    cx,
+                )
+                .into_any_element()
+            } else {
+                theme::meta(label).into_any_element()
+            })
+            .into_any_element()
+    }
     fn export_original(&mut self, cx: &mut Context<Self>) {
         let media = self.media.id;
         let name = export_name(&self.media);
@@ -1132,8 +1316,6 @@ impl Render for TrimPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         use theme::{Height, Look};
         let range = self.playback_range();
-        let seed = self.media.id.to_string();
-        let family = theme::family_for(&seed);
         let elapsed = (self.cursor_seconds - range.start().seconds()).max(0.);
         let mut tags = div().flex().flex_wrap().gap(px(6.));
         tags = if self.prepared.is_some() {
@@ -1231,18 +1413,15 @@ impl Render for TrimPanel {
             .gap(px(16.))
             .child(
                 div()
-                    .h(px(150.))
+                    .py(px(12.))
                     .flex_shrink_0()
                     .rounded(px(22.))
-                    .bg(theme::c(family.soft))
+                    .bg(theme::c(theme::SURFACE))
+                    .shadow(theme::step(theme::BORDER, 2.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(theme::pixel_glyph(
-                        theme::Glyph::for_seed(&seed),
-                        family.accent,
-                        9.,
-                    )),
+                    .child(self.icon_slot(cx)),
             )
             .child(
                 div()

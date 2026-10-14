@@ -50,11 +50,20 @@ impl IconChoices {
         }
     }
 }
+/// What a chosen icon is for: a chapter or track of an open playlist, or a media of the
+/// library, which passes it on to the chapters it becomes.
+pub(super) enum IconTarget {
+    Playlist {
+        editor: WeakEntity<editor::PlaylistEditor>,
+        chapter: ChapterId,
+        track: Option<TrackId>,
+    },
+    Media(WeakEntity<trim::TrimPanel>),
+}
 pub(super) struct IconPicker {
-    owner: WeakEntity<editor::PlaylistEditor>,
-    account: AccountId,
-    chapter: ChapterId,
-    track: Option<TrackId>,
+    target: IconTarget,
+    /// The account whose Yoto icons are offered; without one, only an image can be imported.
+    account: Option<AccountId>,
     choices: Arc<IconChoices>,
     collection: IconCollection,
     selected: Option<YotoMediaId>,
@@ -66,56 +75,133 @@ pub(super) struct IconPicker {
 }
 impl IconPicker {
     pub(super) fn new(
-        owner: Entity<editor::PlaylistEditor>,
+        target: IconTarget,
         parent: Entity<AppView>,
-        account: AccountId,
-        chapter: ChapterId,
-        track: Option<TrackId>,
+        account: Option<AccountId>,
         cx: &mut Context<Self>,
     ) -> Self {
         let choices = parent.read(cx).playlist_icon_choices.clone();
+        let mut subscriptions = vec![cx.observe(&parent, |v, parent, cx| {
+            let parent = parent.read(cx);
+            v.choices = parent.playlist_icon_choices.clone();
+            if v.account.is_some() {
+                v.sync = parent
+                    .snapshot
+                    .remote_sync
+                    .get(&RemoteCollection::Icons)
+                    .cloned();
+            }
+            cx.notify();
+        })];
+        match &target {
+            IconTarget::Playlist { editor, .. } => {
+                if let Some(editor) = editor.upgrade() {
+                    subscriptions.push(cx.observe(&editor, |_, _, cx| cx.notify()));
+                }
+            }
+            IconTarget::Media(panel) => {
+                if let Some(panel) = panel.upgrade() {
+                    subscriptions.push(cx.observe(&panel, |_, _, cx| cx.notify()));
+                }
+            }
+        }
         Self {
-            owner: owner.downgrade(),
+            sync: account.as_ref().map(|_| RemoteSyncState::Syncing),
+            target,
             account,
-            chapter,
-            track,
             choices,
             collection: IconCollection::Public,
             selected: None,
             uploading: false,
-            sync: Some(RemoteSyncState::Syncing),
             status: String::new(),
             tasks: vec![],
-            _subscriptions: vec![
-                cx.observe(&owner, |_, _, cx| cx.notify()),
-                cx.observe(&parent, |v, parent, cx| {
-                    let parent = parent.read(cx);
-                    v.choices = parent.playlist_icon_choices.clone();
-                    v.sync = parent
-                        .snapshot
-                        .remote_sync
-                        .get(&RemoteCollection::Icons)
-                        .cloned();
-                    cx.notify();
-                }),
-            ],
+            _subscriptions: subscriptions,
         }
     }
     pub(super) fn can_cancel(&self, cx: &App) -> bool {
-        !self.uploading && self.owner.upgrade().is_none_or(|v| !v.read(cx).busy())
+        !self.uploading && !self.owner_state(cx).0
+    }
+    /// Whether the owner is busy, whether it refuses changes, and its status line.
+    fn owner_state(&self, cx: &App) -> (bool, bool, String) {
+        match &self.target {
+            IconTarget::Playlist { editor, .. } => editor.upgrade().map(|owner| {
+                let owner = owner.read(cx);
+                (owner.busy(), owner.blocked(), owner.status.clone())
+            }),
+            IconTarget::Media(panel) => panel.upgrade().map(|panel| {
+                let panel = panel.read(cx);
+                (panel.saving_icon(), false, panel.status().to_owned())
+            }),
+        }
+        .unwrap_or((false, true, String::new()))
+    }
+    fn backend(&self, cx: &App) -> Option<(Arc<Service>, Arc<tokio::runtime::Runtime>)> {
+        match &self.target {
+            IconTarget::Playlist { editor, .. } => editor.upgrade().map(|owner| {
+                let owner = owner.read(cx);
+                (owner.service.clone(), owner.runtime.clone())
+            }),
+            IconTarget::Media(panel) => panel.upgrade().map(|panel| panel.read(cx).backend()),
+        }
+    }
+    /// Hand the icon to its owner; false when the owner is gone and did not take it.
+    fn choose(&self, icon: IconReference, cx: &mut Context<Self>) -> bool {
+        match &self.target {
+            IconTarget::Playlist {
+                editor,
+                chapter,
+                track,
+            } => {
+                let Some(account) = self.account.clone() else {
+                    return false;
+                };
+                let (chapter, track) = (*chapter, *track);
+                editor
+                    .update(cx, |owner, cx| {
+                        owner.choose_icon(&account, chapter, track, icon, cx)
+                    })
+                    .is_ok()
+            }
+            IconTarget::Media(panel) => panel
+                .update(cx, |panel, cx| panel.choose_icon(icon, cx))
+                .is_ok(),
+        }
+    }
+    fn refresh(&self, cx: &mut Context<Self>) {
+        let Some(account) = self.account.clone() else {
+            return;
+        };
+        match &self.target {
+            IconTarget::Playlist { editor, .. } => {
+                let _ = editor.update(cx, |owner, cx| {
+                    if owner
+                        .owning_remote(cx)
+                        .is_ok_and(|(active, _)| active == account)
+                    {
+                        owner.send(Command::RefreshIcons(account), cx);
+                    }
+                });
+            }
+            IconTarget::Media(_) => {
+                if let Some((service, runtime)) = self.backend(cx) {
+                    runtime.spawn(async move {
+                        let _ = service.execute(Command::RefreshIcons(account)).await;
+                    });
+                }
+            }
+        }
     }
     fn import_image(&mut self, cx: &mut Context<Self>) {
         if self.uploading {
             return;
         }
-        let Some(owner) = self.owner.upgrade() else {
+        let (_, blocked, _) = self.owner_state(cx);
+        let Some((service, runtime)) = self.backend(cx) else {
             return;
         };
-        if owner.read(cx).blocked() {
+        if blocked {
             return;
         }
-        let service = owner.read(cx).service.clone();
-        let runtime = owner.read(cx).runtime.clone();
         self.uploading = true;
         self.status = tr!("Choisissez une image…").into();
         cx.notify();
@@ -155,22 +241,7 @@ impl IconPicker {
                 .update(cx, |v, cx| {
                     v.uploading = false;
                     let accepted = match staged {
-                        Ok(asset) => {
-                            let account = v.account.clone();
-                            let chapter = v.chapter;
-                            let track = v.track;
-                            v.owner
-                                .update(cx, |owner, cx| {
-                                    owner.choose_icon(
-                                        &account,
-                                        chapter,
-                                        track,
-                                        IconReference::Local { asset },
-                                        cx,
-                                    )
-                                })
-                                .is_ok()
-                        }
+                        Ok(asset) => v.choose(IconReference::Local { asset }, cx),
                         Err(error) => {
                             v.status = error;
                             false
@@ -191,14 +262,7 @@ impl IconPicker {
 }
 impl Render for IconPicker {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (busy, blocked, status) = self
-            .owner
-            .upgrade()
-            .map(|owner| {
-                let owner = owner.read(cx);
-                (owner.busy(), owner.blocked(), owner.status.clone())
-            })
-            .unwrap_or((false, true, String::new()));
+        let (busy, blocked, status) = self.owner_state(cx);
         let disabled = blocked || self.uploading;
         const COLUMNS: usize = 6;
         let rows = gpui_kit::uniform_list(
@@ -208,10 +272,7 @@ impl Render for IconPicker {
                 |v: &mut Self, range: std::ops::Range<usize>, _, cx: &mut Context<Self>| {
                     range
                         .map(|row| {
-                            let disabled = v.uploading
-                                || v.owner
-                                    .upgrade()
-                                    .is_none_or(|owner| owner.read(cx).blocked());
+                            let disabled = v.uploading || v.owner_state(cx).1;
                             let mut cells = div().h(px(64.)).flex().gap(px(8.)).items_center();
                             for icon in v
                                 .choices
@@ -248,11 +309,8 @@ impl Render for IconPicker {
                                                 .object_fit(ObjectFit::Contain)
                                         }))
                                         .children(icon.url.is_none().then(|| {
-                                            theme::pixel_glyph(
-                                                theme::Glyph::for_seed(&icon.title),
-                                                theme::LILAC.accent,
-                                                3.,
-                                            )
+                                            // Yoto gave no image: say so, never invent one.
+                                            div().text_sm().child("◇")
                                         }))
                                         .on_click(cx.listener(move |v, _, _, cx| {
                                             v.selected = Some(media.clone());
@@ -294,12 +352,15 @@ impl Render for IconPicker {
                 cx,
             )
         });
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap(px(14.))
-            .child(div().child(theme::segmented().children(collections)))
-            .child(rows);
+        let mut body = div().flex().flex_col().gap(px(14.));
+        body = if self.account.is_some() {
+            body.child(div().child(theme::segmented().children(collections)))
+                .child(rows)
+        } else {
+            body.child(theme::note(tr!(
+                "Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez aussi importer une image."
+            )))
+        };
         if loading {
             body = body.child(
                 div()
@@ -321,21 +382,15 @@ impl Render for IconPicker {
                             .label(tr!("Réessayer"))
                             .disabled(disabled)
                             .outline()
-                            .on_click(cx.listener(|v, _, _, cx| {
-                                let account = v.account.clone();
-                                let _ = v.owner.update(cx, |owner, cx| {
-                                    if owner
-                                        .owning_remote(cx)
-                                        .is_ok_and(|(active, _)| active == account)
-                                    {
-                                        owner.send(Command::RefreshIcons(account), cx);
-                                    }
-                                });
-                            })),
+                            .on_click(cx.listener(|v, _, _, cx| v.refresh(cx))),
                     ),
             );
         }
-        if !loading && failure.is_none() && self.choices.rows(self.collection).is_empty() {
+        if self.account.is_some()
+            && !loading
+            && failure.is_none()
+            && self.choices.rows(self.collection).is_empty()
+        {
             body = body.child(div().text_sm().child(tr!(
                 "Aucune icône dans cette collection. Vous pouvez importer une image."
             )));
@@ -374,17 +429,12 @@ impl Render for IconPicker {
                         Button::new("apply-icon")
                             .label(tr!("Utiliser cette icône"))
                             .on_click(cx.listener(|v, _, _, cx| {
-                                if let Some(media) = &v.selected {
+                                if let (Some(media), Some(account)) = (&v.selected, &v.account) {
                                     let icon = IconReference::Yoto {
-                                        account: v.account.clone(),
+                                        account: account.clone(),
                                         media: media.clone(),
                                     };
-                                    let account = v.account.clone();
-                                    let chapter = v.chapter;
-                                    let track = v.track;
-                                    let _ = v.owner.update(cx, |owner, cx| {
-                                        owner.choose_icon(&account, chapter, track, icon, cx)
-                                    });
+                                    v.choose(icon, cx);
                                 }
                             })),
                         Look::Primary,
@@ -409,6 +459,100 @@ impl Render for IconPicker {
             body = body.child(div().text_sm().child(status));
         }
         body
+    }
+}
+
+/// A chosen icon as this computer can draw it, `size` pixels wide: a local image once its
+/// pixels are read, or a Yoto icon of the connected account. A Yoto icon this computer
+/// has no image for (another account's, say) shows a small diamond: it is there, unseen.
+pub(super) fn icon_image(
+    icon: &IconReference,
+    previews: &BTreeMap<AssetId, PixelArt>,
+    parent: &AppView,
+    size: f32,
+    cx: &App,
+) -> AnyElement {
+    match icon {
+        IconReference::Local { asset } => previews
+            .get(asset)
+            .map(|art| thumbnail(art, size / 16., cx))
+            .unwrap_or_else(|| div().size(px(size)).into_any_element()),
+        IconReference::Yoto { account, media } => {
+            match parent
+                .playlist_icon_choices
+                .url(media)
+                .filter(|_| parent.snapshot.active_account.as_ref() == Some(account))
+            {
+                Some(url) => img(url.clone())
+                    .size(px(size))
+                    .object_fit(ObjectFit::Contain)
+                    .into_any_element(),
+                None => div()
+                    .size(px(size))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_sm()
+                    .child("◇")
+                    .into_any_element(),
+            }
+        }
+    }
+}
+impl AppView {
+    /// The icon of a media in a tile of `size`: the icon itself, or an empty slot.
+    pub(super) fn media_icon_tile(
+        &self,
+        id: MediaId,
+        icon: Option<&IconReference>,
+        size: f32,
+        radius: f32,
+        cx: &App,
+    ) -> Div {
+        match icon {
+            Some(icon) => theme::icon_frame(&id.to_string(), size, radius).child(icon_image(
+                icon,
+                &self.icon_previews,
+                self,
+                (size * 0.66).round(),
+                cx,
+            )),
+            None => theme::empty_icon_slot(size, radius, false),
+        }
+    }
+    /// Read the pixels of every local media icon not drawn yet.
+    pub(super) fn load_media_icons(&mut self, cx: &mut Context<Self>) {
+        let missing: Vec<AssetId> = self
+            .snapshot
+            .media
+            .iter()
+            .filter_map(|media| match &media.icon {
+                Some(IconReference::Local { asset }) => Some(*asset),
+                Some(IconReference::Yoto { .. }) | None => None,
+            })
+            .collect();
+        for asset in missing {
+            self.load_icon_preview(asset, cx);
+        }
+    }
+    /// Read one local icon's pixels once; an icon that cannot be read is not asked again.
+    pub(super) fn load_icon_preview(&mut self, asset: AssetId, cx: &mut Context<Self>) {
+        if self.icon_previews.contains_key(&asset) || !self.icon_requests.insert(asset) {
+            return;
+        }
+        let service = self.service.clone();
+        let runtime = self.runtime.clone();
+        self._tasks.push(cx.spawn(async move |weak, cx| {
+            let result = runtime
+                .spawn(async move { service.execute(Command::ReadPixelArt(asset)).await })
+                .await;
+            if let Ok(art) = joined(result).and_then(Reply::into_pixel_art) {
+                let _ = weak.update(cx, |v, cx| {
+                    v.icon_previews.insert(asset, art);
+                    cx.notify();
+                });
+            }
+        }));
     }
 }
 

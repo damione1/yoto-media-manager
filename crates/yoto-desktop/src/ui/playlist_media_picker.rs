@@ -40,6 +40,8 @@ impl VersionChoice {
 struct MediaChoice {
     id: MediaId,
     title: String,
+    /// The icon its chapter and tracks will get.
+    icon: Option<IconReference>,
     versions: Vec<VersionChoice>,
     default: RecipeId,
 }
@@ -96,6 +98,7 @@ fn choices(snapshot: &Snapshot) -> Vec<MediaChoice> {
             Some(MediaChoice {
                 id: media.id,
                 title: media.title.clone(),
+                icon: media.icon.clone(),
                 versions,
                 default,
             })
@@ -154,9 +157,23 @@ impl Render for MediaPicker {
                       range: std::ops::Range<usize>,
                       _,
                       cx: &mut Context<MediaPicker>| {
+                    let parent = view
+                        .editor
+                        .upgrade()
+                        .and_then(|editor| editor.read(cx).parent.upgrade());
                     range
                         .map(|index| {
                             let row = &view.rows.rows[index];
+                            let icon = match &parent {
+                                Some(parent) => parent.read(cx).media_icon_tile(
+                                    row.id,
+                                    row.icon.as_ref(),
+                                    48.,
+                                    14.,
+                                    cx,
+                                ),
+                                None => theme::empty_icon_slot(48., 14., false),
+                            };
                             let media = row.id;
                             let selected = view.selected.contains(&media);
                             let default = row.default;
@@ -200,7 +217,7 @@ impl Render for MediaPicker {
                                             cx.notify();
                                         })),
                                 )
-                                .child(theme::thumbnail(&media.to_string(), 48., 14.))
+                                .child(icon)
                                 .child(
                                     div()
                                         .flex_1()
@@ -302,7 +319,7 @@ impl Render for MediaPicker {
             }))
             .child(list)
             .child(theme::note(tr!(
-                "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
+                "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist. Pas d’icône ? Choisissez-la dans la Médiathèque, ou plus tard dans la playlist."
             )))
             .child(actions)
             .children(busy.then(|| {

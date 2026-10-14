@@ -110,7 +110,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                         },
                                     )),
                                 )
-                                .child(theme::thumbnail(&id.to_string(), 48., 14.))
+                                .child(view.media_icon_tile(id, media.icon.as_ref(), 48., 14., cx))
                                 .child(
                                     div()
                                         .flex_1()
