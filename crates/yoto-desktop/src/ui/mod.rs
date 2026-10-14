@@ -1133,19 +1133,29 @@ impl Render for AppView {
             )
             .child(
                 div()
-                    .px(px(20.))
-                    .py(px(6.))
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .pl(px(20.))
+                    .pr(px(12.))
+                    .py(px(3.))
                     .border_t_2()
                     .border_color(theme::c(theme::DIVIDER))
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme::c(if self.error.is_some() {
-                        theme::ROSE.ink
-                    } else {
-                        theme::MUTED
-                    }))
-                    .truncate()
-                    .child(self.status.clone()),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme::c(if self.error.is_some() {
+                                theme::ROSE.ink
+                            } else {
+                                theme::MUTED
+                            }))
+                            .truncate()
+                            .child(self.status.clone()),
+                    )
+                    .child(updates_control(self, cx)),
             )
     }
 }
@@ -1392,22 +1402,44 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
         .child(brand)
         .children(items)
         .child(div().flex_1())
-        .child(theme::pill(
-            Button::new("updates-sidebar")
-                .label(view.updater.read(cx).sidebar_label())
-                .on_click(cx.listener(|view, _, window, cx| {
-                    let updater = view.updater.clone();
-                    // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
-                    window.defer(cx, move |window, cx| {
-                        update::UpdatePanel::open(updater, window, cx)
-                    });
-                })),
-            theme::Look::Ghost,
-            theme::Height::Small,
-            false,
-            cx,
-        ))
         .child(account_card)
+}
+
+/// Right end of the status bar: opens the update dialog, with a dot when a new
+/// version is waiting.
+fn updates_control(view: &AppView, cx: &mut Context<AppView>) -> Div {
+    let updater = view.updater.read(cx);
+    let (available, label) = (updater.update_available(), updater.status_label());
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap(px(6.))
+        .children(available.then(|| theme::dot(theme::PEACH.accent)))
+        .child(
+            theme::pill(
+                Button::new("updates-status")
+                    .label(label)
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        let updater = view.updater.clone();
+                        // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
+                        window.defer(cx, move |window, cx| {
+                            update::UpdatePanel::open(updater, window, cx)
+                        });
+                    })),
+                if available {
+                    theme::Look::Link(&theme::PEACH)
+                } else {
+                    theme::Look::Ghost
+                },
+                theme::Height::Tiny,
+                false,
+                cx,
+            )
+            .h(px(24.))
+            .px(px(8.))
+            .text_size(px(13.)),
+        )
 }
 
 /// « Annuler » beside a connect button while the browser sign-in runs: a sign-in that

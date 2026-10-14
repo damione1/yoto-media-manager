@@ -87,17 +87,25 @@ impl UpdatePanel {
                 .child(entity.clone())
         });
     }
-    pub fn sidebar_label(&self) -> &'static str {
+    /// A new version is known and not installed yet: the status bar marks it with a dot.
+    pub fn update_available(&self) -> bool {
         match self.state.as_ref() {
             UpdateState::Available(_)
             | UpdateState::Downloading { .. }
             | UpdateState::Verifying(_)
-            | UpdateState::Ready { .. } => tr!("Mise à jour disponible"),
+            | UpdateState::Ready { .. } => true,
             UpdateState::Idle
             | UpdateState::Checking
             | UpdateState::Current
             | UpdateState::Installing
-            | UpdateState::Failed(_) => tr!("Mises à jour"),
+            | UpdateState::Failed(_) => false,
+        }
+    }
+    pub fn status_label(&self) -> &'static str {
+        if self.update_available() {
+            tr!("Mise à jour disponible")
+        } else {
+            tr!("Mises à jour")
         }
     }
     fn request(&self, action: UpdateAction) {
