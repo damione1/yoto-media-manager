@@ -1,15 +1,24 @@
 /* ─────────────────────────────────────────────────────────────
-   The app screens on the landing page play the app's own steps:
+   The app screens on the landing page play the app's own flows,
+   as its interface code (crates/yoto-desktop/src/ui) runs them:
 
-     · import:   a YouTube link is typed into Import audio, the task
-                 downloads, then prepares the audio, and the song lands
-                 at the top of the Library;
-     · trim:     the two handles close in past the intro and credits,
-                 the start/end/kept values follow, the selection plays,
-                 then Apply prepares the trimmed version;
-     · playlist: a song is dropped into the playlist, the header says
-                 Saving… while it is sent, an icon is picked for it, and
-                 both settle on "Saved on Yoto".
+     · import:   a YouTube link is typed into Import audio and
+                 Import pressed; the button looks the link up, the
+                 field clears and the task appears under Activity,
+                 downloading; once ready, its Listen button opens the
+                 song in the Library, with its side panel;
+     · trim:     « Trim the audio » in the song's side panel opens the
+                 trim dialog; the two handles are dragged past the intro
+                 and the credits, a click on the waveform moves the
+                 playhead, the selection plays from there, « play the end
+                 of the selection » checks the cut, and Apply prepares
+                 the trimmed version; once it is ready the dialog closes
+                 and the song shows its trimmed version;
+     · playlist: Add media opens the media dialog, the trimmed song is
+                 ticked and Add (1) sends it to Yoto; the dialog closes
+                 once Yoto has it and the track appears with an empty
+                 icon slot; a click on the slot opens Choose an icon,
+                 an icon is picked and used, and the playlist saves.
 
    The markup is each scene's finished frame. Scenes only animate while
    on screen and the tab is visible, can be paused from their button,
@@ -19,14 +28,14 @@
   "use strict";
 
   var REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var FR = (document.documentElement.lang || "").slice(0, 2) === "fr";
 
   function $(root, sel) { return root.querySelector(sel); }
   function $$(root, sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); }
-  function pct(n) { return Math.round(n) + (FR ? " %" : "%"); }
   function clock(s) { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
-  function length(s) { s = Math.round(s); return Math.floor(s / 60) + " min " + String(s % 60).padStart(2, "0"); }
+  function length(s) { s = Math.round(s); return Math.floor(s / 60) + " min " + String(s % 60).padStart(2, "0") + " s"; }
   function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+  function linear(t) { return t; }
+  function bump(el) { if (!el) return; el.classList.remove("is-bump"); void el.offsetWidth; el.classList.add("is-bump"); }
 
   /* Timers that all die together when a scene stops. */
   function Run() { this.ids = []; this.rafs = []; this.stopped = true; }
@@ -36,13 +45,13 @@
     this.ids.push(id);
     return id;
   };
-  Run.prototype.tween = function (ms, step, done) {
-    var self = this, t0 = 0;
+  Run.prototype.tween = function (ms, step, done, curve) {
+    var self = this, t0 = 0, f = curve || ease;
     var frame = function (now) {
       if (self.stopped) return;
       if (!t0) t0 = now;
       var t = Math.min(1, (now - t0) / ms);
-      step(ease(t));
+      step(f(t));
       if (t < 1) self.rafs.push(requestAnimationFrame(frame));
       else if (done) done();
     };
@@ -89,20 +98,34 @@
     }
   };
 
+  /* A button whose label (and spinner) follow a state named in data-*. */
+  function label(btn, key) {
+    var l = $(btn, "[data-label]") || btn;
+    l.textContent = btn.getAttribute("data-" + key);
+  }
+
   /* ── Base scene ─────────────────────────────────────────────── */
   function Scene(root) {
     this.root = root;
     this.run = new Run();
     this.cursor = new Cursor(root);
     this.toggle = root.parentNode.querySelector("[data-toggle]");
+    this.status = $(root, "[data-statusline]");
+    this.ready = this.status ? this.status.textContent : "";
     this.userPaused = false;
     this.visible = false;
+    var nav = this.nav = {};
+    $$(root, "[data-nav]").forEach(function (el) { nav[el.getAttribute("data-nav")] = el; });
   }
   Scene.prototype.play = function () {
     this.run.start();
     this.root.classList.add("is-playing");
     this.cursor.show(true);
+    // Back to the first frame at once: no transition plays the loop backwards.
+    this.root.classList.add("is-resetting");
     this.reset();
+    void this.root.offsetWidth;
+    this.root.classList.remove("is-resetting");
     this.sequence();
   };
   Scene.prototype.stop = function () {
@@ -119,46 +142,67 @@
     var self = this;
     this.run.after(ms, function () { self.play(); });
   };
+  Scene.prototype.say = function (text) { if (this.status) this.status.textContent = text; };
+  Scene.prototype.activeNav = function (key) {
+    var nav = this.nav;
+    Object.keys(nav).forEach(function (k) { nav[k].classList.toggle("is-active", k === key); });
+  };
+  Scene.prototype.count = function (key, n) {
+    var el = this.nav[key] && $(this.nav[key], "[data-count]");
+    if (!el) return null;
+    el.textContent = String(n);
+    el.classList.toggle("is-zero", n === 0);
+    return el;
+  };
+  /* Glide to `el`, wait, press it, then run `then`. */
+  Scene.prototype.press = function (el, then, wait, fx, fy) {
+    var self = this, run = this.run;
+    var moved = this.cursor.to(el, fx, fy);
+    run.after(moved ? (wait || 800) : 150, function () {
+      self.cursor.click(moved ? el : null, run);
+      then();
+    });
+  };
 
   /* ── 1 · Import ─────────────────────────────────────────────── */
   function Import(root) {
     Scene.call(this, root);
     this.typed = $(root, "[data-typed]");
+    this.field = $(root, "[data-field]");
     this.text = this.typed.getAttribute("data-text");
     this.btn = $(root, "[data-import-btn]");
-    this.act = $(root, "[data-activity]");
-    this.line = $(root, "[data-act-line]");
-    this.bar = $(root, "[data-progress]");
+    this.job = $(root, "[data-job]");
+    this.jobTitle = $(root, "[data-job-title]");
+    this.jobLine = $(root, "[data-job-line]");
+    this.listen = $(root, "[data-job-listen]");
     this.meta = $(root, "[data-lib-meta]");
-    this.nav = {};
-    var self = this;
-    $$(root, "[data-nav]").forEach(function (el) { self.nav[el.getAttribute("data-nav")] = el; });
-    this.count = $(this.nav.library, "[data-count]");
+    this.size = $$(root, ".m-row").length;
   }
   Import.prototype = Object.create(Scene.prototype);
-  Import.prototype.activeNav = function (key) {
-    var nav = this.nav;
-    Object.keys(nav).forEach(function (k) { nav[k].classList.toggle("is-active", k === key); });
+  Import.prototype.type = function (text) {
+    this.typed.textContent = text;
+    this.field.classList.toggle("is-empty", !text);
   };
-  Import.prototype.progress = function (phase, label, ms, done) {
-    var self = this;
-    this.act.setAttribute("data-phase", phase);
-    this.run.tween(ms, function (t) {
-      self.bar.style.setProperty("--p", t * 100 + "%");
-      self.line.textContent = label + " · " + pct(t * 100);
-    }, done);
+  Import.prototype.jobState = function (running) {
+    var j = this.job;
+    j.classList.toggle("is-running", running);
+    this.jobTitle.textContent = j.getAttribute(running ? "data-running-title" : "data-done-title");
+    this.jobLine.textContent = j.getAttribute(running ? "data-running" : "data-done");
   };
   Import.prototype.reset = function () {
     var root = this.root;
     root.setAttribute("data-view", "imports");
     root.classList.add("lib-pre");
     this.activeNav("imports");
-    this.typed.textContent = "";
-    this.act.classList.remove("is-shown");
-    this.act.setAttribute("data-phase", "download");
-    this.bar.style.setProperty("--p", "0%");
+    this.type("");
+    this.btn.classList.remove("is-busy", "is-disabled");
+    label(this.btn, "idle");
+    this.job.classList.remove("is-shown");
+    this.jobState(true);
     this.meta.textContent = this.meta.getAttribute("data-before");
-    if (this.count) this.count.textContent = "24";
+    this.count("library", this.size - 1);
+    this.count("imports", 0);
+    this.say(this.ready);
     var o = root.getBoundingClientRect();
     this.cursor.place(o.width * 0.72, o.height * 0.85, true);
   };
@@ -167,43 +211,49 @@
     run.after(400, function () {
       root.classList.add("is-typing");
       var type = function () {
-        if (i >= self.text.length) { root.classList.remove("is-typing"); return afterTyping(); }
+        if (i >= self.text.length) { root.classList.remove("is-typing"); return lookUp(); }
         i += 1;
-        self.typed.textContent = self.text.slice(0, i);
+        self.type(self.text.slice(0, i));
         run.after(28 + (i % 5 === 0 ? 40 : 0), type);
       };
       type();
     });
-    var afterTyping = function () {
-      self.cursor.to(self.btn);
-      run.after(800, function () {
-        self.cursor.click(self.btn, run);
-        run.after(250, function () {
-          self.act.classList.add("is-shown");
-          self.progress("download", self.line.getAttribute("data-downloading"), 1500, function () {
-            self.progress("prepare", self.line.getAttribute("data-preparing"), 1400, function () {
-              self.act.setAttribute("data-phase", "done");
-              self.line.textContent = self.line.getAttribute("data-ready");
-              run.after(1100, toLibrary);
-            });
-          });
-        });
+    // « Importer » first looks the link up, then starts the import and
+    // clears the field; the task shows under Activity.
+    var lookUp = function () {
+      self.press(self.btn, function () {
+        self.btn.classList.add("is-busy", "is-disabled");
+        label(self.btn, "busy");
+        self.say(self.btn.getAttribute("data-say-busy"));
+        run.after(1000, started);
       });
     };
-    var toLibrary = function () {
-      var moved = self.cursor.to(self.nav.library, 0.3);
-      run.after(moved ? 800 : 200, function () {
-        if (moved) self.cursor.click(null, run);
-        root.setAttribute("data-view", "library");
-        self.activeNav("library");
-        run.after(300, function () {
-          root.classList.remove("lib-pre");
-          self.meta.textContent = self.meta.getAttribute("data-after");
-          if (self.count) {
-            self.count.textContent = "25";
-            self.count.classList.remove("is-bump"); void self.count.offsetWidth; self.count.classList.add("is-bump");
-          }
-          self.loop(3600);
+    var started = function () {
+      self.btn.classList.remove("is-busy", "is-disabled");
+      label(self.btn, "idle");
+      self.type("");
+      self.say(self.btn.getAttribute("data-say-started"));
+      self.jobState(true);
+      self.job.classList.add("is-shown");
+      bump(self.count("imports", 1));
+      run.after(2600, done);
+    };
+    var done = function () {
+      self.jobState(false);
+      self.count("imports", 0);
+      self.meta.textContent = self.meta.getAttribute("data-after");
+      bump(self.count("library", self.size));
+      run.after(900, function () {
+        // « Écouter » opens the song in the Library, in its side panel.
+        self.press(self.listen, function () {
+          self.say(self.ready);
+          root.setAttribute("data-view", "library");
+          self.activeNav("library");
+          run.after(300, function () {
+            root.classList.remove("lib-pre");
+            self.cursor.show(false);
+            self.loop(4200);
+          });
         });
       });
     };
@@ -212,17 +262,27 @@
     this.root.removeAttribute("data-view");
     this.root.classList.remove("lib-pre", "is-typing");
     this.activeNav("library");
-    this.typed.textContent = this.text;
-    this.act.removeAttribute("data-phase");
-    this.line.textContent = this.line.getAttribute("data-ready");
+    // The app clears the link once its import has started.
+    this.type("");
+    this.btn.classList.remove("is-busy", "is-disabled");
+    label(this.btn, "idle");
+    this.job.classList.add("is-shown");
+    this.jobState(false);
     this.meta.textContent = this.meta.getAttribute("data-after");
-    if (this.count) this.count.textContent = "25";
+    this.count("library", this.size);
+    this.count("imports", 0);
+    this.say(this.ready);
   };
 
   /* ── 2 · Trim ───────────────────────────────────────────────── */
-  var DURATION = 112; // seconds: 1 min 52, the song in the design board
+  var DURATION = 112;                 // 1 min 52 s
+  var CUT_A = 16 / DURATION;          // 0:16
+  var CUT_B = 99 / DURATION;          // 1:39
+  var SEEK = 0.45;                    // where the waveform is clicked
+  var ENDING = 5 / DURATION;          // the app plays the last 5 seconds
   function Trim(root) {
     Scene.call(this, root);
+    this.box = $(root, "[data-trim]");
     this.wave = $(root, "[data-wave]");
     this.bars = $$(root, ".m-wave-in i");
     this.ha = $(root, ".m-handle-a");
@@ -230,21 +290,28 @@
     this.start = $(root, "[data-start]");
     this.end = $(root, "[data-end]");
     this.kept = $(root, "[data-kept]");
+    this.listenEnd = $(root, "[data-listen-end]");
     this.listen = $(root, "[data-listen]");
-    this.listenLabel = $(this.listen, "[data-label]");
-    this.apply = $(root, "[data-apply]");
+    this.foot = $(root, "[data-foot]");
+    this.openTrim = $(root, "[data-open-trim]");
     this.note = $(root, "[data-note]");
-    this.a = 0.14; this.b = 0.88; this.p = 0.38;
+    this.cancel = $(root, "[data-cancel]");
+    this.apply = $(root, "[data-apply]");
   }
   Trim.prototype = Object.create(Scene.prototype);
   Trim.prototype.render = function () {
     var a = this.a, b = this.b, p = this.p, n = this.bars.length;
+    // The playhead is drawn only while it sits inside the selection.
+    var head = p >= a - 1e-6 && p <= b + 1e-6;
+    this.box.style.setProperty("--a", a * 100 + "%");
+    this.box.style.setProperty("--b", b * 100 + "%");
     this.wave.style.setProperty("--a", a * 100 + "%");
     this.wave.style.setProperty("--b", b * 100 + "%");
     this.wave.style.setProperty("--p", p * 100 + "%");
+    this.wave.classList.toggle("no-head", !head);
     this.bars.forEach(function (bar, i) {
       var x = (i + 0.5) / n;
-      var state = x < a || x > b ? "out" : x < p ? "played" : "in";
+      var state = x < a || x > b ? "out" : head && x <= p ? "played" : "in";
       if (!bar.classList.contains(state)) {
         bar.classList.remove("out", "in", "played");
         bar.classList.add(state);
@@ -254,184 +321,218 @@
     this.end.textContent = clock(b * DURATION);
     this.kept.textContent = length((b - a) * DURATION);
   };
-  Trim.prototype.setNote = function (state) {
-    var wrap = this.note.parentNode;
-    wrap.classList.toggle("is-busy", state === "busy");
-    wrap.classList.toggle("is-done", state === "done");
-    this.note.textContent = this.note.getAttribute("data-" + state);
+  Trim.prototype.playing = function (on) {
+    this.listen.classList.toggle("is-on", on);
+    label(this.listen, on ? "playing" : "idle");
+  };
+  Trim.prototype.prep = function (busy) {
+    this.foot.classList.toggle("is-busy", busy);
+    this.note.textContent = this.note.getAttribute(busy ? "data-busy" : "data-idle");
+    this.apply.classList.toggle("is-busy", busy);
+    this.apply.classList.toggle("is-disabled", busy);
+    label(this.apply, busy ? "busy" : "idle");
+    [this.cancel, this.listen, this.listenEnd].forEach(function (b) { b.classList.toggle("is-disabled", busy); });
+  };
+  Trim.prototype.dialog = function (open) {
+    this.box.classList.toggle("is-open", open);
+    this.root.classList.toggle("has-dialog", open);
   };
   Trim.prototype.reset = function () {
+    this.root.classList.remove("is-cut");
+    this.dialog(false);
     this.a = 0; this.b = 1; this.p = 0;
-    this.wave.style.setProperty("--ph", "0");
     this.render();
-    this.listenLabel.textContent = this.listen.getAttribute("data-listen-label");
-    this.setNote("idle");
+    this.playing(false);
+    this.prep(false);
     var o = this.root.getBoundingClientRect();
     this.cursor.place(o.width * 0.5, o.height * 0.92, true);
   };
   Trim.prototype.sequence = function () {
     var self = this, run = this.run;
-    run.after(300, function () {
-      self.cursor.to(self.ha, 0.5, 0.5);
+    // Each handle is grabbed on the waveform and dragged.
+    var drag = function (handle, from, to, set, ms, then) {
+      self.cursor.to(handle, 0.5, 0.5);
       run.after(750, function () {
-        self.run.tween(1000, function (t) {
-          self.a = 0.14 * t; self.p = self.a; self.render();
-          self.cursor.to(self.ha, 0.5, 0.5, true);
-        }, function () {
-          self.cursor.to(self.hb, 0.5, 0.5);
-          run.after(750, function () {
-            self.run.tween(900, function (t) {
-              self.b = 1 - 0.12 * t; self.render();
-              self.cursor.to(self.hb, 0.5, 0.5, true);
-            }, listen);
+        run.tween(ms, function (t) {
+          set(from + (to - from) * t); self.render();
+          self.cursor.to(handle, 0.5, 0.5, true);
+        }, then);
+      });
+    };
+    run.after(400, function () {
+      self.press(self.openTrim, function () {
+        self.dialog(true);
+        run.after(600, function () {
+          drag(self.ha, 0, CUT_A, function (v) { self.a = v; }, 1000, function () {
+            drag(self.hb, 1, CUT_B, function (v) { self.b = v; }, 900, seek);
           });
         });
       });
     });
-    var listen = function () {
-      self.cursor.to(self.listen);
+    // A click anywhere else on the waveform moves the playhead.
+    var seek = function () {
+      var p = spot(self.root, self.wave, 0, 0.5);
+      var w = $(self.wave, ".m-wave-in").getBoundingClientRect();
+      if (p) self.cursor.place(w.left - p.o.left + w.width * SEEK, p.y + 12);
       run.after(800, function () {
-        self.cursor.click(self.listen, run);
-        self.listenLabel.textContent = self.listen.getAttribute("data-stop-label");
-        self.wave.style.setProperty("--ph", "1");
-        self.run.tween(2200, function (t) {
-          self.p = self.a + (0.38 - self.a) * t; self.render();
+        self.cursor.click(null, run);
+        self.p = SEEK; self.render();
+        run.after(500, listen);
+      });
+    };
+    // Listening starts from the playhead.
+    var listen = function () {
+      self.press(self.listen, function () {
+        self.playing(true);
+        run.tween(2000, function (t) {
+          self.p = SEEK + 0.12 * t; self.render();
+        }, ending, linear);
+      });
+    };
+    // « Écouter la fin de la sélection »: the last seconds, to check the cut.
+    var ending = function () {
+      self.press(self.listenEnd, function () {
+        self.p = CUT_B - ENDING; self.render();
+        run.tween(2300, function (t) {
+          self.p = CUT_B - ENDING + ENDING * t; self.render();
         }, function () {
-          self.cursor.to(self.listen);
-          run.after(300, function () {
-            self.cursor.click(self.listen, run);
-            self.listenLabel.textContent = self.listen.getAttribute("data-listen-label");
-            self.cursor.to(self.apply);
-            run.after(900, apply);
-          });
+          self.playing(false);
+          run.after(500, apply);
+        }, linear);
+      }, 700);
+    };
+    // Once the trimmed version is ready, the app closes the dialog: the
+    // song now shows « Découpé », its trimmed version and a note.
+    var apply = function () {
+      self.press(self.apply, function () {
+        self.prep(true);
+        run.after(1800, function () {
+          self.dialog(false);
+          self.root.classList.add("is-cut");
+          self.cursor.show(false);
+          self.loop(3800);
         });
       });
     };
-    var apply = function () {
-      self.cursor.click(self.apply, run);
-      self.setNote("busy");
-      run.after(1600, function () {
-        self.setNote("done");
-        self.loop(3400);
-      });
-    };
   };
+  /* The finished frame is the dialog with the cut chosen, before Apply. */
   Trim.prototype.finish = function () {
-    this.a = 0.14; this.b = 0.88; this.p = 0.38;
-    this.wave.style.removeProperty("--ph");
+    this.root.classList.remove("is-cut");
+    this.dialog(true);
+    this.a = CUT_A; this.b = CUT_B; this.p = SEEK;
     this.render();
-    this.listenLabel.textContent = this.listen.getAttribute("data-listen-label");
-    this.setNote("idle");
+    this.playing(false);
+    this.prep(false);
   };
 
   /* ── 3 · Playlist ───────────────────────────────────────────── */
   function Playlist(root) {
     Scene.call(this, root);
-    this.status = $(root, "[data-status]");
-    this.statusLabel = $(this.status, "[data-label]");
+    this.status = $(root, "[data-statusline]");
+    this.tag = $(root, "[data-status]");
+    this.tagLabel = $(this.tag, "[data-label]");
     this.meta = $(root, "[data-pl-meta]");
-    this.slot = $(root, "[data-slot]");
-    this.row = $(this.slot, ".m-track");
-    this.icon = $(root, "[data-track-icon]");
-    this.state = $(root, "[data-state]");
-    this.drag = $(root, "[data-drag]");
-    this.pop = $(root, "[data-pop]");
-    this.icons = $$(root, "[data-icon]");
+    this.add = $(root, "[data-add]");
+    this.picker = $(root, "[data-picker]");
+    this.target = $(root, "[data-pick-row]");
+    this.targetCheck = $(this.target, ".m-check");
+    this.addN = $(root, "[data-pick-add]");
+    this.slot = $(root, "[data-track-icon]");
+    this.icons = $(root, "[data-icons]");
+    this.cells = $$(root, "[data-icon]");
     this.use = $(root, "[data-use]");
+    this.pickName = root.getAttribute("data-pick");
   }
   Playlist.prototype = Object.create(Scene.prototype);
   Playlist.prototype.saving = function (on) {
-    this.status.classList.toggle("is-saving", on);
-    this.statusLabel.textContent = this.status.getAttribute(on ? "data-saving" : "data-saved");
+    this.tag.classList.toggle("is-saving", on);
+    this.tagLabel.textContent = this.tag.getAttribute(on ? "data-saving" : "data-saved");
   };
-  Playlist.prototype.trackState = function (sending) {
-    this.state.classList.toggle("f-butter", sending);
-    this.state.classList.toggle("f-mint", !sending);
-    this.state.textContent = this.state.getAttribute(sending ? "data-sending" : "data-done");
+  Playlist.prototype.dialog = function (el, open) {
+    el.classList.toggle("is-open", open);
+    this.root.classList.toggle("has-dialog", open);
   };
-  Playlist.prototype.pick = function (i) {
-    this.icons.forEach(function (el, j) { el.classList.toggle("is-picked", i === j); });
+  Playlist.prototype.tick = function (on) {
+    this.target.classList.toggle("is-checked", on);
+    this.addN.classList.toggle("is-disabled", !on);
+    label(this.addN, on ? "one" : "zero");
   };
-  Playlist.prototype.moveDrag = function (x, y, instant) {
-    var d = this.drag;
-    d.classList.toggle("is-instant", !!instant);
-    d.style.setProperty("--dx", x + "px");
-    d.style.setProperty("--dy", y + "px");
-    if (instant) void d.offsetWidth;
+  Playlist.prototype.pick = function (name) {
+    this.cells.forEach(function (el) { el.classList.toggle("is-picked", el.getAttribute("data-icon") === name); });
+    this.use.classList.toggle("is-disabled", !name);
+  };
+  Playlist.prototype.cell = function (name) {
+    return this.cells.filter(function (el) { return el.getAttribute("data-icon") === name; })[0];
   };
   Playlist.prototype.reset = function () {
     var root = this.root;
-    root.classList.add("slot-closed");
-    root.classList.remove("is-picking");
+    root.classList.add("is-short");
+    root.classList.remove("is-choosing", "has-dialog");
+    this.picker.classList.remove("is-open", "is-busy");
+    this.icons.classList.remove("is-open");
     this.saving(false);
     this.meta.textContent = this.meta.getAttribute("data-before");
-    this.icon.classList.add("is-unset");
-    this.trackState(true);
-    this.pop.classList.remove("is-open");
-    this.pick(3);
+    this.tick(false);
+    this.slot.classList.remove("is-set");
+    this.pick(null);
     var o = root.getBoundingClientRect();
-    var w = this.drag.offsetWidth;
-    this.startX = Math.max(8, o.width - w - 16);
-    this.startY = Math.round(o.height * 0.16);
-    this.drag.classList.remove("is-shown");
-    this.moveDrag(this.startX, this.startY, true);
-    this.cursor.place(this.startX + w * 0.55, this.startY + 26, true);
+    this.cursor.place(o.width * 0.55, o.height * 0.8, true);
   };
   Playlist.prototype.sequence = function () {
     var self = this, run = this.run, root = this.root;
-    run.after(400, function () { self.drag.classList.add("is-shown"); });
-    run.after(1100, function () {
-      var target = spot(root, self.slot, 0, 0);
-      var tx = target ? target.x : 24, ty = target ? target.y : 200;
-      root.classList.remove("slot-closed");
-      self.moveDrag(tx + 4, ty + 2);
-      if (self.cursor.el) self.cursor.el.classList.add("is-carrying");
-      self.cursor.place(tx + 4 + self.drag.offsetWidth * 0.55, ty + 28);
-      run.after(1000, function () {
-        if (self.cursor.el) self.cursor.el.classList.remove("is-carrying");
-        self.drag.classList.remove("is-shown");
-        self.saving(true);
-        self.meta.textContent = self.meta.getAttribute("data-after");
-        run.after(700, openPicker);
+    // « Ajouter des médias » → the dialog → tick the song → « Ajouter (1) ».
+    run.after(500, function () {
+      self.press(self.add, function () {
+        self.dialog(self.picker, true);
+        run.after(700, function () {
+          self.press(self.targetCheck, function () {
+            self.tick(true);
+            run.after(400, send);
+          });
+        });
       });
     });
-    var openPicker = function () {
-      self.cursor.to(self.icon);
-      run.after(750, function () {
-        self.cursor.click(null, run);
-        root.classList.add("is-picking");
-        // Above the new row, beside its icon, the way the app's popover
-        // opens: it never covers the row whose icon is being chosen.
-        var p = spot(root, self.icon, 1, 0);
-        var row = spot(root, self.row, 0, 0);
-        var o = root.getBoundingClientRect();
-        var w = self.pop.offsetWidth, h = self.pop.offsetHeight;
-        var x = p ? Math.min(p.x + 12, o.width - w - 10) : 10;
-        var y = row ? Math.max(36, row.y - h - 8) : 40;
-        self.pop.style.setProperty("--px", Math.max(10, x) + "px");
-        self.pop.style.setProperty("--py", y + "px");
-        self.pop.classList.add("is-open");
+    // The audio is sent to Yoto before it appears in the playlist: the
+    // dialog waits, then closes, and the new track is there, on Yoto.
+    var send = function () {
+      self.press(self.addN, function () {
+        self.picker.classList.add("is-busy");
+        self.addN.classList.add("is-disabled");
+        label(self.addN, "busy");
+        self.saving(true);
+        run.after(2300, function () {
+          self.dialog(self.picker, false);
+          self.picker.classList.remove("is-busy");
+          root.classList.remove("is-short");
+          self.saving(false);
+          self.meta.textContent = self.meta.getAttribute("data-after");
+          run.after(1100, chooseIcon);
+        });
+      });
+    };
+    // Its empty icon slot opens « Choisir une icône ».
+    var chooseIcon = function () {
+      self.press(self.slot, function () {
+        root.classList.add("is-choosing");
+        self.dialog(self.icons, true);
         run.after(700, function () {
-          self.cursor.to(self.icons[0]);
-          run.after(750, function () {
-            self.cursor.click(null, run);
-            self.pick(0);
-            run.after(500, function () {
-              self.cursor.to(self.use);
-              run.after(750, function () {
-                self.cursor.click(self.use, run);
-                run.after(200, function () {
-                  self.pop.classList.remove("is-open");
-                  root.classList.remove("is-picking");
-                  self.icon.classList.remove("is-unset");
-                  run.after(1100, function () {
-                    self.trackState(false);
+          self.press(self.cell(self.pickName), function () {
+            self.pick(self.pickName);
+            run.after(400, function () {
+              self.press(self.use, function () {
+                self.dialog(self.icons, false);
+                root.classList.remove("is-choosing");
+                self.slot.classList.add("is-set");
+                // The change is grouped and saved on its own.
+                run.after(400, function () {
+                  self.saving(true);
+                  run.after(1300, function () {
                     self.saving(false);
                     self.cursor.show(false);
                     self.loop(3200);
                   });
                 });
-              });
+              }, 750, 0.7, 0.6);
             });
           });
         });
@@ -439,14 +540,14 @@
     };
   };
   Playlist.prototype.finish = function () {
-    this.root.classList.remove("slot-closed", "is-picking");
+    this.root.classList.remove("is-short", "is-choosing", "has-dialog");
+    this.picker.classList.remove("is-open", "is-busy");
+    this.icons.classList.remove("is-open");
     this.saving(false);
     this.meta.textContent = this.meta.getAttribute("data-after");
-    this.icon.classList.remove("is-unset");
-    this.trackState(false);
-    this.pop.classList.remove("is-open");
-    this.drag.classList.remove("is-shown");
-    this.pick(0);
+    this.tick(false);
+    this.slot.classList.add("is-set");
+    this.pick(null);
   };
 
   /* ── Wiring ─────────────────────────────────────────────────── */
@@ -462,7 +563,7 @@
     return;
   }
 
-  var label = function (s) {
+  var toggleLabel = function (s) {
     if (!s.toggle) return;
     var paused = s.userPaused;
     s.toggle.classList.toggle("is-paused", paused);
@@ -476,9 +577,9 @@
       s.userPaused = !s.userPaused;
       if (s.userPaused) s.stop();
       else if (s.visible && !document.hidden) s.play();
-      label(s);
+      toggleLabel(s);
     });
-    label(s);
+    toggleLabel(s);
   });
 
   var io = new IntersectionObserver(function (entries) {

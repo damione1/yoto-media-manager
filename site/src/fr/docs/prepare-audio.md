@@ -7,19 +7,19 @@ order: 4
 
 Dans `Médiathèque`, choisissez `Écouter` sur le média voulu. Le lecteur affiche son titre et sa durée, un bouton de lecture et un curseur pour se déplacer. Les outils de modification sont là quand vous en avez besoin.
 
-![La médiathèque : chaque média affiche sa version, Original ou Découpé, et un bouton de lecture](../../docs/images/library-fr.png)
+![La médiathèque : chaque média affiche son icône ou un emplacement vide, sa version, Original ou Découpé, et un bouton de lecture ; la chanson ouverte montre son lecteur et Découper l’audio dans le panneau latéral](../../docs/images/library-fr.png)
 
 ## Retirer une introduction ou un générique
 
 1. Choisissez `Découper l’audio` pour ouvrir le dialogue de découpe et sa forme d’onde.
-2. Faites glisser les bornes de début et de fin pour garder la partie voulue.
+2. Faites glisser les poignées de début et de fin sur la forme d’onde, ou le curseur en dessous, pour garder la partie voulue.
 3. Pour plus de précision, saisissez les deux positions en secondes. Par exemple, début `12` et fin `180` gardent l’audio de 12 secondes à 3 minutes.
-4. Choisissez `Écouter la sélection` pour vérifier votre sélection.
-5. Ajustez les bornes, puis choisissez `Appliquer`. L’application prépare une version MP3 et revient au lecteur quand elle est prête.
+4. Cliquez sur la forme d’onde pour déplacer la tête de lecture, puis choisissez `Écouter la sélection` pour écouter à partir de là. `Écouter la fin de la sélection` joue ses dernières secondes, pour vérifier où elle se termine.
+5. Ajustez les bornes, puis choisissez `Appliquer`. L’application prépare une version MP3 ; quand elle est prête, le dialogue se ferme et le lecteur affiche `Version découpée`.
 
-Dans le dialogue de découpe, la lecture ne joue que la plage sélectionnée. `Arrêter` arrête l’écoute. `Annuler` ou la touche Échap ferme le dialogue sans créer de version ; votre original reste intact.
+Dans le dialogue de découpe, la lecture ne joue que la plage sélectionnée. `Arrêter l’écoute` arrête l’écoute. `Annuler` ou la touche Échap ferme le dialogue sans créer de version ; votre original reste intact.
 
-![Le dialogue de découpe : les deux poignées autour de la partie gardée, le début, la fin et la durée gardée, Écouter la sélection et Appliquer](../../docs/images/trim-fr.png)
+![Le dialogue de découpe : les deux poignées autour de la partie gardée, la tête de lecture, le début, la fin et la durée gardée, Écouter la fin de la sélection, Écouter la sélection et Appliquer](../../docs/images/trim-fr.png)
 
 La fin doit suivre le début et rester dans la durée de l’original. L’application signale une erreur si les bornes ne sont pas valides.
 
@@ -27,7 +27,7 @@ La fin doit suivre le début et rester dans la durée de l’original. L’appli
 
 Dans le dialogue de découpe, activez `Égaliser le volume` pour préparer une version au volume plus régulier. Laissez cette option désactivée pour garder le niveau de la source.
 
-La conversion et l’égalisation du volume se font sur votre ordinateur. Le dialogue montre la progression de la préparation et se ferme quand la version est disponible. Vous retrouvez aussi cette tâche dans `Imports`.
+La conversion et l’égalisation du volume se font sur votre ordinateur. Le dialogue affiche `Préparation de votre découpe…` et se ferme quand la version est disponible. Vous retrouvez aussi cette tâche dans `Imports`.
 
 ## Comprendre les versions audio
 

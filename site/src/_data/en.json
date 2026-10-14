@@ -27,14 +27,14 @@
     "ctaWin": "For Windows",
     "note": "macOS and Windows · works with your Yoto account",
     "cardTitle": "Evening songs",
-    "cardMeta": "4 tracks · 9 min",
+    "cardMeta": "4 tracks · 8 min 58 s",
     "tracks": [
-      { "title": "Twinkle, Twinkle, Little Star", "dur": "1:52", "family": "mint", "pixel": "heart" },
-      { "title": "Hush, Little Baby", "dur": "2:40", "family": "lilac", "pixel": "moon" },
-      { "title": "Row, Row, Row Your Boat", "dur": "1:34", "family": "butter", "pixel": "star" },
-      { "title": "Brahms’ Lullaby", "dur": "3:21", "family": "sky", "pixel": "note" }
+      { "title": "Hush, Little Baby", "dur": "2:40", "family": "sky", "icon": "sheep" },
+      { "title": "Row, Row, Row Your Boat", "dur": "1:34", "family": "butter", "icon": "boat" },
+      { "title": "Brahms’ Lullaby", "dur": "3:21", "family": "lilac", "icon": "moon" },
+      { "title": "Twinkle, Twinkle, Little Star", "dur": "1:23", "family": "mint", "icon": "star" }
     ],
-    "toast": "Sent to Yoto. The card is up to date."
+    "toast": "Saved on Yoto"
   },
   "how": {
     "title": "Four steps, one place",
@@ -54,18 +54,18 @@
     "scenes": {
       "import": {
         "title": "Paste a link, get the song",
-        "text": "Paste a public YouTube video or playlist, or add a file from your computer. The audio is downloaded and prepared on your computer, then waits in your library.",
-        "alt": "Animation of the app: a YouTube link is pasted into Import audio, the download and preparation progress, and the song appears at the top of the Library."
+        "text": "Paste a public YouTube video or playlist, or add a file from your computer. The audio is downloaded on your computer and waits in your library, ready to listen to.",
+        "alt": "Animation of the app: a YouTube link is pasted into Import audio and Import is pressed; the task appears under Activity, downloads, then is ready in the library, and Listen opens the song in the Library."
       },
       "trim": {
         "title": "Keep just the right part",
-        "text": "Drag the two handles past the intro and the credits, listen to the selection, then apply. Your original is always kept, and the trimmed version is ready for your playlists.",
-        "alt": "Animation of the trim dialog: the start and end handles move inward, the start and end times update, the selection plays, then Apply is pressed."
+        "text": "Drag the two handles past the intro and the credits, click the waveform to listen from any spot, and play the end of the selection to check the cut. Apply keeps your original and creates the trimmed version for your playlists.",
+        "alt": "Animation of the trim dialog: the start and end handles are dragged inward, a click on the waveform moves the playhead, the selection plays, the end of the selection plays, then Apply prepares the trimmed version."
       },
       "playlist": {
         "title": "Straight onto their Yoto",
-        "text": "Add a song to a playlist and give it its little pixel icon. Changes are saved to your Yoto account as you go: there is no publish button.",
-        "alt": "Animation of the playlist editor: a song is added to the playlist, an icon is picked for it, and the status changes from Saving to Saved on Yoto."
+        "text": "Choose Add media, tick a song from your library and the version to send. Once Yoto has it, it appears in the playlist; click its empty icon slot to give it its little pixel icon. Changes are saved to your Yoto account as you go: there is no publish button.",
+        "alt": "Animation of the playlist editor: Add media opens a dialog, a trimmed song is ticked and added; once sent to Yoto it appears as a new track, its empty icon slot opens Choose an icon, an icon is used, and the playlist shows Saved on Yoto."
       }
     }
   },
@@ -132,60 +132,109 @@
     "navImports": "Imports",
     "navPlayers": "Players",
     "navAccount": "Account",
+    "updates": "Updates",
+    "ready": "Ready.",
     "importTitle": "Import audio",
     "importSub": "From YouTube or from a file on your computer.",
     "ytLabel": "YouTube link",
     "ytUrl": "youtube.com/watch?v=twinkle-little-star",
-    "ytHint": "A public video or playlist. Only the audio is kept.",
+    "ytHint": "A public video or playlist. Only the audio is kept; for a playlist, you will choose the videos to keep.",
     "importBtn": "Import",
+    "lookingUp": "Looking up…",
+    "statusLookup": "Looking up the title and YouTube details…",
+    "statusStarted": "Import of “Twinkle, Twinkle, Little Star” started. Follow its progress in “Imports”.",
     "addFile": "Add an audio file",
-    "activities": "Activities",
-    "downloading": "Downloading",
-    "preparing": "Preparing audio on this computer",
-    "ready": "Ready in the library",
+    "dropHint": "or drag it here · MP3, M4A, WAV…",
+    "activities": "Activity",
+    "jobTitle": "YouTube · Twinkle, Twinkle, Little Star",
+    "downloading": "Downloading…",
+    "readyInLibrary": "Ready in the library",
     "listen": "Listen",
+    "cancel": "Cancel",
+    "details": "Details",
     "libraryTitle": "Library",
     "libraryMeta": "{n} audios · on this computer",
+    "search": "Search your media…",
     "trimmed": "Trimmed",
     "original": "Original",
-    "newSong": { "title": "Twinkle, Twinkle, Little Star", "meta": "1 min 52 · Nursery rhyme" },
+    "trimmedVersion": "Trimmed version",
+    "originalKept": "Original kept",
+    "song": {
+      "title": "Twinkle, Twinkle, Little Star",
+      "meta": "1 min 52 s · YouTube",
+      "clock": "1:52",
+      "cutMeta": "1 min 23 s · YouTube",
+      "cutClock": "1:23"
+    },
     "library": [
-      { "title": "Brahms’ Lullaby", "meta": "3 min 21 · Music", "family": "lilac", "pixel": "moon", "tag": "original" },
-      { "title": "Hush, Little Baby", "meta": "2 min 40 · Nursery rhyme", "family": "sky", "pixel": "moon", "tag": "original" },
-      { "title": "Row, Row, Row Your Boat", "meta": "1 min 34 · Nursery rhyme", "family": "butter", "pixel": "star", "tag": "trimmed" }
+      { "title": "Brahms’ Lullaby", "meta": "3 min 21 s · Audio file", "icon": "moon", "family": "lilac" },
+      { "title": "Hush, Little Baby", "meta": "2 min 40 s · YouTube", "icon": "sheep", "family": "sky" },
+      { "title": "Row, Row, Row Your Boat", "meta": "1 min 40 s · YouTube", "icon": "boat", "family": "butter", "trimmed": true },
+      { "title": "Twinkle, Twinkle, Little Star", "meta": "1 min 52 s · YouTube", "isNew": true },
+      { "title": "Wheels on the Bus", "meta": "2 min 12 s · Audio file" }
     ],
+    "chooseIcon": "Choose an icon",
+    "trimAudio": "Trim the audio",
+    "editInfo": "Edit details",
     "trimTitle": "Trim “Twinkle, Twinkle, Little Star”",
     "trimSub": "Move the handles to keep the part you like.",
+    "trimSeek": "Click the waveform to listen from that spot.",
     "start": "Start",
     "end": "End",
     "kept": "Kept length",
+    "keptValue": "1 min 23 s",
+    "listenEnd": "Play the end of the selection",
     "listenSel": "Listen to the selection",
-    "stop": "Stop",
+    "stopListen": "Stop listening",
     "level": "Level the volume",
     "levelHint": "Useful when one song is much louder than the others.",
-    "keptNote": "Your original is kept. Apply creates a version for your playlists.",
-    "cancel": "Cancel",
+    "keptNote": "Your original is kept. Applying creates a version for your playlists.",
     "apply": "Apply",
+    "preparingBtn": "Preparing…",
     "preparingTrim": "Preparing your trim…",
-    "trimDone": "Trimmed version ready",
-    "music": "Music",
-    "saving": "Saving…",
-    "saved": "Saved on Yoto",
-    "onYoto": "On Yoto",
-    "sending": "Sending to Yoto…",
-    "addMedia": "Add media",
-    "playlistTitle": "Evening songs",
-    "playlistMetaBefore": "3 tracks · 6 min",
-    "playlistMetaAfter": "4 tracks · 8 min",
-    "tracks": [
-      { "title": "Twinkle, Twinkle, Little Star", "meta": "1 min 52", "family": "mint", "pixel": "heart" },
-      { "title": "Hush, Little Baby", "meta": "2 min 40", "family": "lilac", "pixel": "moon" },
-      { "title": "Row, Row, Row Your Boat", "meta": "1 min 34", "family": "butter", "pixel": "star" }
-    ],
-    "incoming": { "title": "Rock-a-bye Baby", "meta": "2 min 05" },
-    "chooseIcon": "Choose an icon",
-    "iconsYoto": "Yoto",
-    "iconsMine": "My icons",
-    "useIcon": "Use this icon"
+    "trimSaved": "Trim saved. You can add it to a playlist.",
+    "pl": {
+      "title": "Evening songs",
+      "category": "Music",
+      "saving": "Saving…",
+      "saved": "Saved on Yoto",
+      "onYoto": "On Yoto",
+      "addMedia": "Add media",
+      "metaBefore": "3 tracks · 7 min 35 s",
+      "metaAfter": "4 tracks · 8 min 58 s",
+      "tracks": [
+        { "title": "Hush, Little Baby", "meta": "2 min 40 s", "icon": "sheep", "family": "sky" },
+        { "title": "Row, Row, Row Your Boat", "meta": "1 min 34 s", "icon": "boat", "family": "butter" },
+        { "title": "Brahms’ Lullaby", "meta": "3 min 21 s", "icon": "moon", "family": "lilac" }
+      ],
+      "added": {
+        "title": "Twinkle, Twinkle, Little Star",
+        "meta": "1 min 23 s",
+        "icon": "star",
+        "family": "mint"
+      },
+      "pickerTitle": "Add media",
+      "pickerLead": "Select your media and the version to send.",
+      "choices": [
+        { "title": "Brahms’ Lullaby", "version": "Original · 3 min 21 s", "icon": "moon", "family": "lilac" },
+        { "title": "Hush, Little Baby", "version": "Original · 2 min 40 s", "icon": "sheep", "family": "sky" },
+        { "title": "Row, Row, Row Your Boat", "version": "Trim 0:04 → 1:38 (1 min 34 s)", "icon": "boat", "family": "butter" },
+        { "title": "Twinkle, Twinkle, Little Star", "version": "Trim 0:16 → 1:39 (1 min 23 s)", "target": true },
+        { "title": "Wheels on the Bus", "version": "Original · 2 min 12 s" }
+      ],
+      "pickerNote": "The audio is sent to Yoto before it appears in your playlist. No icon? Choose one in the Library, or later in the playlist.",
+      "importAudio": "Import audio",
+      "addN": "Add ({selected})",
+      "sendingBtn": "Sending…",
+      "sendingStatus": "Sending and checking on Yoto…",
+      "iconTitle": "Choose an icon",
+      "iconsMine": "My icons",
+      "iconsImages": "My images",
+      "iconGrid": ["moon", "star", "heart", "sun", "sheep", "boat", "mouse", "bell", "note", "tree", "cloud", "rainbow"],
+      "iconPick": "star",
+      "iconNote": "Choose a Yoto icon or add your own image: it will be fitted to 16 × 16 for the player’s screen.",
+      "importImage": "Import an image",
+      "useIcon": "Use this icon"
+    }
   }
 }

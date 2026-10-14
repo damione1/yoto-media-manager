@@ -16,10 +16,12 @@ La liste représente vos playlists Yoto. Un cache garde disponibles les dernièr
 1. Ouvrez votre playlist et choisissez `Ajouter des médias`.
 2. Dans le dialogue, cochez les fichiers audio voulus dans votre médiathèque.
 3. Choisissez la version de chaque fichier si vous en avez préparé plusieurs.
-4. Choisissez `Ajouter` pour envoyer la sélection à Yoto.
-5. Attendez la confirmation. La progression reste visible pendant la préparation et l’envoi, puis les pistes apparaissent dans la playlist.
+4. Choisissez `Ajouter (1)` (le nombre compte votre sélection) pour l’envoyer à Yoto.
+5. Attendez la confirmation. Le dialogue reste ouvert pendant l’envoi de l’audio, puis se ferme, et les pistes apparaissent dans la playlist.
 
-`Importer` ouvre l’écran `Imports` pour ajouter un fichier ou un lien YouTube à votre médiathèque. Préparez cet audio, puis revenez à la playlist et sélectionnez-le. Importer dans la médiathèque n’ajoute pas automatiquement le média à une playlist.
+![Le dialogue Ajouter des médias : chaque média de la médiathèque avec son icône ou un emplacement vide, la version à envoyer, et Ajouter (1) pour la chanson cochée](../../docs/images/playlist-add-fr.png)
+
+Un média sans icône arrive avec un emplacement d’icône vide ; vous pouvez choisir son icône juste après (voir plus bas). `Importer de l’audio` ouvre l’écran `Imports` pour ajouter un fichier ou un lien YouTube à votre médiathèque. Préparez cet audio, puis revenez à la playlist et sélectionnez-le. Importer dans la médiathèque n’ajoute pas automatiquement le média à une playlist.
 
 Les versions déjà envoyées sur le compte actif sont réutilisées. Une nouvelle découpe peut demander un nouvel envoi. L’original reste sur votre ordinateur.
 
@@ -41,9 +43,11 @@ En cas d’erreur, le message et le détail de la tâche expliquent ce qui deman
 
 Une couverture représente la playlist. De petites icônes représentent ses chapitres ou ses pistes sur le lecteur.
 
-Choisissez `Changer l’icône` dans le menu de l’audio. Le dialogue propose le catalogue `Yoto` et vos images personnelles dans `Mes icônes`. Sélectionnez une icône pour l’appliquer, ou importez une image pour l’ajouter à vos icônes personnelles. Le dialogue se ferme et le changement est enregistré sur Yoto avec vos autres changements.
+Cliquez sur l’icône d’une piste, ou sur son emplacement vide marqué `+`, ou choisissez `Changer l’icône` dans le menu `⋮` de la piste. Le dialogue `Choisir une icône` propose le catalogue `Yoto`, `Mes icônes` (vos icônes sur Yoto) et `Mes images` (les images que vous avez déjà importées). Sélectionnez une icône et choisissez `Utiliser cette icône`, ou choisissez `Importer une image` pour utiliser votre propre image : elle est adaptée en 16 × 16 pour l’écran du lecteur. Le dialogue se ferme et le changement est enregistré sur Yoto avec vos autres changements.
 
-![Le choix d’icône ouvert sur une piste qui vient d’être ajoutée, avec le catalogue Yoto et Mes icônes](../../docs/images/playlist-icons-fr.png)
+Une icône choisie pour un média dans `Médiathèque` l’accompagne dans les playlists où vous l’ajoutez ensuite.
+
+![Choisir une icône ouvert sur une piste qui vient d’être ajoutée : les onglets Yoto, Mes icônes et Mes images, les icônes Yoto, Importer une image et Utiliser cette icône](../../docs/images/playlist-icons-fr.png)
 
 Une chanson affiche un seul titre. Les playlists dont les chapitres contiennent plusieurs pistes gardent cette structure ; leurs réglages détaillés restent disponibles dans les menus.
 
