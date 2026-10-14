@@ -59,6 +59,6 @@ If another app changed the playlist, the update may require a choice between you
 
 ## Disconnect
 
-In `Compte`, open `Options` for the account and choose `Déconnecter ce compte`. Its authorizations and cached remote data are removed. Your original audio and local work are preserved.
+In `Compte`, open the account's `⋯` button (`Options du compte`) and choose `Déconnecter ce compte`. Its authorizations and cached remote data are removed. Your original audio and local work are preserved.
 
 After reconnecting, your playlists load automatically again. Disconnecting does not delete creations already published on Yoto. The app keeps minimal references to confirmed publications so it can find the same creation during a later update. A genuinely uncertain result still needs to be resolved after reconnecting.

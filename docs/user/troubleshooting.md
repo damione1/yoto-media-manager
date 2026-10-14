@@ -50,7 +50,7 @@ The media or its version is still used by a playlist or task. Remove the relevan
 
 ## Open a restored library
 
-After restoring, choose `Ouvrir la médiathèque restaurée` in the advanced options in `Compte`. A new window opens that library and the original window stays available. To find an existing profile, choose `Ouvrir une autre médiathèque` and select its folder. You must reconnect Yoto in a restored profile.
+After restoring, choose `Ouvrir la médiathèque restaurée` in the `Sauvegarde` card in `Compte`. A new window opens that library and the original window stays available. To find an existing profile, open `Options avancées` in the same card, choose `Ouvrir une autre médiathèque` and select its folder. You must reconnect Yoto in a restored profile.
 
 ## Report a problem
 

@@ -10,9 +10,9 @@ Your library contains your original audio and prepared versions. It is stored lo
 
 ## Create a backup
 
-1. Open `Compte` and expand `Sauvegarde et médiathèques · Options avancées`.
+1. Open `Compte`; the `Sauvegarde` card is on the right.
 2. Choose `Générer une clé`. The field hides the key; `Afficher` and `Masquer` let you reveal or hide it.
-3. Choose `Copier la clé` and keep it in your password manager, separately from the backup folder.
+3. Choose `Copier` and keep it in your password manager, separately from the backup folder.
 4. Choose `Créer une sauvegarde`, then select its parent folder.
 5. Wait for the result. A new Yoto folder contains the backup.
 
@@ -22,14 +22,14 @@ The recovery key is required to open the backup. Keep it safe: an encrypted back
 
 ## Restore
 
-1. Open the backup section in `Compte`.
+1. Open the `Sauvegarde` card in `Compte`.
 2. Enter the backup's recovery key.
 3. Choose `Restaurer une sauvegarde`.
 4. Select the backup folder, then the parent folder for the restored library.
 5. Wait while the files and catalog are checked. The app shows the new folder's path.
 6. Choose `Ouvrir la médiathèque restaurée` to open that library in a new window.
 
-Restoring creates a new folder and leaves the original library open. `Ouvrir une autre médiathèque` lets you select an existing folder and return to your original profile. Reconnect your Yoto account in the restored profile.
+Restoring creates a new folder and leaves the original library open. `Ouvrir une autre médiathèque`, under `Options avancées` at the bottom of the `Sauvegarde` card, lets you select an existing folder and return to your original profile. Reconnect your Yoto account in the restored profile.
 
 ## Export an original
 
