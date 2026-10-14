@@ -597,10 +597,19 @@ fn yoto_limit_refusals_become_plain_messages() {
             "Playlist total size is larger than 500 MB",
             Some(messages::YOTO_PLAYLIST_TOO_LARGE),
         ),
+        // Naming a limit without its value, or mentioning sizes, maxima and numbers in an
+        // unrelated way, does not say which limit was broken.
+        ("Track exceeds the maximum duration and file size", None),
         (
-            "Track exceeds the maximum duration and file size",
-            Some(messages::TRACK_EXCEEDS_LIMITS),
+            r#"{"error":{"code":"bad-request","message":"\"sha256\" must be a valid hash"}}"#,
+            None,
         ),
+        ("Invalid file: size limit check failed for upload 100", None),
+        ("Request body exceeds the limit of 1100 MB", None),
+        ("Rate limit: max 100 requests per minute", None),
+        ("filename length must be at most 100 characters", None),
+        ("Track title exceeds maximum length", None),
+        ("Card exceeds 100 tracks and 500 MB", None),
         ("Invalid cardId", None),
         ("title is required", None),
         ("", None),
@@ -630,6 +639,52 @@ async fn a_refused_card_names_the_limit_it_broke() {
         .await
         .unwrap_err();
     assert!(matches!(failure, Failure::Validation(m) if m == messages::YOTO_PLAYLIST_TOO_LONG));
+}
+#[tokio::test]
+async fn an_unexplained_refusal_keeps_what_yoto_said() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("GET"))
+        .and(path("/media/transcode/audio/uploadUrl"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error":{"code":"bad-request","message":"Invalid upload: max file size check failed, see https://storage.test/x?X-Amz-Signature=secret"}
+        })))
+        .mount(&server)
+        .await;
+    let failure = api
+        .reserve("API-TOKEN", &"ab".repeat(32), "Chanson")
+        .await
+        .unwrap_err();
+    let Failure::Validation(message) = failure else {
+        panic!("{failure:?}")
+    };
+    assert_eq!(
+        messages::parse_yoto_rejected(&message),
+        Some((
+            400,
+            Some("Invalid upload: max file size check failed, see https://storage.test/x?…")
+        ))
+    );
+    assert!(!message.contains("secret"));
+}
+#[test]
+fn refusal_excerpts_are_bounded_and_plain() {
+    use crate::api::response_excerpt as excerpt;
+    assert_eq!(excerpt(""), None);
+    assert_eq!(excerpt("  plain\n text "), Some("plain text".into()));
+    assert_eq!(
+        excerpt(r#"{"message":"Bad title"}"#),
+        Some("Bad title".into())
+    );
+    let long = excerpt(&"x ".repeat(400)).unwrap();
+    assert_eq!(long.chars().count(), 300);
+    assert!(long.ends_with('…'));
+    assert_eq!(
+        messages::parse_yoto_rejected(&messages::yoto_rejected(422, None)),
+        Some((422, None))
+    );
 }
 #[test]
 fn retry_after_accepts_seconds_and_dates_within_bounds() {

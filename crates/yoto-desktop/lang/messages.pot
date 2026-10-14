@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:14-0400\n"
+"POT-Creation-Date: 2026-10-14 00:44-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2250,6 +2250,16 @@ msgstr ""
 
 #: src/ui/wording.rs
 msgid "Opération annulée."
+msgstr ""
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Yoto a refusé la demande (code {status}). Réponse de Yoto : {said}"
+msgstr ""
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Yoto a refusé la demande (code {status})."
 msgstr ""
 
 #: src/ui/wording.rs

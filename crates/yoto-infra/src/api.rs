@@ -556,14 +556,19 @@ pub fn classify<T>(e: apis::Error<T>) -> Failure {
                     std::time::SystemTime::now(),
                 ),
             },
-            status @ (400 | 404 | 413 | 422) => match limit_message(&e.content) {
-                Some(message) if status != 404 => Failure::Validation(message.into()),
-                Some(_) | None if status == 413 => {
-                    Failure::Compatibility(format!("Unexpected HTTP status {status}"))
-                }
-                Some(_) | None => {
-                    Failure::Validation(format!("Yoto rejected the request ({status})"))
-                }
+            404 => Failure::Validation(messages::YOTO_NOT_FOUND.into()),
+            status @ (400 | 413 | 422) => match limit_message(&e.content) {
+                Some(message) => Failure::Validation(message.into()),
+                None if status == 413 => Failure::Compatibility(format!(
+                    "Unexpected HTTP status {status}{}",
+                    response_excerpt(&e.content)
+                        .map(|said| format!(": {said}"))
+                        .unwrap_or_default()
+                )),
+                None => Failure::Validation(messages::yoto_rejected(
+                    status,
+                    response_excerpt(&e.content).as_deref(),
+                )),
             },
             500..=599 => Failure::Connection,
             _ => Failure::Compatibility(format!("Unexpected HTTP status {}", e.status.as_u16())),
@@ -591,15 +596,15 @@ pub fn retry_after_seconds(header: Option<&str>, now: std::time::SystemTime) -> 
     };
     seconds.clamp(1, RETRY_AFTER_MAX)
 }
-/// Recognise a refusal that names one of Yoto's playlist limits (100 tracks; 60 minutes or
-/// 100 MB per track; 5 hours or 500 MB in total) and return the matching message.
+/// Recognise a refusal that states which of Yoto's playlist limits it broke (100 tracks;
+/// 60 minutes or 100 MB per track; 5 hours or 500 MB in total) and return the matching
+/// message. The body must name the limit's own value with its unit, next to a word saying it
+/// was exceeded: a refusal that merely mentions a size, a maximum or a number is not read as
+/// a limit, so its own wording stays visible instead.
 pub fn limit_message(body: &str) -> Option<&'static str> {
     let text = body.to_lowercase();
-    let has = |words: &[&str]| words.iter().any(|w| text.contains(w));
-    if !has(&[
-        "limit",
+    let exceeded = [
         "exceed",
-        "max",
         "too many",
         "too long",
         "too large",
@@ -608,40 +613,96 @@ pub fn limit_message(body: &str) -> Option<&'static str> {
         "more than",
         "longer than",
         "larger than",
-    ]) {
+        "at most",
+        "maximum",
+        "limit",
+    ]
+    .iter()
+    .any(|w| text.contains(w));
+    if !exceeded {
         return None;
     }
-    let duration = has(&[
-        "duration",
-        "minute",
-        "hour",
-        "length",
-        "too long",
-        "longer than",
-    ]);
-    let size = has(&[
-        "size",
-        "bytes",
-        "megabyte",
-        " mb",
-        "too large",
-        "too big",
-        "larger than",
-    ]);
-    let total = has(&["total", "card", "playlist"]);
-    let track = has(&["track", "chapter", "file", "audio"]);
-    Some(match (duration, size) {
-        (false, false) if has(&["too many", "tracks", "track count", "number of"]) => {
-            messages::PLAYLIST_TRACKS_MAX
+    let states = |value: &str, units: &[&str]| states_quantity(&text, value, units);
+    let found = [
+        (
+            states("100", &["tracks", "track", "chapters", "chapter"])
+                || text.contains("too many tracks")
+                || text.contains("too many chapters"),
+            messages::PLAYLIST_TRACKS_MAX,
+        ),
+        (
+            states("60", &["minutes", "minute", "mins", "min"]),
+            messages::YOTO_TRACK_TOO_LONG,
+        ),
+        (
+            states("100", &["megabytes", "megabyte", "mb"]),
+            messages::YOTO_TRACK_TOO_LARGE,
+        ),
+        (
+            states("5", &["hours", "hour", "hrs", "h"]) || states("300", &["minutes", "minute"]),
+            messages::YOTO_PLAYLIST_TOO_LONG,
+        ),
+        (
+            states("500", &["megabytes", "megabyte", "mb"]),
+            messages::YOTO_PLAYLIST_TOO_LARGE,
+        ),
+    ];
+    let mut named = found.iter().filter(|(hit, _)| *hit).map(|(_, m)| *m);
+    match (named.next(), named.next()) {
+        (Some(message), None) => Some(message),
+        // A body naming several limits does not say which one this request broke.
+        (Some(_), Some(_)) | (None, _) => None,
+    }
+}
+/// Whether `text` holds `value` as a whole number directly followed by one of `units`
+/// (« 100 MB », « 100mb », « 60-minute »), so « 1100 MB » or « 100 MBps » do not count.
+fn states_quantity(text: &str, value: &str, units: &[&str]) -> bool {
+    text.match_indices(value).any(|(at, _)| {
+        let before = text[..at].chars().next_back();
+        if before.is_some_and(|c| c.is_ascii_digit() || c == '.' || c == ',') {
+            return false;
         }
-        (true, false) if total => messages::YOTO_PLAYLIST_TOO_LONG,
-        (false, true) if total => messages::YOTO_PLAYLIST_TOO_LARGE,
-        (true, true) if total => messages::PLAYLIST_EXCEEDS_LIMITS,
-        (true, false) if track => messages::YOTO_TRACK_TOO_LONG,
-        (false, true) if track => messages::YOTO_TRACK_TOO_LARGE,
-        (true, true) if track => messages::TRACK_EXCEEDS_LIMITS,
-        (false, false) | (true, false) | (false, true) | (true, true) => return None,
+        let rest = text[at + value.len()..].trim_start_matches([' ', '-', '\u{a0}']);
+        units.iter().any(|unit| {
+            rest.strip_prefix(unit)
+                .is_some_and(|after| !after.starts_with(|c: char| c.is_alphanumeric()))
+        })
     })
+}
+/// What Yoto said when refusing a request, trimmed for the job's details: whitespace
+/// collapsed, links cut before their query, so a signed address never shows, and at most
+/// 300 characters. A JSON body is reduced to its message when it has one.
+pub fn response_excerpt(body: &str) -> Option<String> {
+    let said = serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|v| {
+            let error = v.get("error").unwrap_or(&v);
+            [error.get("message"), v.get("message"), error.get("code")]
+                .into_iter()
+                .flatten()
+                .find_map(Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| body.to_owned());
+    let words: Vec<String> = said
+        .split_whitespace()
+        .map(|word| match word.find("://").and(word.find('?')) {
+            Some(query) => format!("{}?…", &word[..query]),
+            None => word.to_owned(),
+        })
+        .collect();
+    let mut excerpt: String = words
+        .join(" ")
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect();
+    if excerpt.is_empty() {
+        return None;
+    }
+    if excerpt.chars().count() > 300 {
+        excerpt = excerpt.chars().take(299).collect::<String>() + "…";
+    }
+    Some(excerpt)
 }
 fn object(v: &Value) -> Result<Extra> {
     serde_json::from_value(v.clone()).map_err(|_| Failure::Compatibility("Expected object".into()))

@@ -13,7 +13,9 @@ pub const PRODUCT_NAME: &str = "YotoMediaManager";
 pub fn failure_text(failure: &Failure) -> String {
     let known = |message: &str| known_message(message).map(str::to_owned);
     match failure {
-        Failure::Validation(message) => known(message).unwrap_or_else(|| message.clone()),
+        Failure::Validation(message) => known(message)
+            .or_else(|| yoto_rejected_text(message))
+            .unwrap_or_else(|| message.clone()),
         Failure::Media(message) => known(message).unwrap_or_else(|| {
             tr!(
                 "L’audio n’a pas pu être traité. Détail : {message}",
@@ -64,6 +66,19 @@ pub fn failure_text(failure: &Failure) -> String {
             percent,
         } => transcode_text(track, *problem, *percent),
     }
+}
+
+/// A refusal Yoto did not explain in terms the app recognises, with what Yoto answered.
+fn yoto_rejected_text(message: &str) -> Option<String> {
+    let (status, said) = yoto_domain::messages::parse_yoto_rejected(message)?;
+    Some(match said {
+        Some(said) => tr!(
+            "Yoto a refusé la demande (code {status}). Réponse de Yoto : {said}",
+            status = status,
+            said = said
+        ),
+        None => tr!("Yoto a refusé la demande (code {status}).", status = status),
+    })
 }
 
 /// Why Yoto's conversion of a track did not finish, naming the track.
