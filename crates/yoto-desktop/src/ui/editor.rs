@@ -42,6 +42,8 @@ enum SyncState {
     Unsaved,
     /// What is shown is what Yoto has.
     OnYoto,
+    /// The last write to Yoto failed; what is shown is still what Yoto has.
+    Failed,
 }
 impl SyncState {
     /// A running save wins over anything to check, which wins over changes left unsaved,
@@ -62,7 +64,8 @@ impl SyncState {
             Self::Sending => text::track_sending(),
             Self::ToCheck => text::to_check(),
             Self::Unsaved => text::unsaved(),
-            Self::OnYoto => text::track_on_yoto(),
+            // A failed write leaves the tracks as Yoto holds them.
+            Self::OnYoto | Self::Failed => text::track_on_yoto(),
         }
     }
     fn playlist_label(self) -> &'static str {
@@ -70,12 +73,13 @@ impl SyncState {
             Self::Sending => text::saving(),
             Self::ToCheck | Self::Unsaved => self.track_label(),
             Self::OnYoto => text::saved(),
+            Self::Failed => text::send_failed(),
         }
     }
     fn family(self) -> &'static theme::Family {
         match self {
             Self::Sending => &theme::BUTTER,
-            Self::ToCheck | Self::Unsaved => &theme::ROSE,
+            Self::ToCheck | Self::Unsaved | Self::Failed => &theme::ROSE,
             Self::OnYoto => &theme::MINT,
         }
     }
@@ -163,6 +167,8 @@ pub struct PlaylistEditor {
     queued_media: Option<Vec<(MediaId, RecipeId)>>,
     /// Why the last changes could not be written, until a later write succeeds.
     unsaved: Option<String>,
+    /// The publication job that failed last, which « Réessayer » sends again.
+    failed_job: Option<(JobId, CommitTarget)>,
     /// Tell the parent in a toast when the next write fails (they are leaving the playlist).
     report_failures: bool,
     /// Yoto's icon list to refresh once a new icon is written.
@@ -318,6 +324,7 @@ impl PlaylistEditor {
             sent: None,
             queued_media: None,
             unsaved: None,
+            failed_job: None,
             report_failures: false,
             refresh_icons: None,
             deleting: false,
@@ -921,6 +928,7 @@ impl PlaylistEditor {
         cx: &mut Context<Self>,
     ) {
         self.operation = Some(PlaylistOperation::Submitting { target });
+        self.failed_job = None;
         self.sent = Some(sent);
         self.save_updates.begin();
         if target != CommitTarget::Editor {
@@ -1019,7 +1027,11 @@ impl PlaylistEditor {
                 Failure::Compatibility(tr!("Résultat de playlist inattendu.").into()),
                 cx,
             ),
-            JobState::Failed { failure } => self.fail_operation(failure.clone(), cx),
+            JobState::Failed { failure } => {
+                let failure = failure.clone();
+                self.fail_operation(failure, cx);
+                self.failed_job = Some((job.id, target));
+            }
             JobState::Cancelled => self.fail_operation(Failure::Cancelled, cx),
             state @ (JobState::Queued
             | JobState::Running { .. }
@@ -2149,10 +2161,144 @@ impl PlaylistEditor {
     /// The state in the tag by the title: changes waiting for their write count as sending.
     fn sync_state(&self) -> SyncState {
         let waiting = (self.autosave.has_pending() || self.queued_media.is_some()) && !self.held();
-        SyncState::of(
+        let state = SyncState::of(
             self.write_running() || waiting,
             self.blocked() || self.external.is_some() || self.deleted,
             self.unsaved.is_some(),
+        );
+        if matches!(state, SyncState::OnYoto | SyncState::Unsaved) && self.send_failure().is_some()
+        {
+            SyncState::Failed
+        } else {
+            state
+        }
+    }
+    /// Why the last write to Yoto failed, while nothing newer was written. Uncertain or
+    /// conflicting writes have their own panel, and a cancelled one is no failure.
+    fn send_failure(&self) -> Option<&Failure> {
+        match &self.operation {
+            Some(PlaylistOperation::Failed(failure)) => match failure {
+                Failure::Ambiguous | Failure::Conflict | Failure::Cancelled => None,
+                Failure::Validation(_)
+                | Failure::Storage(_)
+                | Failure::Media(_)
+                | Failure::Connection
+                | Failure::Authentication
+                | Failure::Permission(_)
+                | Failure::RateLimit { .. }
+                | Failure::Compatibility(_)
+                | Failure::Tool(_)
+                | Failure::Transcode { .. } => Some(failure),
+            },
+            Some(PlaylistOperation::Submitting { .. } | PlaylistOperation::Pending { .. })
+            | None => None,
+        }
+    }
+    /// On opening: show the failure of this playlist's latest publication, if it failed,
+    /// so it does not only appear in « Imports ».
+    pub fn restore_failure(&mut self, snapshot: &Snapshot) {
+        let DraftOrigin::Existing { base } = &self.base.origin else {
+            return;
+        };
+        let latest = snapshot
+            .jobs
+            .iter()
+            .filter(|job| match &job.request {
+                JobRequest::Publish {
+                    account,
+                    snapshot: draft,
+                } => account == &base.account && draft.id == self.base.id,
+                JobRequest::Import { .. } | JobRequest::Encode { .. } => false,
+            })
+            .max_by_key(|job| publication_job_key(job));
+        if let Some(job) = latest
+            && let JobState::Failed { failure } = &job.state
+            && !matches!(
+                failure,
+                Failure::Ambiguous | Failure::Conflict | Failure::Cancelled
+            )
+        {
+            self.operation = Some(PlaylistOperation::Failed(failure.clone()));
+            self.failed_job = Some((job.id, CommitTarget::Editor));
+        }
+    }
+    /// Send the failed publication again, as it was prepared.
+    fn retry_failed(&mut self, cx: &mut Context<Self>) {
+        let Some((job, target)) = self.failed_job.take() else {
+            return;
+        };
+        self.operation = Some(PlaylistOperation::Submitting { target });
+        self.status = text::writing().into();
+        self.notify_parent(cx);
+        cx.notify();
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        self.tasks.push(cx.spawn(async move |weak, cx| {
+            let result = rt
+                .spawn(async move { service.execute(Command::Retry(job)).await })
+                .await;
+            let _ = weak.update(cx, |v, cx| {
+                match joined(result) {
+                    Ok(_) => {
+                        v.operation = Some(PlaylistOperation::Pending {
+                            job,
+                            state: JobState::Queued,
+                            target,
+                        });
+                        v.status = text::writing_and_checking().into();
+                    }
+                    Err(e) => v.fail_operation(e, cx),
+                }
+                if let Some(parent) = v.parent.upgrade() {
+                    let snapshot = parent.read(cx).snapshot.clone();
+                    v.apply_snapshot(&snapshot, cx);
+                }
+                cx.notify();
+            });
+        }));
+    }
+    /// Under the header when the last write failed: why, and what to do next.
+    fn failure_banner(&self, cx: &mut Context<Self>) -> Option<Div> {
+        use theme::{Height, Look};
+        let failure = self.send_failure()?;
+        let parent = self.parent.clone();
+        let mut actions = div().flex().gap(px(8.)).items_center();
+        if self.failed_job.is_some() {
+            actions = actions.child(theme::pill(
+                Button::new("retry-failed-publication")
+                    .label(tr!("Réessayer"))
+                    .on_click(cx.listener(|v, _, _, cx| v.retry_failed(cx))),
+                Look::Primary,
+                Height::Small,
+                false,
+                cx,
+            ));
+        }
+        actions = actions.child(theme::pill(
+            Button::new("failed-publication-details")
+                .label(tr!("Voir les détails"))
+                .on_click(move |_, _, cx| {
+                    let _ = parent.update(cx, |p, cx| p.navigate(Route::Imports, cx));
+                }),
+            Look::Link(&theme::ROSE),
+            Height::Small,
+            false,
+            cx,
+        ));
+        Some(
+            theme::inset()
+                .bg(theme::c(theme::ROSE.soft))
+                .flex()
+                .flex_col()
+                .gap(px(10.))
+                .child(
+                    div()
+                        .text_color(theme::c(theme::ROSE.ink))
+                        .font_weight(FontWeight::BOLD)
+                        .child(text::send_failed()),
+                )
+                .child(div().child(failure_text(failure)))
+                .child(actions),
         )
     }
     /// The state on every track: only an actual write to Yoto shows there, not typing.
@@ -2657,6 +2803,9 @@ impl Render for PlaylistEditor {
             .flex_col()
             .gap(px(18.))
             .child(self.header(&snapshot, cx));
+        let banner = self.failure_banner(cx);
+        let banner_shown = banner.is_some();
+        body = body.children(banner);
         if self.blocked() {
             let mut pending = theme::inset().child(
                 div()
@@ -2797,7 +2946,10 @@ impl Render for PlaylistEditor {
                     ),
             )
             .children(
-                (!self.status.is_empty() && self.external.is_none() && !self.deleted)
+                (!self.status.is_empty()
+                    && self.external.is_none()
+                    && !self.deleted
+                    && !banner_shown)
                     .then(|| theme::note(self.status.clone())),
             );
         body.into_any_element()

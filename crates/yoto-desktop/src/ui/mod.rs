@@ -813,7 +813,11 @@ impl AppView {
                 )
             });
             let advanced = self.advanced;
-            editor.update(cx, |e, _| e.advanced = advanced);
+            let snapshot = &self.snapshot;
+            editor.update(cx, |e, _| {
+                e.advanced = advanced;
+                e.restore_failure(snapshot);
+            });
             self.editors.insert(id, editor);
         }
         cx.notify();

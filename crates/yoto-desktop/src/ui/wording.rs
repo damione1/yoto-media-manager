@@ -234,6 +234,10 @@ pub mod autosave {
     pub fn unsaved() -> &'static str {
         tr!("Non enregistré")
     }
+    /// Tag and banner title when the last write to Yoto failed.
+    pub fn send_failed() -> &'static str {
+        tr!("Envoi échoué")
+    }
     /// Tag when something needs the parent (uncertain write, newer Yoto version).
     pub fn to_check() -> &'static str {
         tr!("À vérifier")
