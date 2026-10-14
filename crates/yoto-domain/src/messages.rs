@@ -12,6 +12,7 @@ pub const CHAPTER_EMPTY: &str = "A chapter needs at least one track.";
 pub const SHUFFLE_RANGE_INVALID: &str = "Invalid chapter shuffle range.";
 pub const DUPLICATE_CHAPTER_KEY: &str = "Duplicate chapter key";
 pub const DUPLICATE_TRACK_KEY: &str = "Duplicate track key";
+pub const WIRE_KEY_LENGTH: &str = "Chapter and track keys must contain at most 20 characters.";
 pub const UNPARSED_EVENTS: &str =
     "Unparsed interactive events must be reviewed before structural edits.";
 pub const REFERENCE_EVENTS: &str =
@@ -163,6 +164,7 @@ pub const ALL: &[&str] = &[
     SHUFFLE_RANGE_INVALID,
     DUPLICATE_CHAPTER_KEY,
     DUPLICATE_TRACK_KEY,
+    WIRE_KEY_LENGTH,
     UNPARSED_EVENTS,
     REFERENCE_EVENTS,
     SHUFFLE_INVALID,

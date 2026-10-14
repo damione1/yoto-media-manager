@@ -303,3 +303,49 @@ fn a_long_media_becomes_one_chapter_of_ordered_parts() {
     }
     playlist.validate().unwrap();
 }
+
+#[test]
+fn new_wire_keys_fit_yoto_and_long_keys_shorten_stably() {
+    assert!(ChapterKey::fresh().as_str().len() <= WIRE_KEY_MAX);
+    assert!(TrackKey::fresh().as_str().len() <= WIRE_KEY_MAX);
+    let long = "0123456789abcdef0123456789abcdef";
+    let mut p = Playlist::new("Chansons".into()).unwrap();
+    p.chapters.push(Chapter {
+        id: ChapterId::new(),
+        key: ChapterKey::new(long).unwrap(),
+        title: "Trois p'tits chats".into(),
+        icon: None,
+        extra: Extra::new(),
+        tracks: vec![Track {
+            id: TrackId::new(),
+            key: TrackKey::new(long).unwrap(),
+            title: "Trois p'tits chats".into(),
+            icon: None,
+            events: None,
+            extra: Extra::new(),
+            media: TrackMedia::Stream {
+                url: "https://example.com/a.mp3".into(),
+                format: AudioFormat::Mp3,
+            },
+        }],
+    });
+    assert!(matches!(p.validate(), Err(Failure::Validation(m)) if m == messages::WIRE_KEY_LENGTH));
+    let before = p.clone();
+    p.fit_wire_keys();
+    p.validate().unwrap();
+    assert_eq!(p.chapters[0].key.as_str(), &long[..WIRE_KEY_MAX]);
+    assert_eq!(p.chapters[0].tracks[0].key.as_str(), &long[..WIRE_KEY_MAX]);
+    let mut again = p.clone();
+    again.fit_wire_keys();
+    assert_eq!(again.chapters[0].key, p.chapters[0].key);
+    assert_eq!(again.chapters[0].tracks[0].key, p.chapters[0].tracks[0].key);
+    let mut remote = p.clone();
+    remote.chapters[0].id = ChapterId::new();
+    remote.chapters[0].tracks[0].id = TrackId::new();
+    remote.retain_ids_from(&before);
+    assert_eq!(remote.chapters[0].id, before.chapters[0].id);
+    assert_eq!(
+        remote.chapters[0].tracks[0].id,
+        before.chapters[0].tracks[0].id
+    );
+}

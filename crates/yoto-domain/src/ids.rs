@@ -40,6 +40,31 @@ remote_id!(
     FamilyImageId
 );
 
+/// Yoto rejects chapter and track keys longer than this many characters.
+pub const WIRE_KEY_MAX: usize = 20;
+/// The form Yoto accepts for a wire key: unchanged when short enough, otherwise its first
+/// [`WIRE_KEY_MAX`] characters, so a long key always shortens to the same value.
+pub fn fit_wire_key(key: &str) -> &str {
+    key.char_indices()
+        .nth(WIRE_KEY_MAX)
+        .map_or(key, |(end, _)| &key[..end])
+}
+fn fresh_wire_key() -> String {
+    Uuid::new_v4().simple().to_string()[..16].to_owned()
+}
+impl ChapterKey {
+    /// A random key unique within its playlist, short enough for Yoto.
+    pub fn fresh() -> Self {
+        Self(fresh_wire_key())
+    }
+}
+impl TrackKey {
+    /// A random key unique within its chapter, short enough for Yoto.
+    pub fn fresh() -> Self {
+        Self(fresh_wire_key())
+    }
+}
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]

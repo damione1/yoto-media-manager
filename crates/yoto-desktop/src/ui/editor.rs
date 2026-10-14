@@ -2727,7 +2727,7 @@ impl PlaylistEditor {
             let track = Track {
                 events: None,
                 id: TrackId::new(),
-                key: TrackKey::new(uuid_string()).expect("uuid"),
+                key: TrackKey::fresh(),
                 title: tr!("Streaming").into(),
                 icon: None,
                 media: TrackMedia::Stream {
@@ -2738,7 +2738,7 @@ impl PlaylistEditor {
             };
             p.chapters.push(Chapter {
                 id: ChapterId::new(),
-                key: ChapterKey::new(uuid_string()).expect("uuid"),
+                key: ChapterKey::fresh(),
                 title: tr!("Streaming").into(),
                 icon: None,
                 tracks: vec![track],
@@ -2960,9 +2960,6 @@ impl Drop for PlaylistEditor {
             });
         }
     }
-}
-fn uuid_string() -> String {
-    TrackId::new().to_string().replace('-', "")
 }
 impl PlaylistEditor {
     fn refresh_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {

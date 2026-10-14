@@ -1863,6 +1863,7 @@ impl Service {
                         },
                     };
                 }
+                p.fit_wire_keys();
                 p.validate()?;
                 self.enqueue(JobRequest::Publish {
                     account,

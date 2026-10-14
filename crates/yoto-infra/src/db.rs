@@ -1388,6 +1388,9 @@ fn write_playlist(
     expected: Option<Revision>,
     intent: PlaylistWriteIntent,
 ) -> Result<Revision> {
+    let mut fitted = p.clone();
+    fitted.fit_wire_keys();
+    let p = &fitted;
     Rules::title(&p.title)?;
     if !p.chapters.is_empty() {
         p.validate()?;
