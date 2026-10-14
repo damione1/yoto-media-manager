@@ -395,15 +395,26 @@ impl Playlist {
                 }
             }
         }
-        for (i, group) in old.playback.shuffle.iter().enumerate() {
+        // Chapters removed from the playlist leave their range; a range left empty is dropped.
+        let present = self
+            .chapters
+            .iter()
+            .map(|c| &c.key)
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut groups = self.playback.shuffle.iter();
+        for group in &old.playback.shuffle {
             let before = old
                 .chapters
                 .get(group.start..=group.end)
                 .ok_or_else(|| Failure::Validation(crate::messages::SHUFFLE_INVALID.into()))?
                 .iter()
+                .filter(|c| present.contains(&c.key))
                 .map(|c| c.key.clone())
                 .collect::<std::collections::BTreeSet<_>>();
-            let Some(new) = self.playback.shuffle.get(i) else {
+            if before.is_empty() {
+                continue;
+            }
+            let Some(new) = groups.next() else {
                 continue;
             }; // Explicitly removing a group is safe.
             let after = self
@@ -421,43 +432,69 @@ impl Playlist {
         }
         Ok(())
     }
-    fn remap_shuffle(&mut self, old: &Self) -> Result<()> {
-        for (group, previous) in self.playback.shuffle.iter_mut().zip(&old.playback.shuffle) {
+    /// Follows each shuffle range to its chapters' new positions. With `removal`, chapters
+    /// that left the playlist leave their range too, its limit shrinks to fit, and a range
+    /// with no chapter left is dropped; otherwise a missing chapter refuses the edit.
+    fn remap_shuffle(&mut self, old: &Self, removal: bool) -> Result<()> {
+        let mut groups = vec![];
+        for (group, previous) in self.playback.shuffle.iter().zip(&old.playback.shuffle) {
             let targets = old
                 .chapters
                 .get(previous.start..=previous.end)
                 .ok_or_else(|| Failure::Validation(crate::messages::SHUFFLE_INVALID.into()))?;
-            let mut positions = targets
-                .iter()
-                .map(|c| {
-                    self.chapters
-                        .iter()
-                        .position(|new| new.key == c.key)
-                        .ok_or_else(|| {
-                            Failure::Compatibility(crate::messages::SHUFFLE_CHAPTER_REMOVED.into())
-                        })
-                })
-                .collect::<Result<Vec<_>>>()?;
+            let mut positions = vec![];
+            for c in targets {
+                match self.chapters.iter().position(|new| new.key == c.key) {
+                    Some(position) => positions.push(position),
+                    None if removal => {}
+                    None => {
+                        return Err(Failure::Compatibility(
+                            crate::messages::SHUFFLE_CHAPTER_REMOVED.into(),
+                        ));
+                    }
+                }
+            }
             positions.sort_unstable();
-            let start = *positions.first().ok_or(Failure::Conflict)?;
-            let end = *positions.last().ok_or(Failure::Conflict)?;
+            let (Some(&start), Some(&end)) = (positions.first(), positions.last()) else {
+                continue;
+            };
             if end - start + 1 != positions.len() {
                 return Err(Failure::Compatibility(
                     crate::messages::SHUFFLE_NOT_CONTIGUOUS.into(),
                 ));
             }
-            group.start = start;
-            group.end = end;
+            groups.push(ShuffleGroup {
+                start,
+                end,
+                limit: group.limit.min(positions.len()),
+            });
         }
+        groups.extend(
+            self.playback
+                .shuffle
+                .iter()
+                .skip(old.playback.shuffle.len())
+                .cloned(),
+        );
+        self.playback.shuffle = groups;
         self.validate_structure_against(old)
     }
     pub fn remove_track(&mut self, id: TrackId) -> Result<()> {
+        // Removing nothing must not pass for a removal waiting to be written.
+        if !self
+            .chapters
+            .iter()
+            .flat_map(|c| &c.tracks)
+            .any(|t| t.id == id)
+        {
+            return Err(Failure::Validation(crate::messages::TRACK_ABSENT.into()));
+        }
         let old = self.clone();
         for c in &mut self.chapters {
             c.tracks.retain(|t| t.id != id);
         }
         self.chapters.retain(|c| !c.tracks.is_empty());
-        if let Err(error) = self.remap_shuffle(&old) {
+        if let Err(error) = self.remap_shuffle(&old, true) {
             *self = old;
             return Err(error);
         }
@@ -475,7 +512,7 @@ impl Playlist {
             .ok_or_else(|| Failure::Validation(crate::messages::CHAPTER_BOUNDARY.into()))?;
         let old = self.clone();
         self.chapters.swap(i, j);
-        if let Err(error) = self.remap_shuffle(&old) {
+        if let Err(error) = self.remap_shuffle(&old, false) {
             *self = old;
             return Err(error);
         }
@@ -511,7 +548,7 @@ impl Playlist {
         let t = self.chapters[ci].tracks.remove(ti);
         self.chapters[di].tracks.insert(index, t);
         self.chapters.retain(|c| !c.tracks.is_empty());
-        if let Err(error) = self.remap_shuffle(&old) {
+        if let Err(error) = self.remap_shuffle(&old, false) {
             *self = old;
             return Err(error);
         }
@@ -537,7 +574,7 @@ impl Playlist {
             });
         }
         self.chapters.splice(i..i, chapters);
-        if let Err(error) = self.remap_shuffle(&old) {
+        if let Err(error) = self.remap_shuffle(&old, false) {
             *self = old;
             return Err(error);
         }

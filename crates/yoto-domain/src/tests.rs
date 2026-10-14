@@ -169,8 +169,20 @@ fn shuffle_targets_and_wire_keys_survive_safe_moves_and_copy_and_gate_unsafe_edi
     let before = serde_json::to_value(&p).unwrap();
     assert!(p.move_chapter(z, 1).is_err());
     assert_eq!(serde_json::to_value(&p).unwrap(), before);
+    // Removing a chapter inside a shuffle range shrinks the range; emptying it drops it.
     let first = p.chapters[0].tracks[0].id;
-    assert!(p.remove_track(first).is_err());
+    let mut removed = p.clone();
+    removed.remove_track(first).unwrap();
+    assert_eq!(removed.chapters.len(), 2);
+    let range = &removed.playback.shuffle[0];
+    assert_eq!((range.start, range.end, range.limit), (0, 0, 1));
+    removed.validate().unwrap();
+    let second = removed.chapters[0].tracks[0].id;
+    removed.remove_track(second).unwrap();
+    assert!(removed.playback.shuffle.is_empty());
+    removed.validate().unwrap();
+    assert!(p.remove_track(TrackId::new()).is_err());
+    assert_eq!(serde_json::to_value(&p).unwrap(), before);
     let mut event = Event::new(EventCommand::Goto);
     event.params = Some(std::collections::HashMap::from([(
         "trackKey".into(),

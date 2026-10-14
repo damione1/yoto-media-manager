@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 10:38-0400\n"
+"POT-Creation-Date: 2026-10-14 13:24-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -873,6 +873,14 @@ msgstr ""
 msgid "Image"
 msgstr ""
 
+#: src/ui/editor.rs src/ui/imports.rs
+msgid "Vérifier auprès de Yoto"
+msgstr ""
+
+#: src/ui/editor.rs src/ui/imports.rs
+msgid "Garder la version de Yoto"
+msgstr ""
+
 #: src/ui/editor.rs src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
 msgid "Réessayer"
 msgstr ""
@@ -1459,18 +1467,10 @@ msgid ""
 msgstr ""
 
 #: src/ui/imports.rs
-msgid "Vérifier auprès de Yoto"
-msgstr ""
-
-#: src/ui/imports.rs
 msgid ""
 "Vous avez regardé dans l’application Yoto et la playlist vous convient ? "
 "Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour "
 "ici."
-msgstr ""
-
-#: src/ui/imports.rs
-msgid "Garder la version de Yoto"
 msgstr ""
 
 #: src/ui/imports.rs

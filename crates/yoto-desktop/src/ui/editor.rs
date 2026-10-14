@@ -10,6 +10,7 @@ use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::{WindowExt, spinner::Spinner};
 pub(super) use media_picker::{MediaChoices, prepare_media_choices};
 use std::time::Instant;
+use yoto_infra::service::ConflictChoice;
 /// What a write to Yoto was started for.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CommitTarget {
@@ -119,6 +120,8 @@ fn pending_status(state: &JobState) -> String {
         }
     }
 }
+/// How long an uncertain write waits before the editor checks it with Yoto by itself.
+const VERIFY_DELAY: Duration = Duration::from_secs(3);
 /// Where an editor stands when the parent quits the app.
 pub(super) enum QuitState {
     /// Nothing waits to be written.
@@ -169,6 +172,8 @@ pub struct PlaylistEditor {
     unsaved: Option<String>,
     /// The publication job that failed last, which « Réessayer » sends again.
     failed_job: Option<(JobId, CommitTarget)>,
+    /// The uncertain write already checked again with Yoto by itself, once.
+    verified: Option<JobId>,
     /// Tell the parent in a toast when the next write fails (they are leaving the playlist).
     report_failures: bool,
     /// Yoto's icon list to refresh once a new icon is written.
@@ -327,6 +332,7 @@ impl PlaylistEditor {
             queued_media: None,
             unsaved: None,
             failed_job: None,
+            verified: None,
             report_failures: false,
             refresh_icons: None,
             deleting: false,
@@ -588,9 +594,9 @@ impl PlaylistEditor {
             if let Some(failure) = failure {
                 let _ = weak.update(cx, |v, cx| {
                     if v.preview_generation == generation {
+                        eprintln!("Track preview failed: {failure:?}");
                         v.previewing = None;
-                        v.status = failure_text(&failure);
-                        cx.notify();
+                        v.refuse(&failure, cx);
                     }
                 });
                 return;
@@ -1039,7 +1045,20 @@ impl PlaylistEditor {
                 self.fail_operation(failure, cx);
                 self.failed_job = Some((job.id, target));
             }
-            JobState::Cancelled => self.fail_operation(Failure::Cancelled, cx),
+            JobState::Cancelled => {
+                let conflicting = matches!(
+                    &self.operation,
+                    Some(PlaylistOperation::Pending {
+                        state: JobState::Conflict { .. },
+                        ..
+                    })
+                );
+                if conflicting {
+                    self.yoto_version_kept(cx);
+                } else {
+                    self.fail_operation(Failure::Cancelled, cx);
+                }
+            }
             state @ (JobState::Queued
             | JobState::Running { .. }
             | JobState::Retry { .. }
@@ -1064,6 +1083,7 @@ impl PlaylistEditor {
                     state: state.clone(),
                     target,
                 });
+                self.verify_uncertain(cx);
             }
         }
         cx.notify();
@@ -1345,7 +1365,7 @@ impl PlaylistEditor {
                                     tr!("Remonter le chapitre"),
                                     move |v, _, cx| {
                                         if let Err(error) = v.draft.move_chapter(id, -1) {
-                                            v.status = failure_text(&error);
+                                            v.refuse(&error, cx);
                                             return;
                                         }
                                         v.changed(Change::Discrete, cx);
@@ -1359,7 +1379,7 @@ impl PlaylistEditor {
                                     tr!("Descendre le chapitre"),
                                     move |v, _, cx| {
                                         if let Err(error) = v.draft.move_chapter(id, 1) {
-                                            v.status = failure_text(&error);
+                                            v.refuse(&error, cx);
                                             return;
                                         }
                                         v.changed(Change::Discrete, cx);
@@ -1373,7 +1393,7 @@ impl PlaylistEditor {
                                 tr!("Séparer les pistes en chapitres"),
                                 move |v, window, cx| {
                                     if let Err(error) = v.draft.ungroup(id) {
-                                        v.status = failure_text(&error);
+                                        v.refuse(&error, cx);
                                         return;
                                     }
                                     v.refresh_inputs(window, cx);
@@ -1477,7 +1497,7 @@ impl PlaylistEditor {
                             v.draft.move_track(tid, id, track_index - 1)
                         };
                         if let Err(error) = result {
-                            v.status = failure_text(&error);
+                            v.refuse(&error, cx);
                             return;
                         }
                         v.changed(Change::Discrete, cx);
@@ -1496,7 +1516,7 @@ impl PlaylistEditor {
                             v.draft.move_track(tid, id, track_index + 1)
                         };
                         if let Err(error) = result {
-                            v.status = failure_text(&error);
+                            v.refuse(&error, cx);
                             return;
                         }
                         v.changed(Change::Discrete, cx);
@@ -1523,7 +1543,7 @@ impl PlaylistEditor {
                     tr!("Retirer de la playlist"),
                     move |v, _, cx| {
                         if let Err(error) = v.draft.remove_track(tid) {
-                            v.status = failure_text(&error);
+                            v.refuse(&error, cx);
                             return;
                         }
                         v.changed(Change::Discrete, cx);
@@ -2228,8 +2248,8 @@ impl PlaylistEditor {
             | None => None,
         }
     }
-    /// On opening: show the failure of this playlist's latest publication, if it failed,
-    /// so it does not only appear in « Imports ».
+    /// On opening: show the failure of this playlist's latest publication, if it failed, or
+    /// the write still waiting for the parent, so they do not only appear in « Imports ».
     pub fn restore_failure(&mut self, snapshot: &Snapshot) {
         let DraftOrigin::Existing { base } = &self.base.origin else {
             return;
@@ -2245,16 +2265,152 @@ impl PlaylistEditor {
                 JobRequest::Import { .. } | JobRequest::Encode { .. } => false,
             })
             .max_by_key(|job| publication_job_key(job));
-        if let Some(job) = latest
-            && let JobState::Failed { failure } = &job.state
-            && !matches!(
-                failure,
-                Failure::Ambiguous | Failure::Conflict | Failure::Cancelled
-            )
-        {
-            self.operation = Some(PlaylistOperation::Failed(failure.clone()));
-            self.failed_job = Some((job.id, CommitTarget::Editor));
+        let Some(job) = latest else {
+            return;
+        };
+        match &job.state {
+            JobState::Failed { failure }
+                if !matches!(
+                    failure,
+                    Failure::Ambiguous | Failure::Conflict | Failure::Cancelled
+                ) =>
+            {
+                self.operation = Some(PlaylistOperation::Failed(failure.clone()));
+                self.failed_job = Some((job.id, CommitTarget::Editor));
+            }
+            state @ (JobState::Conflict { .. } | JobState::Reconciling) => {
+                self.status = pending_status(state);
+                self.operation = Some(PlaylistOperation::Pending {
+                    job: job.id,
+                    state: state.clone(),
+                    target: CommitTarget::Editor,
+                });
+            }
+            JobState::Queued
+            | JobState::Running { .. }
+            | JobState::Retry { .. }
+            | JobState::WaitingForAuthentication
+            | JobState::Completed { .. }
+            | JobState::Failed { .. }
+            | JobState::Cancelled => {}
         }
+    }
+    /// Check an uncertain write with Yoto once by itself, a moment after it became uncertain:
+    /// a connection lost during the write is usually back by then, and Yoto confirms it
+    /// without the parent having to do anything.
+    pub(super) fn verify_uncertain(&mut self, cx: &mut Context<Self>) {
+        let Some(PlaylistOperation::Pending {
+            job,
+            state: JobState::Reconciling,
+            ..
+        }) = &self.operation
+        else {
+            return;
+        };
+        let job = *job;
+        if self.verified == Some(job) {
+            return;
+        }
+        self.verified = Some(job);
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        self.tasks.push(cx.spawn(async move |_, cx| {
+            cx.background_executor().timer(VERIFY_DELAY).await;
+            // A Yoto that still cannot tell leaves the choice to the parent, as before.
+            let _ = rt
+                .spawn(async move { service.execute(Command::Reconcile(job)).await })
+                .await;
+        }));
+    }
+    /// The parent kept the version on Yoto rather than this write: nothing was written, and
+    /// the editor follows Yoto's version once it arrives.
+    fn yoto_version_kept(&mut self, cx: &mut Context<Self>) {
+        self.operation = None;
+        self.draft = self.base.clone();
+        self.sent = None;
+        self.unsaved = None;
+        self.status.clear();
+        self.autosave.finish();
+        self.autosave.discard();
+        if let Some(update) = self.save_updates.finish() {
+            self.reconcile(update.into_playlist(), cx);
+        }
+        self.schedule(cx);
+        self.notify_parent(cx);
+        cx.notify();
+    }
+    /// What the parent can do, right in the playlist, about a write Yoto did not confirm or
+    /// a playlist changed on Yoto meanwhile: the same choices as in « Imports ».
+    fn resolution_actions(&self, cx: &mut Context<Self>) -> Vec<Button> {
+        use theme::{Height, Look};
+        type Choice = (fn(JobId) -> Command, &'static str, Look);
+        let Some(PlaylistOperation::Pending { job, state, .. }) = &self.operation else {
+            return vec![];
+        };
+        let job = *job;
+        let choices: [Choice; 2] = match state {
+            JobState::Reconciling => [
+                (
+                    Command::Reconcile,
+                    tr!("Vérifier auprès de Yoto"),
+                    Look::Primary,
+                ),
+                (
+                    Command::KeepYotoVersion,
+                    tr!("Garder la version de Yoto"),
+                    Look::Outline,
+                ),
+            ],
+            JobState::Conflict { .. } => [
+                (
+                    |job| Command::Resolve {
+                        job,
+                        choice: ConflictChoice::KeepLocal,
+                    },
+                    imports::conflict_label(ConflictChoice::KeepLocal),
+                    Look::Primary,
+                ),
+                (
+                    |job| Command::Resolve {
+                        job,
+                        choice: ConflictChoice::UseRemote,
+                    },
+                    imports::conflict_label(ConflictChoice::UseRemote),
+                    Look::Outline,
+                ),
+            ],
+            JobState::Queued
+            | JobState::Running { .. }
+            | JobState::Retry { .. }
+            | JobState::WaitingForAuthentication
+            | JobState::Completed { .. }
+            | JobState::Failed { .. }
+            | JobState::Cancelled => return vec![],
+        };
+        choices
+            .into_iter()
+            .map(|(command, label, look)| {
+                let parent = self.parent.clone();
+                theme::pill(
+                    Button::new(element_id(label, job))
+                        .label(label)
+                        .on_click(move |_, _, cx| {
+                            let _ = parent.update(cx, |p, cx| p.send(command(job), cx));
+                        }),
+                    look,
+                    Height::Small,
+                    false,
+                    cx,
+                )
+            })
+            .collect()
+    }
+    /// A menu action the playlist refused: say why where the parent is looking.
+    fn refuse(&mut self, failure: &Failure, cx: &mut Context<Self>) {
+        let reason = failure_text(failure);
+        self.status = reason.clone();
+        self.report(reason, cx);
+        cx.notify();
     }
     /// Send the failed publication again, as it was prepared.
     fn retry_failed(&mut self, cx: &mut Context<Self>) {
@@ -2842,6 +2998,7 @@ impl Render for PlaylistEditor {
                     .gap(px(8.))
                     .items_center()
                     .children(self.external.is_some().then(|| self.reload_button(cx)))
+                    .children(self.resolution_actions(cx))
                     .child(theme::pill(
                         Button::new("remote-operation-details")
                             .label(tr!("Voir le suivi"))

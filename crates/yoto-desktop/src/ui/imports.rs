@@ -891,7 +891,7 @@ const CONFLICT_CHOICES: [(ConflictChoice, theme::Look); 3] = [
     (ConflictChoice::CreateCopy, theme::Look::Ghost),
 ];
 /// One label per conflict answer, shared by the job card and its details.
-fn conflict_label(choice: ConflictChoice) -> &'static str {
+pub(super) fn conflict_label(choice: ConflictChoice) -> &'static str {
     match choice {
         ConflictChoice::KeepLocal => tr!("Publier ma version"),
         ConflictChoice::UseRemote => tr!("Garder la version Yoto"),

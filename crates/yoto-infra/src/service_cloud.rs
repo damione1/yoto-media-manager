@@ -71,7 +71,8 @@ impl Service {
                 .db
                 .get::<Playlist>(Table::Playlist, &binding.playlist.to_string())?
         {
-            if meaningful(&document) == meaningful(&binding.document)
+            // Yoto finishing its own processing of the card is no new version to show.
+            if changed_on_yoto(&document, &binding.document).is_none()
                 && old.revision == binding.revision
             {
                 return Ok(old.id);

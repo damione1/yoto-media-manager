@@ -171,7 +171,14 @@ impl YotoGateway {
     ) -> Result<CardId> {
         let r = content_api::create_or_update_content(&self.configuration(token), Some(map))
             .await
-            .map_err(|e| classify(e).uncertain_write())?;
+            .map_err(|e| {
+                let failure = classify(e);
+                let uncertain = failure.clone().uncertain_write();
+                if matches!(uncertain, Failure::Ambiguous) {
+                    eprintln!("Yoto write may have been applied: {failure}");
+                }
+                uncertain
+            })?;
         CardId::new(r.card.card_id).map_err(|_| Failure::Ambiguous)
     }
     pub async fn reserve(

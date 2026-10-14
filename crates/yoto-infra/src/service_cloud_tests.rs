@@ -499,3 +499,147 @@ async fn keeping_yoto_version_closes_an_unconfirmable_edit_without_a_second_post
             .is_err()
     );
 }
+
+/// A Yoto card as the service stores it: what was written is read back as is, and Yoto
+/// finishes processing the card a moment later (measured audio, display URLs, timestamps).
+fn processing_yoto(
+    document: serde_json::Value,
+) -> (Arc<Mutex<serde_json::Value>>, Arc<AtomicBool>) {
+    (
+        Arc::new(Mutex::new(document)),
+        Arc::new(AtomicBool::new(false)),
+    )
+}
+fn finish_processing(card: &mut serde_json::Value) {
+    card["updatedAt"] = serde_json::json!("2026-10-14T10:00:00.000Z");
+    card["metadata"]["media"]["readableDuration"] = serde_json::json!("0m 13s");
+    for chapter in card["content"]["chapters"].as_array_mut().unwrap() {
+        for track in chapter["tracks"].as_array_mut().unwrap() {
+            let duration = track["duration"].as_f64().unwrap();
+            track["duration"] = serde_json::json!(duration + 0.04);
+            track["fileSize"] = serde_json::json!(track["fileSize"].as_i64().unwrap() + 17);
+            track["readableFileSize"] = serde_json::json!(0.1);
+            track["uid"] = serde_json::json!(format!("uid-{}", track["key"].as_str().unwrap()));
+            if let Some(icon) = track["display"]["icon16x16"].as_str() {
+                let url = format!(
+                    "https://media.example/icons/{}",
+                    icon.trim_start_matches("yoto:#")
+                );
+                track["display"]["iconUrl16x16"] = serde_json::json!(url);
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn edits_after_yoto_finishes_processing_the_card_confirm_by_themselves() {
+    let server = MockServer::start().await;
+    let root = tempfile::tempdir().unwrap();
+    let (service, account) = fixture(root.path().join("profile"), server.uri());
+    service
+        .execute(Command::SelectAccount(account.clone()))
+        .await
+        .unwrap();
+    let card = CardId::new("cloud-1").unwrap();
+    let (doc, processing) = processing_yoto(serde_json::json!({
+        "cardId":"cloud-1","title":"Chansons","metadata":{"category":"music"},
+        "content":{"playbackType":"linear","config":{"autoadvance":"next","resumeTimeout":2592000},
+            "chapters":[
+                {"key":"01","title":"Une","tracks":[{"key":"01","title":"Une","type":"audio","trackUrl":"yoto:#audio-one","format":"mp3","duration":6.0,"fileSize":1234,"channels":"stereo"}]},
+                {"key":"02","title":"Deux","tracks":[{"key":"01","title":"Deux","type":"audio","trackUrl":"yoto:#audio-two","format":"mp3","duration":7.0,"fileSize":2345,"channels":"stereo"}]}
+            ]}
+    }));
+    let (state, pending) = (doc.clone(), processing.clone());
+    Mock::given(method("GET"))
+        .and(path("/content/cloud-1"))
+        .respond_with(move |_: &Request| {
+            let mut card = state.lock().unwrap();
+            // The readback right after a write sees it unprocessed; later reads do not.
+            if pending.swap(false, Ordering::SeqCst) {
+                let unprocessed = card.clone();
+                finish_processing(&mut card);
+                return ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"card":unprocessed}));
+            }
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"card":card.clone()}))
+        })
+        .mount(&server)
+        .await;
+    let (state, pending) = (doc.clone(), processing.clone());
+    Mock::given(method("POST"))
+        .and(path("/content"))
+        .respond_with(move |request: &Request| {
+            *state.lock().unwrap() = serde_json::from_slice(&request.body).unwrap();
+            pending.store(true, Ordering::SeqCst);
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"card":{"cardId":"cloud-1"}}))
+        })
+        .expect(3)
+        .mount(&server)
+        .await;
+    let Reply::OpenedPlaylist(id) = service
+        .execute(Command::LoadRemote {
+            account: account.clone(),
+            card: card.clone(),
+        })
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    let edit = |draft: Playlist| {
+        let service = service.clone();
+        let account = account.clone();
+        async move {
+            let expected = service.playlist(draft.id).unwrap().revision;
+            let (_, job) = operation(
+                service
+                    .execute(Command::UpdateYotoPlaylist {
+                        account,
+                        draft: Box::new(draft),
+                        expected,
+                    })
+                    .await
+                    .unwrap(),
+            );
+            service.run_job(service.job(job).unwrap()).await;
+            service.job(job).unwrap().state
+        }
+    };
+    let mut draft = service.playlist(id).unwrap();
+    draft.title = "Chansons du soir".into();
+    assert!(matches!(edit(draft).await, JobState::Completed { .. }));
+    // An icon chosen for a track already on Yoto, after Yoto processed the card.
+    let mut draft = service.playlist(id).unwrap();
+    draft.chapters[0].tracks[0].icon = Some(IconReference::Yoto {
+        account: account.clone(),
+        media: YotoMediaId::new("public-cat").unwrap(),
+    });
+    let state = edit(draft).await;
+    assert!(matches!(state, JobState::Completed { .. }), "{state:?}");
+    assert!(matches!(
+        &service.playlist(id).unwrap().chapters[0].tracks[0].icon,
+        Some(IconReference::Yoto { media, .. }) if media.as_str() == "public-cat"
+    ));
+    // Removing a track already on Yoto is written too.
+    let mut draft = service.playlist(id).unwrap();
+    let removed = draft.chapters[1].tracks[0].id;
+    draft.remove_track(removed).unwrap();
+    let state = edit(draft).await;
+    assert!(matches!(state, JobState::Completed { .. }), "{state:?}");
+    let confirmed = service.playlist(id).unwrap();
+    assert_eq!(confirmed.chapters.len(), 1);
+    assert_eq!(
+        doc.lock().unwrap()["content"]["chapters"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    // A title changed in the Yoto app is still a newer version to choose from.
+    doc.lock().unwrap()["content"]["chapters"][0]["tracks"][0]["title"] =
+        serde_json::json!("Renommée dans Yoto");
+    let mut draft = service.playlist(id).unwrap();
+    draft.title = "Chansons du matin".into();
+    assert!(matches!(edit(draft).await, JobState::Conflict { .. }));
+}

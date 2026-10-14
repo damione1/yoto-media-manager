@@ -515,6 +515,9 @@ impl TrimPanel {
                         }
                     }
                     Ok(Err(e)) => {
+                        if preview {
+                            eprintln!("Media preview failed: {e:?}");
+                        }
                         view.status = failure_text(&e);
                         if let Some(draft) = &mut view.editing
                             && draft.preparation.busy()

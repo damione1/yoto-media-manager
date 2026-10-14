@@ -869,9 +869,10 @@ impl AppView {
             });
             let advanced = self.advanced;
             let snapshot = &self.snapshot;
-            editor.update(cx, |e, _| {
+            editor.update(cx, |e, cx| {
                 e.advanced = advanced;
                 e.restore_failure(snapshot);
+                e.verify_uncertain(cx);
             });
             self.editors.insert(id, editor);
             if let Some(account) = self.icons_missing(p) {
