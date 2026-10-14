@@ -251,6 +251,27 @@ fn part_titles_number_the_parts_and_fit_the_title_limit() {
     assert!(Rules::title(&title).is_ok());
 }
 #[test]
+fn part_titles_follow_the_client_wording() {
+    assert_eq!(
+        part_title_with(
+            "{title} — part {part} of {parts}",
+            "The Little Prince",
+            2,
+            3
+        ),
+        "The Little Prince — part 2 of 3"
+    );
+    let long = "A very long story ".repeat(10);
+    let title = part_title_with("{title} — part {part} of {parts}", &long, 12, 12);
+    assert_eq!(title.chars().count(), Rules::TITLE_MAX);
+    assert!(title.ends_with("… — part 12 of 12"), "{title}");
+    // A template that would lose the numbering is not used.
+    assert_eq!(
+        part_title_with("{title}", "Histoire", 1, 2),
+        part_title("Histoire", 1, 2)
+    );
+}
+#[test]
 fn a_long_media_becomes_one_chapter_of_ordered_parts() {
     let media = MediaItem {
         id: MediaId::new(),
@@ -272,7 +293,7 @@ fn a_long_media_becomes_one_chapter_of_ordered_parts() {
     };
     let parts = [RecipeId::new(), RecipeId::new()];
     let mut playlist = Playlist::new("Soir".into()).unwrap();
-    playlist.add_media_parts(&media, &parts).unwrap();
+    playlist.add_media_parts(&media, &parts, None).unwrap();
     let chapter = &playlist.chapters[0];
     assert_eq!(chapter.title, "Histoire");
     let titles: Vec<_> = chapter.tracks.iter().map(|t| t.title.as_str()).collect();

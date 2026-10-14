@@ -1270,6 +1270,7 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
             .execute(Command::AddMedia {
                 playlist: playlist.id,
                 media: vec![(media.id, version.id)],
+                part_title: None,
             })
             .await
             .unwrap();

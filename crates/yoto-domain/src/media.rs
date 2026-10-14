@@ -153,12 +153,26 @@ pub fn plan_parts(range: TrimRange) -> Vec<TrimRange> {
         .collect()
 }
 /// Title of each part of a long audio; `{title}`, `{part}` and `{parts}` are replaced.
+/// Clients may pass their own wording of it (see [`part_title_with`]).
 pub const PART_TITLE: &str = "{title} — partie {part}/{parts}";
-/// Title for part `part` of `parts`, shortening `title` so the whole fits
-/// [`Rules::TITLE_MAX`].
+/// Title for part `part` of `parts` with [`PART_TITLE`].
 pub fn part_title(title: &str, part: usize, parts: usize) -> String {
-    let fill = |title: &str| {
+    part_title_with(PART_TITLE, title, part, parts)
+}
+/// Title for part `part` of `parts` from `template`, shortening `title` so the whole fits
+/// [`Rules::TITLE_MAX`]. A template missing one of its three placeholders falls back to
+/// [`PART_TITLE`], so a part is always numbered.
+pub fn part_title_with(template: &str, title: &str, part: usize, parts: usize) -> String {
+    let template = if ["{title}", "{part}", "{parts}"]
+        .iter()
+        .all(|placeholder| template.contains(placeholder))
+    {
+        template
+    } else {
         PART_TITLE
+    };
+    let fill = |title: &str| {
+        template
             .replace("{part}", &part.to_string())
             .replace("{parts}", &parts.to_string())
             .replace("{title}", title)

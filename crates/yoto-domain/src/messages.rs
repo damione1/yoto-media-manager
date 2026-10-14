@@ -1,8 +1,8 @@
 //! Failure messages a person can meet through the desktop app or the MCP server.
 //!
 //! They stay in developer English, shared by every client. The desktop app maps each one to
-//! plain French by referring to these constants, so a reworded message is caught by the
-//! compiler instead of silently falling back to English.
+//! plain wording in its interface language by referring to these constants, so a reworded
+//! message is caught by the compiler instead of silently showing developer English.
 
 // Domain rules.
 pub const TITLE_LENGTH: &str = "Title must contain 1–140 characters.";
@@ -78,6 +78,8 @@ pub const MEDIA_AWAITS_RECONCILE: &str =
 pub const MEDIA_ABSENT: &str = "Media/version absent";
 pub const MEDIA_NOT_FOUND: &str = "Media not found";
 pub const RECIPE_NOT_FOUND: &str = "Recipe not found";
+pub const MEDIA_SELECTION_EMPTY: &str = "Select at least one media.";
+pub const RECIPE_NOT_OF_MEDIA: &str = "Recipe does not belong to this media";
 pub const PLAYLIST_NOT_FOUND: &str = "Playlist not found";
 pub const TASK_NOT_FOUND: &str = "Task not found";
 pub const PUBLICATION_PENDING: &str =
@@ -195,6 +197,8 @@ pub const ALL: &[&str] = &[
     MEDIA_ABSENT,
     MEDIA_NOT_FOUND,
     RECIPE_NOT_FOUND,
+    MEDIA_SELECTION_EMPTY,
+    RECIPE_NOT_OF_MEDIA,
     PLAYLIST_NOT_FOUND,
     TASK_NOT_FOUND,
     PUBLICATION_PENDING,

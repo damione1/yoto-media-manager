@@ -360,6 +360,8 @@ fn known_message(message: &str) -> Option<&'static str> {
         m::MEDIA_ABSENT | m::MEDIA_NOT_FOUND | m::RECIPE_NOT_FOUND => {
             "Ce média n’existe plus dans votre médiathèque."
         }
+        m::MEDIA_SELECTION_EMPTY => "Choisissez au moins un média.",
+        m::RECIPE_NOT_OF_MEDIA => "Cette version n’appartient pas au média choisi.",
         m::PLAYLIST_NOT_FOUND => "Cette playlist n’existe plus.",
         m::TASK_NOT_FOUND => "Cette tâche n’existe plus.",
         m::PUBLICATION_PENDING => {
@@ -608,8 +610,8 @@ mod tests {
             .contains("30 secondes")
         );
         assert_eq!(
-            failure_text(&Failure::Validation("Choisissez au moins un média.".into())),
-            "Choisissez au moins un média."
+            failure_text(&Failure::Validation("Une règle encore inconnue.".into())),
+            "Une règle encore inconnue."
         );
         let stuck = failure_text(&Failure::Transcode {
             track: "La Belle au bois dormant".into(),

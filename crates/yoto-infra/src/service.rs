@@ -52,6 +52,9 @@ pub enum Command {
     AddMedia {
         playlist: PlaylistId,
         media: Vec<(MediaId, RecipeId)>,
+        /// As in [`Command::AddYotoMedia`].
+        #[serde(default)]
+        part_title: Option<String>,
     },
     DeleteMedia {
         media: MediaId,
@@ -126,6 +129,10 @@ pub enum Command {
         account: AccountId,
         card: CardId,
         media: Vec<(MediaId, RecipeId)>,
+        /// Title of each part of a media too long for one track, in the client's language;
+        /// `{title}`, `{part}` and `{parts}` are replaced. `None` uses [`PART_TITLE`].
+        #[serde(default)]
+        part_title: Option<String>,
     },
     DuplicateYotoPlaylist {
         account: AccountId,
@@ -1140,9 +1147,10 @@ impl Service {
                 account,
                 card,
                 media,
+                part_title,
             } => {
                 if media.is_empty() {
-                    return Err(Failure::Validation("Choisissez au moins un média.".into()));
+                    return Err(Failure::Validation(messages::MEDIA_SELECTION_EMPTY.into()));
                 }
                 let id = self.load_cloud_playlist(&account, &card).await?;
                 let mut draft = self.playlist(id)?;
@@ -1150,11 +1158,9 @@ impl Service {
                 for (id, recipe) in media {
                     let media = self.media(id)?;
                     if !media.recipes.contains(&recipe) {
-                        return Err(Failure::Validation(
-                            "Cette version n’appartient pas au média choisi.".into(),
-                        ));
+                        return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    self.add_to_playlist(&mut draft, &media, recipe)?;
+                    self.add_to_playlist(&mut draft, &media, recipe, part_title.as_deref())?;
                 }
                 self.auth.access(&account, Scope::UserContentManage).await?;
                 self.enqueue_cloud(account, draft, CloudPlaylistWrite::Update { expected })
@@ -1666,17 +1672,19 @@ impl Service {
                 self.db.remove(Table::Playlist, &id.to_string())?;
                 Ok(Reply::Updated)
             }
-            Command::AddMedia { playlist, media } => {
+            Command::AddMedia {
+                playlist,
+                media,
+                part_title,
+            } => {
                 let mut p = self.playlist(playlist)?;
                 let base = p.revision;
                 for (id, recipe) in media {
                     let m = self.media(id)?;
                     if !m.recipes.contains(&recipe) {
-                        return Err(Failure::Validation(
-                            "Recipe does not belong to this media".into(),
-                        ));
+                        return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    self.add_to_playlist(&mut p, &m, recipe)?;
+                    self.add_to_playlist(&mut p, &m, recipe, part_title.as_deref())?;
                 }
                 self.db.save_playlist_cas(&p, base)?;
                 Ok(Reply::Updated)
@@ -2563,6 +2571,7 @@ impl Service {
         playlist: &mut Playlist,
         media: &MediaItem,
         recipe: RecipeId,
+        part_title: Option<&str>,
     ) -> Result<()> {
         let version = self.recipe(recipe)?;
         let ranges = plan_parts(version.trim);
@@ -2606,7 +2615,7 @@ impl Service {
             };
             parts.push(id);
         }
-        playlist.add_media_parts(media, &parts)
+        playlist.add_media_parts(media, &parts, part_title)
     }
     /// Acquire, analyse and record one import with the given tools.
     async fn import(

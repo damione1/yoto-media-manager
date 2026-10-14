@@ -849,6 +849,7 @@ impl PlaylistEditor {
                 account,
                 card,
                 media,
+                part_title: None,
             },
             CommitTarget::MediaPicker,
             sent,

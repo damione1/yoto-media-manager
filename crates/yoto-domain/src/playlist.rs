@@ -185,8 +185,14 @@ impl Playlist {
         self.touch()
     }
     /// Add a long audio cut into parts: one chapter titled like the media, holding one
-    /// track per part recipe, in order, each titled with [`part_title`].
-    pub fn add_media_parts(&mut self, media: &MediaItem, parts: &[RecipeId]) -> Result<()> {
+    /// track per part recipe, in order, each titled with [`part_title_with`] from
+    /// `template` ([`PART_TITLE`] when `None`).
+    pub fn add_media_parts(
+        &mut self,
+        media: &MediaItem,
+        parts: &[RecipeId],
+        template: Option<&str>,
+    ) -> Result<()> {
         let tracks = parts
             .iter()
             .enumerate()
@@ -194,7 +200,12 @@ impl Playlist {
                 Ok(Track {
                     id: TrackId::new(),
                     key: TrackKey::new(uuid::Uuid::new_v4().simple().to_string())?,
-                    title: part_title(&media.title, index + 1, parts.len()),
+                    title: part_title_with(
+                        template.unwrap_or(PART_TITLE),
+                        &media.title,
+                        index + 1,
+                        parts.len(),
+                    ),
                     icon: None,
                     events: None,
                     media: TrackMedia::Local {
