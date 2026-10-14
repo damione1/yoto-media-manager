@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import yotoIcons from "./src/_data/yotoIcons.js";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(root, "src");
@@ -74,20 +75,30 @@ export default function (eleventyConfig) {
     return code === "fr" ? `/fr${neutral}` : neutral;
   });
 
-  // The trim dialog's waveform: the same envelope as the design board (quiet
-  // intro and credits, louder middle), with each bar's class for the scene's
-  // finished state: outside the kept range, inside it, or already played.
+  // The trim dialog's waveform: quiet intro and credits, louder middle,
+  // with each bar's class for the scene's finished frame (the selection
+  // 0:16 → 1:39 of a 1 min 52 s song, the playhead clicked at 45 %):
+  // outside the kept range, inside it, or before the playhead.
   eleventyConfig.addGlobalData("waveBars", () => {
-    const n = 72, a = 0.14, b = 0.88, p = 0.38;
+    const n = 72, a = 16 / 112, b = 99 / 112, p = 0.45;
     return Array.from({ length: n }, (_, i) => {
-      const x = i / n;
+      const x = (i + 0.5) / n;
       const env = x < 0.12 ? 0.25 : x > 0.9 ? 0.3 : 1;
       const h = Math.round(18 + env * (40 + 60 * Math.abs(Math.sin(i * 0.7) * Math.cos(i * 0.23))));
-      const cls = x < a || x > b ? "out" : x < p ? "played" : "in";
+      const cls = x < a || x > b ? "out" : x <= p ? "played" : "in";
       // Twelve height steps, as classes: the CSP forbids style attributes.
       const level = Math.round(((Math.min(100, h) - 18) / 82) * 11);
       return { level, cls };
     });
+  });
+
+  // A 16 × 16 icon from _data/yotoIcons.js as inline SVG: one <rect> per
+  // run of same-colour pixels, presentation attributes only (no style).
+  eleventyConfig.addFilter("yicon", (name, cls = "") => {
+    const runs = yotoIcons[name];
+    if (!runs) throw new Error(`yicon: unknown icon "${name}"`);
+    const rects = runs.map((r) => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="1" fill="${r.c}"/>`).join("");
+    return `<svg class="yi${cls ? ` ${cls}` : ""}" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${rects}</svg>`;
   });
 
   // A guide page's title, split from its body, so "On this page" can sit

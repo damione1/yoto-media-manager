@@ -3,7 +3,7 @@ pagination: { data: locales, size: 1, alias: loc }
 permalink: "{{ loc.dir }}index.html"
 layout: layouts/base.njk
 ---
-{% from "icons.njk" import icon, pixel, play %}
+{% from "icons.njk" import icon, pixel, play, cover %}
 {% from "mocks/mocks.njk" import importScene, trimScene, playlistScene %}
 
 {% macro downloads(t, primary, secondary, onInk = false) %}
@@ -25,12 +25,12 @@ layout: layouts/base.njk
     <div class="hero-blob"></div>
     <div class="hero-card">
       <div class="hero-card-head">
-        <span class="tile f-lilac tile-lg">{{ pixel("moon", 40) }}</span>
+        <span class="tile tile-lg hero-cover">{{ cover() }}</span>
         <div><p class="card-title">{{ t.hero.cardTitle }}</p><p class="meta">{{ t.hero.cardMeta }}</p></div>
       </div>
       <ul class="hero-tracks">
         {%- for tr in t.hero.tracks %}
-        <li><span class="tile f-{{ tr.family }} tile-sm">{{ pixel(tr.pixel, 20) }}</span><span class="tr-title">{{ tr.title }}</span><span class="meta">{{ tr.dur }}</span></li>
+        <li><span class="tile f-{{ tr.family }} tile-sm hero-ic">{{ tr.icon | yicon | safe }}</span><span class="tr-title">{{ tr.title }}</span><span class="meta">{{ tr.dur }}</span></li>
         {%- endfor %}
       </ul>
       <p class="toast"><span class="toast-ok">{{ icon("check", 12, 3.6) }}</span>{{ t.hero.toast }}</p>

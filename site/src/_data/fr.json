@@ -27,14 +27,14 @@
     "ctaWin": "Pour Windows",
     "note": "macOS et Windows · fonctionne avec votre compte Yoto",
     "cardTitle": "Chansons du soir",
-    "cardMeta": "4 pistes · 9 min",
+    "cardMeta": "4 pistes · 8 min 58 s",
     "tracks": [
-      { "title": "Une souris verte", "dur": "1:52", "family": "mint", "pixel": "heart" },
-      { "title": "Dodo, l’enfant do", "dur": "2:40", "family": "lilac", "pixel": "moon" },
-      { "title": "Frère Jacques", "dur": "1:34", "family": "butter", "pixel": "star" },
-      { "title": "Berceuse de Brahms", "dur": "3:21", "family": "sky", "pixel": "note" }
+      { "title": "Dodo, l’enfant do", "dur": "2:40", "family": "sky", "icon": "sheep" },
+      { "title": "Frère Jacques", "dur": "1:34", "family": "butter", "icon": "bell" },
+      { "title": "Berceuse de Brahms", "dur": "3:21", "family": "lilac", "icon": "moon" },
+      { "title": "Une souris verte", "dur": "1:23", "family": "mint", "icon": "mouse" }
     ],
-    "toast": "Envoyé sur Yoto. La carte est à jour."
+    "toast": "Enregistré sur Yoto"
   },
   "how": {
     "title": "Quatre étapes, un seul endroit",
@@ -54,18 +54,18 @@
     "scenes": {
       "import": {
         "title": "Collez un lien, récupérez la chanson",
-        "text": "Collez une vidéo ou une playlist YouTube publique, ou ajoutez un fichier de votre ordinateur. L’audio est téléchargé et préparé sur votre ordinateur, puis attend dans votre médiathèque.",
-        "alt": "Animation de l’application : un lien YouTube est collé dans Importer de l’audio, le téléchargement et la préparation avancent, et la chanson apparaît en haut de la Médiathèque."
+        "text": "Collez une vidéo ou une playlist YouTube publique, ou ajoutez un fichier de votre ordinateur. L’audio est téléchargé sur votre ordinateur et attend dans votre médiathèque, prêt à écouter.",
+        "alt": "Animation de l’application : un lien YouTube est collé dans Importer de l’audio, puis Importer est choisi ; la tâche apparaît dans Activités, se télécharge, devient prête dans la médiathèque, et Écouter ouvre la chanson dans la Médiathèque."
       },
       "trim": {
         "title": "Gardez juste le bon morceau",
-        "text": "Faites glisser les deux poignées après l’intro et avant le générique, écoutez la sélection, puis appliquez. Votre original est toujours conservé, et la version découpée est prête pour vos playlists.",
-        "alt": "Animation du dialogue de découpe : les poignées de début et de fin se rapprochent, les temps de début et de fin se mettent à jour, la sélection est écoutée, puis Appliquer est choisi."
+        "text": "Faites glisser les deux poignées après l’intro et avant le générique, cliquez sur la forme d’onde pour écouter à partir de n’importe quel endroit, et écoutez la fin de la sélection pour vérifier la coupe. Appliquer garde votre original et crée la version découpée pour vos playlists.",
+        "alt": "Animation du dialogue de découpe : les poignées de début et de fin sont glissées vers l’intérieur, un clic sur la forme d’onde déplace la tête de lecture, la sélection est écoutée, puis sa fin, et Appliquer prépare la version découpée."
       },
       "playlist": {
         "title": "Directement sur leur Yoto",
-        "text": "Ajoutez une chanson à une playlist et donnez-lui sa petite icône pixel. Les changements sont enregistrés sur votre compte Yoto au fur et à mesure : il n’y a pas de bouton pour publier.",
-        "alt": "Animation de l’éditeur de playlist : une chanson est ajoutée à la playlist, une icône est choisie pour elle, et l’état passe de Enregistrement à Enregistré sur Yoto."
+        "text": "Choisissez Ajouter des médias, cochez une chanson de votre médiathèque et la version à envoyer. Une fois sur Yoto, elle apparaît dans la playlist ; cliquez sur son emplacement d’icône vide pour lui donner sa petite icône pixel. Les changements sont enregistrés sur votre compte Yoto au fur et à mesure : il n’y a pas de bouton pour publier.",
+        "alt": "Animation de l’éditeur de playlist : Ajouter des médias ouvre un dialogue, une chanson découpée est cochée et ajoutée ; une fois envoyée sur Yoto, elle apparaît comme nouvelle piste, son emplacement d’icône vide ouvre Choisir une icône, une icône est utilisée, et la playlist affiche Enregistré sur Yoto."
       }
     }
   },
@@ -132,60 +132,109 @@
     "navImports": "Imports",
     "navPlayers": "Lecteurs",
     "navAccount": "Compte",
+    "updates": "Mises à jour",
+    "ready": "Prêt.",
     "importTitle": "Importer de l’audio",
     "importSub": "Depuis YouTube ou depuis un fichier de votre ordinateur.",
     "ytLabel": "Lien YouTube",
     "ytUrl": "youtube.com/watch?v=une-souris-verte",
-    "ytHint": "Une vidéo ou une playlist publique. On récupère seulement l’audio.",
+    "ytHint": "Une vidéo ou une playlist publique. On récupère seulement l’audio ; pour une playlist, vous choisirez les vidéos à garder.",
     "importBtn": "Importer",
+    "lookingUp": "Recherche…",
+    "statusLookup": "Recherche du titre et des informations YouTube…",
+    "statusStarted": "Import de « Une souris verte » lancé. Suivez sa progression dans « Imports ».",
     "addFile": "Ajouter un fichier audio",
+    "dropHint": "ou glissez-le ici · MP3, M4A, WAV…",
     "activities": "Activités",
-    "downloading": "Téléchargement",
-    "preparing": "Préparation audio locale",
-    "ready": "Prêt dans la médiathèque",
+    "jobTitle": "YouTube · Une souris verte",
+    "downloading": "Téléchargement…",
+    "readyInLibrary": "Prêt dans la médiathèque",
     "listen": "Écouter",
+    "cancel": "Annuler",
+    "details": "Détails",
     "libraryTitle": "Médiathèque",
     "libraryMeta": "{n} audios · sur cet ordinateur",
+    "search": "Rechercher dans vos médias…",
     "trimmed": "Découpé",
     "original": "Original",
-    "newSong": { "title": "Une souris verte", "meta": "1 min 52 · Comptine" },
+    "trimmedVersion": "Version découpée",
+    "originalKept": "Original conservé",
+    "song": {
+      "title": "Une souris verte",
+      "meta": "1 min 52 s · YouTube",
+      "clock": "1:52",
+      "cutMeta": "1 min 23 s · YouTube",
+      "cutClock": "1:23"
+    },
     "library": [
-      { "title": "Berceuse de Brahms", "meta": "3 min 21 · Musique", "family": "lilac", "pixel": "moon", "tag": "original" },
-      { "title": "Dodo, l’enfant do", "meta": "2 min 40 · Comptine", "family": "sky", "pixel": "moon", "tag": "original" },
-      { "title": "Frère Jacques", "meta": "1 min 34 · Comptine", "family": "butter", "pixel": "star", "tag": "trimmed" }
+      { "title": "Berceuse de Brahms", "meta": "3 min 21 s · Fichier audio", "icon": "moon", "family": "lilac" },
+      { "title": "Dodo, l’enfant do", "meta": "2 min 40 s · YouTube", "icon": "sheep", "family": "sky" },
+      { "title": "Frère Jacques", "meta": "1 min 40 s · YouTube", "icon": "bell", "family": "butter", "trimmed": true },
+      { "title": "Une souris verte", "meta": "1 min 52 s · YouTube", "isNew": true },
+      { "title": "Vive le vent", "meta": "2 min 12 s · Fichier audio" }
     ],
+    "chooseIcon": "Choisir une icône",
+    "trimAudio": "Découper l’audio",
+    "editInfo": "Modifier les informations",
     "trimTitle": "Découper « Une souris verte »",
     "trimSub": "Déplacez les poignées pour garder la partie qui vous plaît.",
+    "trimSeek": "Cliquez sur la forme d’onde pour écouter à partir de cet endroit.",
     "start": "Début",
     "end": "Fin",
     "kept": "Durée gardée",
+    "keptValue": "1 min 23 s",
+    "listenEnd": "Écouter la fin de la sélection",
     "listenSel": "Écouter la sélection",
-    "stop": "Arrêter",
+    "stopListen": "Arrêter l’écoute",
     "level": "Égaliser le volume",
     "levelHint": "Utile quand une chanson est beaucoup plus forte que les autres.",
     "keptNote": "Votre original est conservé. Appliquer crée une version pour vos playlists.",
-    "cancel": "Annuler",
     "apply": "Appliquer",
+    "preparingBtn": "Préparation…",
     "preparingTrim": "Préparation de votre découpe…",
-    "trimDone": "Version découpée prête",
-    "music": "Musique",
-    "saving": "Enregistrement…",
-    "saved": "Enregistré sur Yoto",
-    "onYoto": "Sur Yoto",
-    "sending": "Envoi sur Yoto…",
-    "addMedia": "Ajouter des médias",
-    "playlistTitle": "Chansons du soir",
-    "playlistMetaBefore": "3 pistes · 6 min",
-    "playlistMetaAfter": "4 pistes · 8 min",
-    "tracks": [
-      { "title": "Une souris verte", "meta": "1 min 52", "family": "mint", "pixel": "heart" },
-      { "title": "Dodo, l’enfant do", "meta": "2 min 40", "family": "lilac", "pixel": "moon" },
-      { "title": "Frère Jacques", "meta": "1 min 34", "family": "butter", "pixel": "star" }
-    ],
-    "incoming": { "title": "Au clair de la lune", "meta": "2 min 05" },
-    "chooseIcon": "Choisir une icône",
-    "iconsYoto": "Yoto",
-    "iconsMine": "Mes icônes",
-    "useIcon": "Utiliser cette icône"
+    "trimSaved": "Découpe enregistrée. Vous pouvez l’ajouter à une playlist.",
+    "pl": {
+      "title": "Chansons du soir",
+      "category": "Musique",
+      "saving": "Enregistrement…",
+      "saved": "Enregistré sur Yoto",
+      "onYoto": "Sur Yoto",
+      "addMedia": "Ajouter des médias",
+      "metaBefore": "3 pistes · 7 min 35 s",
+      "metaAfter": "4 pistes · 8 min 58 s",
+      "tracks": [
+        { "title": "Dodo, l’enfant do", "meta": "2 min 40 s", "icon": "sheep", "family": "sky" },
+        { "title": "Frère Jacques", "meta": "1 min 34 s", "icon": "bell", "family": "butter" },
+        { "title": "Berceuse de Brahms", "meta": "3 min 21 s", "icon": "moon", "family": "lilac" }
+      ],
+      "added": {
+        "title": "Une souris verte",
+        "meta": "1 min 23 s",
+        "icon": "mouse",
+        "family": "mint"
+      },
+      "pickerTitle": "Ajouter des médias",
+      "pickerLead": "Sélectionnez vos médias et la version à envoyer.",
+      "choices": [
+        { "title": "Berceuse de Brahms", "version": "Original · 3 min 21 s", "icon": "moon", "family": "lilac" },
+        { "title": "Dodo, l’enfant do", "version": "Original · 2 min 40 s", "icon": "sheep", "family": "sky" },
+        { "title": "Frère Jacques", "version": "Découpe 0:04 → 1:38 (1 min 34 s)", "icon": "bell", "family": "butter" },
+        { "title": "Une souris verte", "version": "Découpe 0:16 → 1:39 (1 min 23 s)", "target": true },
+        { "title": "Vive le vent", "version": "Original · 2 min 12 s" }
+      ],
+      "pickerNote": "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist. Pas d’icône ? Choisissez-la dans la Médiathèque, ou plus tard dans la playlist.",
+      "importAudio": "Importer de l’audio",
+      "addN": "Ajouter ({selected})",
+      "sendingBtn": "Envoi en cours…",
+      "sendingStatus": "Envoi et vérification sur Yoto…",
+      "iconTitle": "Choisir une icône",
+      "iconsMine": "Mes icônes",
+      "iconsImages": "Mes images",
+      "iconGrid": ["moon", "star", "heart", "sun", "sheep", "boat", "mouse", "bell", "note", "tree", "cloud", "rainbow"],
+      "iconPick": "mouse",
+      "iconNote": "Choisissez une icône Yoto ou ajoutez votre image : elle sera adaptée en 16 × 16 pour l’écran du lecteur.",
+      "importImage": "Importer une image",
+      "useIcon": "Utiliser cette icône"
+    }
   }
 }
