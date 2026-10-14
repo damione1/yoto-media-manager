@@ -2987,3 +2987,28 @@ mod title_edit_tests {
         assert_eq!(edited.tracks[1].id, base.tracks[1].id);
     }
 }
+
+#[cfg(test)]
+mod parent_input_tests {
+    use super::{SyncState, parse_shuffle};
+    #[test]
+    fn shuffle_ranges_are_typed_from_chapter_one() {
+        let groups = parse_shuffle(" 1-3-2 , 4-6-1 ,").unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!((groups[0].start, groups[0].end, groups[0].limit), (0, 2, 2));
+        assert_eq!((groups[1].start, groups[1].end, groups[1].limit), (3, 5, 1));
+        assert!(parse_shuffle("").unwrap().is_empty());
+        assert!(parse_shuffle("0-2-1").is_err());
+        assert!(parse_shuffle("1-2").is_err());
+        assert!(parse_shuffle("1-x-1").is_err());
+    }
+    #[test]
+    fn a_running_save_outranks_anything_to_check() {
+        assert_eq!(SyncState::of(true, true), SyncState::Sending);
+        assert_eq!(SyncState::of(true, false), SyncState::Sending);
+        assert_eq!(SyncState::of(false, true), SyncState::ToCheck);
+        assert_eq!(SyncState::of(false, false), SyncState::OnYoto);
+        assert_eq!(SyncState::OnYoto.playlist_label(), "Enregistré sur Yoto");
+        assert_eq!(SyncState::OnYoto.track_label(), "Sur Yoto");
+    }
+}

@@ -1227,3 +1227,17 @@ impl DevicePanel {
         card.child(commands)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::shortcuts;
+    #[core::prelude::v1::test]
+    fn shortcuts_accept_commas_and_line_breaks() {
+        let parsed = shortcuts("card-1/ch-1/tr-1, card-2/ch-2/tr-2\ncard-3/ch-3/tr-3").unwrap();
+        assert_eq!(parsed.len(), 3);
+        assert_eq!(parsed[1].card.as_str(), "card-2");
+        assert_eq!(parsed[2].track.as_str(), "tr-3");
+        assert!(shortcuts("  ").unwrap().is_empty());
+        assert!(shortcuts("card/chapter").is_err());
+    }
+}

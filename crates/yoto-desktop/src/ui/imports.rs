@@ -992,3 +992,46 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
     )
     .into_any_element()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn job(request: JobRequest, state: JobState) -> Job {
+        Job {
+            id: JobId::new(),
+            request,
+            state,
+            attempts: 0,
+            created: 0,
+            checkpoint: None,
+        }
+    }
+    #[core::prelude::v1::test]
+    fn youtube_imports_show_the_title_learned_while_inspecting() {
+        let url = "https://www.youtube.com/watch?v=abc".to_owned();
+        let request = JobRequest::Import {
+            selection: ImportSelection::Youtube {
+                url: url.clone(),
+                entry: None,
+            },
+        };
+        let snapshot = Snapshot::default();
+        let mut titles = BTreeMap::new();
+        let queued = job(request.clone(), JobState::Queued);
+        assert_eq!(job_title(&queued, &snapshot, &titles), "Vidéo YouTube");
+        titles.insert(url, "La petite sirène".to_owned());
+        assert_eq!(
+            job_title(&queued, &snapshot, &titles),
+            "YouTube · La petite sirène"
+        );
+        let local = job(
+            JobRequest::Import {
+                selection: ImportSelection::LocalFile {
+                    path: "/musique/berceuse.mp3".into(),
+                },
+            },
+            JobState::Queued,
+        );
+        assert_eq!(job_title(&local, &snapshot, &titles), "berceuse.mp3");
+    }
+}

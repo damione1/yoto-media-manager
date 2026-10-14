@@ -668,11 +668,7 @@ impl AppView {
     /// Files dropped anywhere on the window: keep the audio, explain the rest, and show
     /// the import queue so the parent sees something happen.
     pub fn import_dropped(&mut self, paths: &[std::path::PathBuf], cx: &mut Context<Self>) {
-        let (audio, ignored): (Vec<_>, Vec<_>) = paths.iter().cloned().partition(|path| {
-            path.extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| AUDIO_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
-        });
+        let (audio, ignored) = partition_audio(paths);
         if audio.is_empty() {
             self.report_error(
                 Failure::Validation(
@@ -838,6 +834,16 @@ fn joined<T>(
     result: std::result::Result<yoto_domain::Result<T>, tokio::task::JoinError>,
 ) -> yoto_domain::Result<T> {
     result.unwrap_or_else(|error| Err(Failure::Storage(error.to_string())))
+}
+/// Dropped files split into audio to import and the rest, by extension, ignoring case.
+fn partition_audio(
+    paths: &[std::path::PathBuf],
+) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
+    paths.iter().cloned().partition(|path| {
+        path.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| AUDIO_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+    })
 }
 /// Audio formats accepted by the file picker and by drag-and-drop.
 const AUDIO_EXTENSIONS: &[&str] = &[
@@ -1365,5 +1371,36 @@ fn remote_sync_message(snapshot: &Snapshot, collection: RemoteCollection) -> Str
                 failure_text(failure)
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[core::prelude::v1::test]
+    fn dropped_files_keep_audio_whatever_the_case() {
+        let paths: Vec<std::path::PathBuf> = [
+            "a/conte.MP3",
+            "b/chanson.m4a",
+            "c/photo.jpg",
+            "d/sans-extension",
+            "e/Berceuse.FlAc",
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+        let (audio, ignored) = partition_audio(&paths);
+        assert_eq!(
+            audio,
+            ["a/conte.MP3", "b/chanson.m4a", "e/Berceuse.FlAc"]
+                .map(std::path::PathBuf::from)
+                .to_vec()
+        );
+        assert_eq!(
+            ignored,
+            ["c/photo.jpg", "d/sans-extension"]
+                .map(std::path::PathBuf::from)
+                .to_vec()
+        );
     }
 }
