@@ -1,0 +1,39 @@
+name: Site
+
+# Checks that the public website (site/, Eleventy) still builds. Cloudflare
+# Workers Builds watches master and builds and publishes the site itself
+# (root directory site/, SITE_URL as a build variable), so this workflow only
+# guards pull requests and never deploys.
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Build
+        working-directory: site
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
+      # A build that silently produced nothing would pass unnoticed.
+      - name: Check the build produced a page
+        run: test -s site/_site/index.html
