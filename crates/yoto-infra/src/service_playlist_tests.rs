@@ -348,3 +348,181 @@ async fn an_empty_remote_myo_remains_editable_when_reloaded() {
         matches!(service.execute(Command::LoadRemote{account,card:CardId::new("empty-card").unwrap()}).await.unwrap(),Reply::OpenedPlaylist(same) if same==id)
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn tracks_upload_in_parallel_and_each_keeps_its_own_audio() {
+    use base64::Engine;
+    let server = MockServer::start().await;
+    let root = tempfile::tempdir().unwrap();
+    let (service, account) = fixture(root.path().join("catalogue"), server.uri());
+    let input = root.path().join("Histoire.wav");
+    let mut generate = crate::media::command(&service.tools.ffmpeg);
+    generate
+        .args([
+            "-nostdin",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=330:duration=5",
+            "-ac",
+            "2",
+            "-y",
+        ])
+        .arg(&input);
+    assert!(
+        crate::process::output(generate, 100_000, std::time::Duration::from_secs(30))
+            .unwrap()
+            .status
+            .success()
+    );
+    service
+        .execute(Command::Import(vec![ImportSelection::LocalFile {
+            path: input,
+        }]))
+        .await
+        .unwrap();
+    let import = service.db.jobs_page(0, 1).unwrap().remove(0);
+    service.run_job(import.clone()).await;
+    let JobState::Completed {
+        output: JobOutput::Imported { media },
+    } = service.job(import.id).unwrap().state
+    else {
+        panic!("synthetic audio import failed");
+    };
+    let duration = service.media(media).unwrap().info.duration;
+    let second = |s: f64| MediaTime::from_seconds(s).unwrap();
+    let mut recipes = vec![];
+    for start in 0..5 {
+        let Reply::Prepared(recipe) = service
+            .execute(Command::Prepare {
+                media,
+                trim: TrimRange::new(second(start as f64), second(start as f64 + 0.5), duration)
+                    .unwrap(),
+                normalization: Normalization::Preserve,
+            })
+            .await
+            .unwrap()
+        else {
+            panic!("prepared recipe missing");
+        };
+        recipes.push(recipe);
+    }
+    let Reply::OpenedPlaylist(playlist) = service
+        .execute(Command::NewPlaylist("Cinq extraits".into()))
+        .await
+        .unwrap()
+    else {
+        panic!("new playlist");
+    };
+    service
+        .execute(Command::AddMedia {
+            playlist,
+            media: recipes.iter().map(|r| (media, *r)).collect(),
+        })
+        .await
+        .unwrap();
+    // Each upload is named after the audio it carries, and Yoto's media after the upload.
+    let upload_for = |sha256: &str| format!("up-{}", &sha256[..12]);
+    let storage = server.uri();
+    Mock::given(method("GET"))
+        .and(path("/media/transcode/audio/uploadUrl"))
+        .respond_with(move |request: &Request| {
+            let sha = request
+                .url
+                .query_pairs()
+                .find(|(k, _)| k == "sha256")
+                .unwrap()
+                .1
+                .replace(['-', '_'], "x");
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"upload":{
+                "uploadId": upload_for(&sha),
+                "uploadUrl": format!("{storage}/signed/{}", upload_for(&sha))}}))
+        })
+        .expect(5)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path_regex("^/signed/up-[^/]+$"))
+        .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_millis(120)))
+        .expect(5)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path_regex("^/media/upload/up-[^/]+/transcoded$"))
+        .respond_with(|request: &Request| {
+            let upload = request.url.path().split('/').nth(3).unwrap().to_owned();
+            ResponseTemplate::new(200)
+                .set_delay(std::time::Duration::from_millis(80))
+                .set_body_json(serde_json::json!({"transcode":{
+                    "transcodedSha256": format!("audio-{upload}"),
+                    "transcodedInfo":{"duration":0.5,"fileSize":1024,"channels":"stereo","format":"mp3"}}}))
+        })
+        .mount(&server)
+        .await;
+    let stored = Arc::new(Mutex::new(serde_json::Value::Null));
+    let card = stored.clone();
+    Mock::given(method("POST"))
+        .and(path("/content"))
+        .respond_with(move |request: &Request| {
+            let mut document: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+            document["cardId"] = serde_json::json!("cinq");
+            *card.lock().unwrap() = document;
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"card":{"cardId":"cinq"}}))
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+    let card = stored.clone();
+    Mock::given(method("GET"))
+        .and(path("/content/cinq"))
+        .respond_with(move |_: &Request| {
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"card":card.lock().unwrap().clone()}))
+        })
+        .mount(&server)
+        .await;
+    service
+        .execute(Command::Publish {
+            account: account.clone(),
+            playlist,
+        })
+        .await
+        .unwrap();
+    let job = service
+        .db
+        .list::<Job>(Table::Job)
+        .unwrap()
+        .into_iter()
+        .find(|j| matches!(j.request, JobRequest::Publish { .. }))
+        .unwrap()
+        .id;
+    service.run_job(service.job(job).unwrap()).await;
+    assert!(
+        matches!(service.job(job).unwrap().state, JobState::Completed { .. }),
+        "{:?}",
+        service.job(job).unwrap().state
+    );
+    // Every track points at the audio uploaded for its own recipe, in playlist order.
+    let document = stored.lock().unwrap().clone();
+    let urls: Vec<String> = document["content"]["chapters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["tracks"][0]["trackUrl"].as_str().unwrap().to_owned())
+        .collect();
+    let expected: Vec<String> = recipes
+        .iter()
+        .map(|r| {
+            let asset = service
+                .asset(service.recipe(*r).unwrap().result.unwrap())
+                .unwrap();
+            let sha = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(hex::decode(asset.sha256.as_str()).unwrap())
+                .replace(['-', '_'], "x");
+            format!("yoto:#audio-{}", upload_for(&sha))
+        })
+        .collect();
+    assert_eq!(urls, expected);
+}

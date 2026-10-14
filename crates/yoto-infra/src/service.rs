@@ -343,6 +343,25 @@ pub struct Service {
     update_gate: tokio::sync::RwLock<()>,
     update_shutdown: std::sync::atomic::AtomicBool,
 }
+/// A publication job shared by the stages of its upload pipeline.
+type JobCell = Arc<Mutex<Job>>;
+/// A prepared track on its way to Yoto, with the mapping of an earlier upload if any.
+struct Outgoing {
+    recipe: RecipeId,
+    title: String,
+    asset: Asset,
+    key: String,
+    known: Option<PublicationMapping>,
+}
+/// A track after its upload stage.
+enum Sent {
+    /// Yoto already had this exact audio.
+    Known(PublicationMapping),
+    Uploaded {
+        track: Outgoing,
+        upload: UploadId,
+    },
+}
 /// How waiting for Yoto's conversion of one upload ended.
 enum TranscodeEnd {
     Ready(Box<crate::api::Ingested>),
@@ -2366,95 +2385,9 @@ impl Service {
                         ));
                     }
                 }
-                let mut mappings = vec![];
-                for chapter in &snapshot.chapters {
-                    for track in &chapter.tracks {
-                        match &track.media {
-                            TrackMedia::Local { recipe, .. } => {
-                                let asset_id =
-                                    self.encode_recipe(*recipe, cancel.clone(), None).await?;
-                                let asset = self.asset(asset_id)?;
-                                let key = format!("{account}:{recipe}:{}", asset.sha256);
-                                let mapping: Option<PublicationMapping> =
-                                    self.db.get(Table::Mapping, &key)?;
-                                let mapping = match mapping {
-                                    Some(m) => m,
-                                    None => {
-                                        let token = self
-                                            .auth
-                                            .access(&account, Scope::UserContentManage)
-                                            .await?;
-                                        let audio_seconds = self
-                                            .recipe(*recipe)?
-                                            .info
-                                            .map_or(0., |info| info.duration.seconds());
-                                        let budget =
-                                            crate::transcode::budget(audio_seconds, asset.bytes);
-                                        let mut reservation = self
-                                            .send_audio(job, &token, *recipe, &asset, &track.title)
-                                            .await?;
-                                        let mut sent_again = false;
-                                        let ingested = loop {
-                                            let (end, percent) = self
-                                                .await_transcode(
-                                                    job,
-                                                    &account,
-                                                    *recipe,
-                                                    &reservation,
-                                                    budget,
-                                                    &cancel,
-                                                )
-                                                .await?;
-                                            let problem = match end {
-                                                TranscodeEnd::Ready(ingested) => break ingested,
-                                                TranscodeEnd::Stalled if !sent_again => {
-                                                    sent_again = true;
-                                                    reservation = self
-                                                        .send_audio(
-                                                            job,
-                                                            &self
-                                                                .auth
-                                                                .access(
-                                                                    &account,
-                                                                    Scope::UserContentManage,
-                                                                )
-                                                                .await?,
-                                                            *recipe,
-                                                            &asset,
-                                                            &track.title,
-                                                        )
-                                                        .await?;
-                                                    continue;
-                                                }
-                                                TranscodeEnd::Stalled => TranscodeProblem::Stalled,
-                                                TranscodeEnd::OutOfTime => {
-                                                    TranscodeProblem::TimedOut
-                                                }
-                                                TranscodeEnd::Failed => TranscodeProblem::Failed,
-                                            };
-                                            return Err(Failure::Transcode {
-                                                track: track.title.clone(),
-                                                problem,
-                                                percent,
-                                            });
-                                        };
-                                        let mapping = PublicationMapping {
-                                            account: account.clone(),
-                                            recipe: *recipe,
-                                            digest: asset.sha256,
-                                            info: ingested.audio_info()?,
-                                            media: ingested.media,
-                                        };
-                                        self.db.put(Table::Mapping, &key, &mapping)?;
-                                        mapping
-                                    }
-                                };
-                                mappings.push(mapping);
-                            }
-                            TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => {}
-                        }
-                    }
-                }
+                let mappings = self
+                    .upload_tracks(job, &account, &snapshot, cancel.clone())
+                    .await?;
                 let token = self.auth.access(&account, Scope::UserContentManage).await?;
                 let mut icons = BTreeMap::new();
                 for chapter in &snapshot.chapters {
@@ -2698,16 +2631,171 @@ impl Service {
         tools.youtube = self.youtube.path();
         tools
     }
+    fn shared_phase(&self, job: &JobCell, phase: JobPhase) -> Result<()> {
+        let mut job = job.lock().map_err(storage)?;
+        self.phase(&mut job, phase)
+    }
+    /// Prepare, upload and follow the conversion of every local track of a publication
+    /// through a bounded pipeline: encoding runs ahead one track at a time while earlier
+    /// tracks upload and convert. Returns one mapping per distinct recipe, in track order.
+    async fn upload_tracks(
+        self: &Arc<Self>,
+        job: &mut Job,
+        account: &AccountId,
+        snapshot: &Playlist,
+        cancel: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Vec<PublicationMapping>> {
+        use crate::pipeline::{Gates, Halt};
+        let mut seen = std::collections::BTreeSet::new();
+        let tracks: Vec<(RecipeId, String)> = snapshot
+            .chapters
+            .iter()
+            .flat_map(|c| &c.tracks)
+            .filter_map(|t| match &t.media {
+                TrackMedia::Local { recipe, .. } => {
+                    seen.insert(*recipe).then(|| (*recipe, t.title.clone()))
+                }
+                TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => None,
+            })
+            .collect();
+        let cell: JobCell = Arc::new(Mutex::new(job.clone()));
+        let prepare = {
+            let service = self.clone();
+            let account = account.clone();
+            move |(recipe, title): (RecipeId, String), halt: Halt| {
+                let service = service.clone();
+                let account = account.clone();
+                async move {
+                    let asset = service
+                        .encode_recipe_until(recipe, halt.flags(), None)
+                        .await?;
+                    let asset = service.asset(asset)?;
+                    let key = format!("{account}:{recipe}:{}", asset.sha256);
+                    let known = service.db.get(Table::Mapping, &key)?;
+                    Ok(Outgoing {
+                        recipe,
+                        title,
+                        asset,
+                        key,
+                        known,
+                    })
+                }
+            }
+        };
+        let send = {
+            let service = self.clone();
+            let account = account.clone();
+            let cell = cell.clone();
+            move |track: Outgoing, _halt: Halt| {
+                let (service, account, cell) = (service.clone(), account.clone(), cell.clone());
+                async move {
+                    if let Some(mapping) = track.known {
+                        return Ok(Sent::Known(mapping));
+                    }
+                    let token = service
+                        .auth
+                        .access(&account, Scope::UserContentManage)
+                        .await?;
+                    let upload = service
+                        .send_audio(&cell, &token, track.recipe, &track.asset, &track.title)
+                        .await?;
+                    Ok(Sent::Uploaded { track, upload })
+                }
+            }
+        };
+        let finish = {
+            let service = self.clone();
+            let account = account.clone();
+            let cell = cell.clone();
+            move |sent: Sent, gates: Gates| {
+                let (service, account, cell) = (service.clone(), account.clone(), cell.clone());
+                async move {
+                    let (track, mut upload) = match sent {
+                        Sent::Known(mapping) => return Ok(mapping),
+                        Sent::Uploaded { track, upload } => (track, upload),
+                    };
+                    let audio_seconds = service
+                        .recipe(track.recipe)?
+                        .info
+                        .map_or(0., |info| info.duration.seconds());
+                    let budget = crate::transcode::budget(audio_seconds, track.asset.bytes);
+                    let mut sent_again = false;
+                    let ingested = loop {
+                        let (end, percent) = service
+                            .await_transcode(
+                                &cell,
+                                &account,
+                                track.recipe,
+                                &upload,
+                                budget,
+                                gates.halt(),
+                            )
+                            .await?;
+                        let problem = match end {
+                            TranscodeEnd::Ready(ingested) => break ingested,
+                            TranscodeEnd::Stalled if !sent_again => {
+                                sent_again = true;
+                                let _slot = gates.upload().await?;
+                                let token = service
+                                    .auth
+                                    .access(&account, Scope::UserContentManage)
+                                    .await?;
+                                upload = service
+                                    .send_audio(
+                                        &cell,
+                                        &token,
+                                        track.recipe,
+                                        &track.asset,
+                                        &track.title,
+                                    )
+                                    .await?;
+                                continue;
+                            }
+                            TranscodeEnd::Stalled => TranscodeProblem::Stalled,
+                            TranscodeEnd::OutOfTime => TranscodeProblem::TimedOut,
+                            TranscodeEnd::Failed => TranscodeProblem::Failed,
+                        };
+                        return Err(Failure::Transcode {
+                            track: track.title.clone(),
+                            problem,
+                            percent,
+                        });
+                    };
+                    let mapping = PublicationMapping {
+                        account: account.clone(),
+                        recipe: track.recipe,
+                        digest: track.asset.sha256,
+                        info: ingested.audio_info()?,
+                        media: ingested.media,
+                    };
+                    service.db.put(Table::Mapping, &track.key, &mapping)?;
+                    Ok(mapping)
+                }
+            }
+        };
+        let result = crate::pipeline::run(
+            tracks,
+            crate::pipeline::PUBLISH,
+            cancel,
+            prepare,
+            send,
+            finish,
+        )
+        .await;
+        // Keep the phase and checkpoint the stages recorded.
+        *job = cell.lock().map_err(storage)?.clone();
+        result
+    }
     /// Reserve an upload for a prepared track and send the file when Yoto does not have it.
     async fn send_audio(
         self: &Arc<Self>,
-        job: &mut Job,
+        job: &JobCell,
         token: &str,
         recipe: RecipeId,
         asset: &Asset,
         title: &str,
     ) -> Result<UploadId> {
-        self.phase(
+        self.shared_phase(
             job,
             JobPhase::Uploading {
                 recipe,
@@ -2715,7 +2803,7 @@ impl Service {
             },
         )?;
         let reservation = self.api.reserve(token, &asset.sha256, title).await?;
-        self.phase(
+        self.shared_phase(
             job,
             JobPhase::Uploading {
                 recipe,
@@ -2736,12 +2824,12 @@ impl Service {
     /// Returns how the wait ended and the last percentage Yoto reported.
     async fn await_transcode(
         self: &Arc<Self>,
-        job: &mut Job,
+        job: &JobCell,
         account: &AccountId,
         recipe: RecipeId,
         upload: &UploadId,
         budget: std::time::Duration,
-        cancel: &std::sync::atomic::AtomicBool,
+        halt: &crate::pipeline::Halt,
     ) -> Result<(TranscodeEnd, Option<u8>)> {
         use crate::{
             api::Ingestion,
@@ -2752,11 +2840,11 @@ impl Service {
             upload: upload.clone(),
             percent,
         };
-        self.phase(job, ingesting(None))?;
+        self.shared_phase(job, ingesting(None))?;
         let started = std::time::Instant::now();
         let mut watch = Watch::new(budget);
         loop {
-            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            if halt.halted() {
                 return Err(Failure::Cancelled);
             }
             let token = self.auth.access(account, Scope::UserContentManage).await?;
@@ -2772,7 +2860,7 @@ impl Service {
             let shown = watch.percent();
             let verdict = watch.observe(started.elapsed(), &progress);
             if watch.percent() != shown {
-                self.phase(job, ingesting(watch.percent()))?;
+                self.shared_phase(job, ingesting(watch.percent()))?;
             }
             match verdict {
                 Verdict::Wait => {}
@@ -2788,13 +2876,22 @@ impl Service {
         cancel: Arc<std::sync::atomic::AtomicBool>,
         completion: Option<Job>,
     ) -> Result<AssetId> {
+        self.encode_recipe_until(id, vec![cancel], completion).await
+    }
+    /// Prepare a recipe's audio unless it is ready, stopping when any of `stops` is raised.
+    async fn encode_recipe_until(
+        self: &Arc<Self>,
+        id: RecipeId,
+        stops: Vec<Arc<std::sync::atomic::AtomicBool>>,
+        completion: Option<Job>,
+    ) -> Result<AssetId> {
         let recipe = self.recipe(id)?;
         if let Some(id) = recipe.result {
             return Ok(id);
         }
         let service = self.clone();
         tokio::task::spawn_blocking(move || {
-            let _guard = crate::process::OperationGuard::install(cancel.clone());
+            let _guard = crate::process::OperationGuard::install_any(stops.clone());
             let _assets = service.protect_assets()?;
             let mut r = service.recipe(id)?;
             let m = service.media(r.media)?;
@@ -2805,7 +2902,10 @@ impl Service {
             let info = service.tools.encode(source.path(), output.path(), &r)?;
             let asset = service.store.put(output.path(), "mp3")?;
             let _completion = service.jobs.lock().map_err(storage)?;
-            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            if stops
+                .iter()
+                .any(|s| s.load(std::sync::atomic::Ordering::SeqCst))
+            {
                 return Err(Failure::Cancelled);
             }
             r.result = Some(asset.id);
