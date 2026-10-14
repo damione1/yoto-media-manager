@@ -426,6 +426,7 @@ impl AppView {
         let rt = self.runtime.clone();
         let window = cx.windows().first().copied();
         let connecting = matches!(&command, Command::Connect);
+        let reconciling = matches!(&command, Command::Reconcile(_));
         if connecting {
             self.connecting = true;
         }
@@ -537,6 +538,17 @@ impl AppView {
                                 view.report_error(
                                     Failure::Validation(
                                         tr!("La connexion Yoto n’a pas abouti. Cliquez de nouveau sur « Connecter mon compte Yoto », terminez la connexion dans votre navigateur, puis revenez ici.").into(),
+                                    ),
+                                    cx,
+                                );
+                                return;
+                            }
+                            Err(Failure::Ambiguous) if reconciling => {
+                                // Already on the activity list: say what Yoto shows instead
+                                // of pointing back to where the parent already is.
+                                view.report_error(
+                                    Failure::Validation(
+                                        tr!("Yoto ne montre pas encore cet envoi. Ouvrez la playlist dans « Playlists » pour voir son contenu actuel sur Yoto, puis réessayez la vérification dans quelques minutes.").into(),
                                     ),
                                     cx,
                                 );
@@ -1557,9 +1569,11 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         Command::CollectGarbage => (tr!("Nettoyage…"), tr!("Fichiers inutilisés supprimés.")),
         Command::Retry(_) => (tr!("Relance de la tâche…"), tr!("Tâche relancée.")),
         Command::Cancel(_) => (tr!("Annulation…"), tr!("Tâche annulée.")),
-        Command::Resolve { .. }
-        | Command::Reconcile(_)
-        | Command::AttachPublicationReceipt { .. } => (
+        Command::Reconcile(_) => (
+            tr!("Vérification auprès de Yoto…"),
+            tr!("Yoto confirme l’envoi : la playlist est à jour."),
+        ),
+        Command::Resolve { .. } | Command::AttachPublicationReceipt { .. } => (
             tr!("Vérification auprès de Yoto…"),
             tr!("Vérification lancée."),
         ),

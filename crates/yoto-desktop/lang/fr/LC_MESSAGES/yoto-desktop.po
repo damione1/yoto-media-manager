@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 07:33-0400\n"
+"POT-Creation-Date: 2026-10-14 07:47-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1689,6 +1689,16 @@ msgstr ""
 "compte Yoto », terminez la connexion dans votre navigateur, puis revenez ici."
 
 #: src/ui/mod.rs
+msgid ""
+"Yoto ne montre pas encore cet envoi. Ouvrez la playlist dans « Playlists » "
+"pour voir son contenu actuel sur Yoto, puis réessayez la vérification dans "
+"quelques minutes."
+msgstr ""
+"Yoto ne montre pas encore cet envoi. Ouvrez la playlist dans « Playlists » "
+"pour voir son contenu actuel sur Yoto, puis réessayez la vérification dans "
+"quelques minutes."
+
+#: src/ui/mod.rs
 msgid "Playlist Yoto ouverte."
 msgstr "Playlist Yoto ouverte."
 
@@ -1866,6 +1876,10 @@ msgstr "Tâche annulée."
 #: src/ui/mod.rs
 msgid "Vérification auprès de Yoto…"
 msgstr "Vérification auprès de Yoto…"
+
+#: src/ui/mod.rs
+msgid "Yoto confirme l’envoi : la playlist est à jour."
+msgstr "Yoto confirme l’envoi : la playlist est à jour."
 
 #: src/ui/mod.rs
 msgid "Vérification lancée."
