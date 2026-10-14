@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:08-0400\n"
+"POT-Creation-Date: 2026-10-14 00:11-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -210,6 +210,384 @@ msgid ""
 "pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, "
 "raccourcis et commandes techniques des lecteurs ; ouverture d’une autre "
 "médiathèque. Inutile au quotidien."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Orange doux"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Rose"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Violet"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Bleu"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Vert"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Éteinte"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Non"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Niveau de volume (valeur Yoto)"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Bluetooth configuré (valeur Yoto)"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Cadran (valeur Yoto)"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Langue / locale"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Format horaire (valeur Yoto)"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Luminosité jour (valeur Yoto)"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Luminosité nuit (valeur Yoto)"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Luminosité atténuée (valeur Yoto)"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Yoto Daily jour"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Yoto Daily nuit"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Yoto Radio jour"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Yoto Radio nuit"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Nom du lecteur"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Lumière #RRGGBB"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Début du jour HH:MM"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Début de la nuit HH:MM"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Volume maximal jour"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Volume maximal nuit"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Lumière de nuit #RRGGBB"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Délai avant atténuation"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Délai avant arrêt"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Raccourcis jour : carte/chapitre/piste, séparés par des virgules"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Raccourcis nuit : carte/chapitre/piste, séparés par des virgules"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Connexion au lecteur…"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Réglages du lecteur à jour."
+msgstr ""
+
+#: src/ui/device.rs src/ui/mod.rs
+msgid "État du lecteur reçu."
+msgstr ""
+
+#: src/ui/device.rs src/ui/mod.rs
+msgid "Commande envoyée ; effet non confirmé."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Commande acceptée."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Commande reçue par le lecteur."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Réglages envoyés."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Lecture des réglages du lecteur…"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Chargez les réglages avant de modifier les raccourcis."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Raccourci attendu carte/chapitre/piste"
+msgstr ""
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Couleur de la lumière : {name}"
+msgstr ""
+
+#: src/ui/device.rs
+msgid ""
+"Aucune playlist sur votre compte Yoto pour l’instant. Envoyez-en une depuis "
+"« Playlists », puis actualisez."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Playlist de votre compte Yoto"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Choisir une playlist"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Elle sera lancée sur ce lecteur."
+msgstr ""
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Playlist à lancer : {title}"
+msgstr ""
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Lecture sur « {name} »"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Lire sur ce lecteur"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Reprendre la lecture"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Mettre en pause"
+msgstr ""
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Reprendre"
+msgstr ""
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Pause"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Arrêter la lecture"
+msgstr ""
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Arrêter"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Volume"
+msgstr ""
+
+#: src/ui/device.rs
+#, rust-format
+msgid "{level} %"
+msgstr ""
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Veilleuse : {name}"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Veilleuse"
+msgstr ""
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Minuterie"
+msgstr ""
+
+#: src/ui/device.rs
+msgid ""
+"Ce lecteur semble hors ligne : allumez-le et vérifiez qu’il est connecté au "
+"Wi-Fi."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Jour et nuit"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Jour"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Nuit"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Commence à (HH:MM)"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Volume maximal"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Luminosité de l’écran"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Couleur de la lumière"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Enregistrer ces réglages"
+msgstr ""
+
+#: src/ui/device.rs
+msgid ""
+"Les réglages de ce lecteur n’ont pas pu être lus. Vérifiez qu’il est allumé, "
+"puis réessayez."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Lire les réglages"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Plus de réglages"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Casque, arrêt auto, raccourcis, commandes techniques"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Nom, casque, arrêt automatique"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Lecteur"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Délai avant atténuation de l’écran"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Délai avant arrêt auto"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Répéter les pistes"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Casque Bluetooth"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Limiter le volume du casque"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Valeurs Yoto avancées"
+msgstr ""
+
+#: src/ui/device.rs
+msgid ""
+"Valeurs transmises telles quelles à Yoto. Ne les modifiez que si vous savez "
+"ce qu’elles font."
+msgstr ""
+
+#: src/ui/device.rs
+msgid ""
+"Les raccourcis et les commandes techniques du lecteur s’affichent avec le "
+"« Mode avancé », dans « Compte »."
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Raccourcis"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "bêta"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Enregistrer les raccourcis"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Commandes techniques"
+msgstr ""
+
+#: src/ui/device.rs
+msgid "Actualiser l’état du lecteur"
+msgstr ""
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Redémarrer « {name} » ?"
+msgstr ""
+
+#: src/ui/device.rs
+msgid ""
+"La lecture en cours s’arrête et le lecteur reste indisponible le temps de "
+"redémarrer."
+msgstr ""
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Redémarrer"
 msgstr ""
 
 #: src/ui/group.rs
@@ -721,15 +1099,7 @@ msgid "Enregistrement sur Yoto en cours…"
 msgstr ""
 
 #: src/ui/mod.rs
-msgid "Commande envoyée ; effet non confirmé."
-msgstr ""
-
-#: src/ui/mod.rs
 msgid "Commande acceptée par le lecteur."
-msgstr ""
-
-#: src/ui/mod.rs
-msgid "État du lecteur reçu."
 msgstr ""
 
 #: src/ui/mod.rs
@@ -1562,27 +1932,7 @@ msgid "Lumière"
 msgstr ""
 
 #: src/ui/wording.rs
-msgid "Minuterie"
-msgstr ""
-
-#: src/ui/wording.rs
-msgid "Redémarrer"
-msgstr ""
-
-#: src/ui/wording.rs
 msgid "Lire sur le lecteur"
-msgstr ""
-
-#: src/ui/wording.rs
-msgid "Arrêter"
-msgstr ""
-
-#: src/ui/wording.rs
-msgid "Pause"
-msgstr ""
-
-#: src/ui/wording.rs
-msgid "Reprendre"
 msgstr ""
 
 #: src/ui/wording.rs

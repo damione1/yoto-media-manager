@@ -7,16 +7,25 @@ use gpui_kit::component::{
 };
 use theme::{Height, Look};
 /// Night-light colors offered as swatches: label, RGB.
-const LIGHTS: [(&str, [u8; 3]); 6] = [
-    ("Orange doux", [0xFF, 0xB0, 0x66]),
-    ("Rose", [0xFF, 0x9E, 0xB5]),
-    ("Violet", [0xB4, 0x9C, 0xFF]),
-    ("Bleu", [0x7F, 0xB2, 0xFF]),
-    ("Vert", [0x7E, 0xD9, 0xA6]),
-    ("Éteinte", [0, 0, 0]),
-];
+fn light_choices() -> [(&'static str, [u8; 3]); 6] {
+    [
+        (tr!("Orange doux"), [0xFF, 0xB0, 0x66]),
+        (tr!("Rose"), [0xFF, 0x9E, 0xB5]),
+        (tr!("Violet"), [0xB4, 0x9C, 0xFF]),
+        (tr!("Bleu"), [0x7F, 0xB2, 0xFF]),
+        (tr!("Vert"), [0x7E, 0xD9, 0xA6]),
+        (tr!("Éteinte"), [0, 0, 0]),
+    ]
+}
 /// Sleep timer choices: label, seconds (0 cancels the timer).
-const TIMERS: [(&str, u32); 4] = [("Non", 0), ("15 min", 900), ("30 min", 1800), ("1 h", 3600)];
+fn timer_choices() -> [(&'static str, u32); 4] {
+    [
+        (tr!("Non"), 0),
+        ("15 min", 900),
+        ("30 min", 1800),
+        ("1 h", 3600),
+    ]
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Field {
     Name,
@@ -71,30 +80,32 @@ impl Field {
     ];
     fn label(self) -> &'static str {
         match self {
-            Self::VolumeLevel => "Niveau de volume (valeur Yoto)",
-            Self::BluetoothEnabled => "Bluetooth configuré (valeur Yoto)",
-            Self::ClockFace => "Cadran (valeur Yoto)",
-            Self::Locale => "Langue / locale",
-            Self::HourFormat => "Format horaire (valeur Yoto)",
-            Self::DayBrightness => "Luminosité jour (valeur Yoto)",
-            Self::NightBrightness => "Luminosité nuit (valeur Yoto)",
-            Self::DimBrightness => "Luminosité atténuée (valeur Yoto)",
-            Self::DayDaily => "Yoto Daily jour",
-            Self::NightDaily => "Yoto Daily nuit",
-            Self::DayRadio => "Yoto Radio jour",
-            Self::NightRadio => "Yoto Radio nuit",
-            Self::Name => "Nom du lecteur",
-            Self::Light => "Lumière #RRGGBB",
-            Self::Day => "Début du jour HH:MM",
-            Self::Night => "Début de la nuit HH:MM",
-            Self::DayLimit => "Volume maximal jour",
-            Self::NightLimit => "Volume maximal nuit",
-            Self::NightLight => "Lumière de nuit #RRGGBB",
-            Self::Dim => "Délai avant atténuation",
-            Self::Shutdown => "Délai avant arrêt",
-            Self::DayShortcut => "Raccourcis jour : carte/chapitre/piste, séparés par des virgules",
+            Self::VolumeLevel => tr!("Niveau de volume (valeur Yoto)"),
+            Self::BluetoothEnabled => tr!("Bluetooth configuré (valeur Yoto)"),
+            Self::ClockFace => tr!("Cadran (valeur Yoto)"),
+            Self::Locale => tr!("Langue / locale"),
+            Self::HourFormat => tr!("Format horaire (valeur Yoto)"),
+            Self::DayBrightness => tr!("Luminosité jour (valeur Yoto)"),
+            Self::NightBrightness => tr!("Luminosité nuit (valeur Yoto)"),
+            Self::DimBrightness => tr!("Luminosité atténuée (valeur Yoto)"),
+            Self::DayDaily => tr!("Yoto Daily jour"),
+            Self::NightDaily => tr!("Yoto Daily nuit"),
+            Self::DayRadio => tr!("Yoto Radio jour"),
+            Self::NightRadio => tr!("Yoto Radio nuit"),
+            Self::Name => tr!("Nom du lecteur"),
+            Self::Light => tr!("Lumière #RRGGBB"),
+            Self::Day => tr!("Début du jour HH:MM"),
+            Self::Night => tr!("Début de la nuit HH:MM"),
+            Self::DayLimit => tr!("Volume maximal jour"),
+            Self::NightLimit => tr!("Volume maximal nuit"),
+            Self::NightLight => tr!("Lumière de nuit #RRGGBB"),
+            Self::Dim => tr!("Délai avant atténuation"),
+            Self::Shutdown => tr!("Délai avant arrêt"),
+            Self::DayShortcut => {
+                tr!("Raccourcis jour : carte/chapitre/piste, séparés par des virgules")
+            }
             Self::NightShortcut => {
-                "Raccourcis nuit : carte/chapitre/piste, séparés par des virgules"
+                tr!("Raccourcis nuit : carte/chapitre/piste, séparés par des virgules")
             }
         }
     }
@@ -150,6 +161,12 @@ pub struct DevicePanel {
     _subscriptions: Vec<Subscription>,
 }
 impl DevicePanel {
+    /// Input placeholders, again in the interface language after it changed.
+    pub fn relabel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for (field, input) in &self.inputs {
+            input.update(cx, |s, cx| s.set_placeholder(field.label(), window, cx));
+        }
+    }
     pub fn new(
         account: AccountId,
         device: Device,
@@ -250,7 +267,7 @@ impl DevicePanel {
         } else {
             None
         };
-        self.status = "Connexion au lecteur…".into();
+        self.status = tr!("Connexion au lecteur…").into();
         self.tasks.push(cx.spawn(async move |weak, cx| {
             let r = rt
                 .spawn(async move { service.execute(command).await })
@@ -331,9 +348,9 @@ impl DevicePanel {
                                 .unwrap_or(false);
                         }
                         v.status = if v.loaded {
-                            "Réglages du lecteur à jour.".into()
+                            tr!("Réglages du lecteur à jour.").into()
                         } else {
-                            "État du lecteur reçu.".into()
+                            tr!("État du lecteur reçu.").into()
                         };
                     }
                     Ok(Ok(Reply::Player(result))) => {
@@ -348,13 +365,13 @@ impl DevicePanel {
                         }
                         v.status = match result {
                             yoto_infra::players::CommandResult::Sent => {
-                                "Commande envoyée ; effet non confirmé.".into()
+                                tr!("Commande envoyée ; effet non confirmé.").into()
                             }
                             yoto_infra::players::CommandResult::Accepted => {
-                                "Commande acceptée.".into()
+                                tr!("Commande acceptée.").into()
                             }
                             yoto_infra::players::CommandResult::Observed { .. } => {
-                                "Commande reçue par le lecteur.".into()
+                                tr!("Commande reçue par le lecteur.").into()
                             }
                         }
                     }
@@ -372,7 +389,7 @@ impl DevicePanel {
                         | Reply::PixelArt(_)
                         | Reply::Image(_)
                         | Reply::Images(_),
-                    )) => v.status = "Réglages envoyés.".into(),
+                    )) => v.status = tr!("Réglages envoyés.").into(),
                     Ok(Err(e)) => v.status = failure_text(&e),
                     Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
                 }
@@ -430,7 +447,7 @@ impl DevicePanel {
             },
             cx,
         );
-        self.status = "Lecture des réglages du lecteur…".into();
+        self.status = tr!("Lecture des réglages du lecteur…").into();
     }
     pub fn start(&mut self, card: CardId, cx: &mut Context<Self>) {
         self.paused = false;
@@ -509,7 +526,7 @@ impl DevicePanel {
     }
     fn shortcuts(&mut self, cx: &mut Context<Self>) {
         let Some((base_day, base_night)) = &self.shortcut_base else {
-            self.status = "Chargez les réglages avant de modifier les raccourcis.".into();
+            self.status = tr!("Chargez les réglages avant de modifier les raccourcis.").into();
             return;
         };
         let day = self.value(Field::DayShortcut, cx);
@@ -547,7 +564,7 @@ fn shortcuts(s: &str) -> yoto_domain::Result<Vec<Shortcut>> {
             let parts: Vec<_> = line.trim().split('/').collect();
             if parts.len() != 3 {
                 return Err(Failure::Validation(
-                    "Raccourci attendu carte/chapitre/piste".into(),
+                    tr!("Raccourci attendu carte/chapitre/piste").into(),
                 ));
             }
             Ok(Shortcut {
@@ -609,7 +626,9 @@ impl DevicePanel {
             .items_center()
             .gap(px(6.))
             .py(px(4.));
-        let known = LIGHTS.iter().any(|(_, rgb)| light_hex(*rgb) == current);
+        let known = light_choices()
+            .iter()
+            .any(|(_, rgb)| light_hex(*rgb) == current);
         if !known
             && let Some(rgb) = current
                 .strip_prefix('#')
@@ -624,7 +643,7 @@ impl DevicePanel {
                     .shadow(swatch_ring()),
             );
         }
-        for (index, (name, rgb)) in LIGHTS.iter().enumerate() {
+        for (index, (name, rgb)) in light_choices().iter().enumerate() {
             let hex = light_hex(*rgb);
             let shown = swatch_color(*rgb);
             let input = self.stored(field).clone();
@@ -636,7 +655,7 @@ impl DevicePanel {
                         .hover(theme::c(shown))
                         .active(theme::c(shown)),
                 )
-                .accessibility_label(format!("Couleur de la lumière : {name}"))
+                .accessibility_label(tr!("Couleur de la lumière : {name}", name = name))
                 .tooltip(*name)
                 .toggled(selected)
                 .bg(theme::c(shown))
@@ -668,7 +687,7 @@ impl DevicePanel {
             .and_then(|id| remote.iter().find(|card| &card.card == id));
         let chooser = if remote.is_empty() {
             theme::inset().child(theme::note(
-                "Aucune playlist sur votre compte Yoto pour l’instant. Envoyez-en une depuis « Playlists », puis actualisez.",
+                tr!("Aucune playlist sur votre compte Yoto pour l’instant. Envoyez-en une depuis « Playlists », puis actualisez."),
             ))
         } else {
             let cards: Vec<(CardId, String)> = remote
@@ -680,12 +699,12 @@ impl DevicePanel {
                 Some(card) => (
                     theme::thumbnail(card.card.as_str(), 52., 14.),
                     card.title.clone(),
-                    "Playlist de votre compte Yoto",
+                    tr!("Playlist de votre compte Yoto"),
                 ),
                 None => (
                     theme::icon_tile(IconName::ListMusic, &theme::LILAC, 52., 14.),
-                    "Choisir une playlist".to_owned(),
-                    "Elle sera lancée sur ce lecteur.",
+                    tr!("Choisir une playlist").to_owned(),
+                    tr!("Elle sera lancée sur ce lecteur."),
                 ),
             };
             div().child(
@@ -697,7 +716,7 @@ impl DevicePanel {
                             .hover(theme::c(theme::SAND))
                             .active(theme::c(theme::SAND)),
                     )
-                    .accessibility_label(format!("Playlist à lancer : {title}"))
+                    .accessibility_label(tr!("Playlist à lancer : {title}", title = title))
                     .bg(theme::c(theme::CREAM))
                     .rounded(ButtonRounded::Size(px(16.)))
                     .w_full()
@@ -754,7 +773,7 @@ impl DevicePanel {
         let mut card = theme::card()
             .gap(px(14.))
             .child(theme::heading(
-                format!("Lecture sur « {} »", self.name),
+                tr!("Lecture sur « {name} »", name = self.name),
                 19.,
             ))
             .child(chooser)
@@ -767,7 +786,7 @@ impl DevicePanel {
                         theme::pill(
                             Button::new("device-play")
                                 .icon(IconName::Play)
-                                .label("Lire sur ce lecteur")
+                                .label(tr!("Lire sur ce lecteur"))
                                 .on_click(cx.listener(move |p, _, _, cx| {
                                     if let Some(card) = playable.clone() {
                                         p.start(card, cx);
@@ -788,11 +807,15 @@ impl DevicePanel {
                                 IconName::Pause
                             })
                             .accessibility_label(if paused {
-                                "Reprendre la lecture"
+                                tr!("Reprendre la lecture")
                             } else {
-                                "Mettre en pause"
+                                tr!("Mettre en pause")
                             })
-                            .tooltip(if paused { "Reprendre" } else { "Pause" })
+                            .tooltip(if paused {
+                                tr!("Reprendre")
+                            } else {
+                                tr!("Pause")
+                            })
                             .on_click(cx.listener(|p, _, _, cx| {
                                 let command = if p.paused {
                                     PlayerCommand::Resume
@@ -809,8 +832,8 @@ impl DevicePanel {
                     .child(theme::round(
                         Button::new("device-stop")
                             .icon(IconName::Square)
-                            .accessibility_label("Arrêter la lecture")
-                            .tooltip("Arrêter")
+                            .accessibility_label(tr!("Arrêter la lecture"))
+                            .tooltip(tr!("Arrêter"))
                             .on_click(cx.listener(|p, _, _, cx| {
                                 p.paused = false;
                                 p.player(PlayerCommand::Stop, cx);
@@ -830,18 +853,18 @@ impl DevicePanel {
                         div()
                             .flex()
                             .justify_between()
-                            .child(label("Volume"))
+                            .child(label(tr!("Volume")))
                             .children(self.volume_set.then(|| {
                                 div()
                                     .font_weight(FontWeight::EXTRA_BOLD)
                                     .text_color(theme::c(theme::SKY.ink))
-                                    .child(format!("{level} %"))
+                                    .child(tr!("{level} %", level = level))
                             })),
                     )
                     .child(Slider::new(&self.volume).bg(theme::c(theme::SKY.accent))),
             );
         let mut swatches = div().flex().flex_wrap().gap(px(8.));
-        for (index, (name, rgb)) in LIGHTS.iter().enumerate() {
+        for (index, (name, rgb)) in light_choices().iter().enumerate() {
             let shown = swatch_color(*rgb);
             let [r, g, b] = *rgb;
             let swatch = Button::new(("device-light", index))
@@ -851,7 +874,7 @@ impl DevicePanel {
                         .hover(theme::c(shown))
                         .active(theme::c(shown)),
                 )
-                .accessibility_label(format!("Veilleuse : {name}"))
+                .accessibility_label(tr!("Veilleuse : {name}", name = name))
                 .tooltip(*name)
                 .toggled(self.light == Some(index))
                 .bg(theme::c(shown))
@@ -868,7 +891,7 @@ impl DevicePanel {
             });
         }
         let mut timers = div().flex().flex_wrap().gap(px(6.));
-        for (name, seconds) in TIMERS {
+        for (name, seconds) in timer_choices() {
             timers = timers.child(theme::pill(
                 Button::new(("device-timer", seconds as usize))
                     .label(name)
@@ -892,7 +915,7 @@ impl DevicePanel {
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .child(label("Veilleuse"))
+                    .child(label(tr!("Veilleuse")))
                     .child(swatches),
             )
             .child(
@@ -900,13 +923,13 @@ impl DevicePanel {
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .child(label("Minuterie"))
+                    .child(label(tr!("Minuterie")))
                     .child(timers),
             );
         if !online {
-            card = card.child(theme::note(
-                "Ce lecteur semble hors ligne : allumez-le et vérifiez qu’il est connecté au Wi-Fi.",
-            ));
+            card = card.child(theme::note(tr!(
+                "Ce lecteur semble hors ligne : allumez-le et vérifiez qu’il est connecté au Wi-Fi."
+            )));
         }
         if !self.status.is_empty() {
             card = card.child(theme::note(self.status.clone()));
@@ -923,13 +946,13 @@ impl DevicePanel {
                 .items_center()
                 .justify_between()
                 .gap(px(10.))
-                .child(theme::heading("Jour et nuit", 19.))
+                .child(theme::heading(tr!("Jour et nuit"), 19.))
                 .child(
                     theme::segmented()
                         .child(theme::segment(
                             Button::new("device-day")
                                 .icon(IconName::Sun)
-                                .label("Jour")
+                                .label(tr!("Jour"))
                                 .on_click(cx.listener(|p, _, _, cx| {
                                     p.night = false;
                                     cx.notify();
@@ -941,7 +964,7 @@ impl DevicePanel {
                         .child(theme::segment(
                             Button::new("device-night")
                                 .icon(IconName::Moon)
-                                .label("Nuit")
+                                .label(tr!("Nuit"))
                                 .on_click(cx.listener(|p, _, _, cx| {
                                     p.night = true;
                                     cx.notify();
@@ -955,17 +978,17 @@ impl DevicePanel {
         if self.loaded {
             let tiles: [(&str, Field); 4] = if night {
                 [
-                    ("Commence à (HH:MM)", Field::Night),
-                    ("Volume maximal", Field::NightLimit),
-                    ("Luminosité de l’écran", Field::NightBrightness),
-                    ("Couleur de la lumière", Field::NightLight),
+                    (tr!("Commence à (HH:MM)"), Field::Night),
+                    (tr!("Volume maximal"), Field::NightLimit),
+                    (tr!("Luminosité de l’écran"), Field::NightBrightness),
+                    (tr!("Couleur de la lumière"), Field::NightLight),
                 ]
             } else {
                 [
-                    ("Commence à (HH:MM)", Field::Day),
-                    ("Volume maximal", Field::DayLimit),
-                    ("Luminosité de l’écran", Field::DayBrightness),
-                    ("Couleur de la lumière", Field::Light),
+                    (tr!("Commence à (HH:MM)"), Field::Day),
+                    (tr!("Volume maximal"), Field::DayLimit),
+                    (tr!("Luminosité de l’écran"), Field::DayBrightness),
+                    (tr!("Couleur de la lumière"), Field::Light),
                 ]
             };
             let mut grid = div().flex().flex_wrap().gap(px(10.));
@@ -994,7 +1017,7 @@ impl DevicePanel {
             card = card.child(grid).child(
                 div().flex().justify_end().child(theme::pill(
                     Button::new("save-device-config")
-                        .label("Enregistrer ces réglages")
+                        .label(tr!("Enregistrer ces réglages"))
                         .on_click(cx.listener(|p, _, _, cx| p.save(cx))),
                     Look::Soft(&theme::SKY),
                     Height::Medium,
@@ -1003,15 +1026,15 @@ impl DevicePanel {
                 )),
             );
         } else if self.loading {
-            card = card.child(theme::note("Lecture des réglages du lecteur…"));
+            card = card.child(theme::note(tr!("Lecture des réglages du lecteur…")));
         } else {
             card = card
                 .child(theme::note(
-                    "Les réglages de ce lecteur n’ont pas pu être lus. Vérifiez qu’il est allumé, puis réessayez.",
+                    tr!("Les réglages de ce lecteur n’ont pas pu être lus. Vérifiez qu’il est allumé, puis réessayez."),
                 ))
                 .child(div().flex().justify_end().child(theme::pill(
                     Button::new("load-config")
-                        .label("Lire les réglages")
+                        .label(tr!("Lire les réglages"))
                         .on_click(cx.listener(|p, _, _, cx| p.load(cx))),
                     Look::Soft(&theme::SKY),
                     Height::Medium,
@@ -1022,11 +1045,11 @@ impl DevicePanel {
         column = column.child(card).child(
             theme::disclosure(
                 "device-more",
-                "Plus de réglages",
+                tr!("Plus de réglages"),
                 if advanced {
-                    "Casque, arrêt auto, raccourcis, commandes techniques"
+                    tr!("Casque, arrêt auto, raccourcis, commandes techniques")
                 } else {
-                    "Nom, casque, arrêt automatique"
+                    tr!("Nom, casque, arrêt automatique")
                 },
                 self.more_open,
                 cx,
@@ -1058,22 +1081,22 @@ impl DevicePanel {
         let mut card = theme::card();
         if self.loaded {
             card = card
-                .child(theme::heading("Lecteur", 17.))
-                .child(labelled("Nom du lecteur", self.stored(Field::Name)))
+                .child(theme::heading(tr!("Lecteur"), 17.))
+                .child(labelled(tr!("Nom du lecteur"), self.stored(Field::Name)))
                 .child(
                     row()
                         .child(labelled(
-                            "Délai avant atténuation de l’écran",
+                            tr!("Délai avant atténuation de l’écran"),
                             self.stored(Field::Dim),
                         ))
                         .child(labelled(
-                            "Délai avant arrêt auto",
+                            tr!("Délai avant arrêt auto"),
                             self.stored(Field::Shutdown),
                         )),
                 )
                 .child(
                     Checkbox::new("repeat")
-                        .label("Répéter les pistes")
+                        .label(tr!("Répéter les pistes"))
                         .checked(self.repeat)
                         .on_click(cx.listener(|p, checked, _, cx| {
                             p.repeat = *checked;
@@ -1082,7 +1105,7 @@ impl DevicePanel {
                 )
                 .child(
                     Checkbox::new("headphones")
-                        .label("Casque Bluetooth")
+                        .label(tr!("Casque Bluetooth"))
                         .checked(self.headphones)
                         .on_click(cx.listener(|p, checked, _, cx| {
                             p.headphones = *checked;
@@ -1091,7 +1114,7 @@ impl DevicePanel {
                 )
                 .child(
                     Checkbox::new("limited")
-                        .label("Limiter le volume du casque")
+                        .label(tr!("Limiter le volume du casque"))
                         .checked(self.limited)
                         .on_click(cx.listener(|p, checked, _, cx| {
                             p.limited = *checked;
@@ -1101,9 +1124,9 @@ impl DevicePanel {
         }
         if self.loaded && advanced {
             card = card
-                .child(theme::heading("Valeurs Yoto avancées", 17.))
+                .child(theme::heading(tr!("Valeurs Yoto avancées"), 17.))
                 .child(theme::note(
-                    "Valeurs transmises telles quelles à Yoto. Ne les modifiez que si vous savez ce qu’elles font.",
+                    tr!("Valeurs transmises telles quelles à Yoto. Ne les modifiez que si vous savez ce qu’elles font."),
                 ));
             let mut raw = row();
             for field in [
@@ -1126,7 +1149,7 @@ impl DevicePanel {
             card = card.child(
                 div().flex().justify_end().child(theme::pill(
                     Button::new("save-device-more")
-                        .label("Enregistrer ces réglages")
+                        .label(tr!("Enregistrer ces réglages"))
                         .on_click(cx.listener(|p, _, _, cx| p.save(cx))),
                     Look::Soft(&theme::SKY),
                     Height::Medium,
@@ -1137,7 +1160,7 @@ impl DevicePanel {
         }
         if !advanced {
             return card.child(theme::note(
-                "Les raccourcis et les commandes techniques du lecteur s’affichent avec le « Mode avancé », dans « Compte ».",
+                tr!("Les raccourcis et les commandes techniques du lecteur s’affichent avec le « Mode avancé », dans « Compte »."),
             ));
         }
         card = card
@@ -1146,8 +1169,8 @@ impl DevicePanel {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(theme::heading("Raccourcis", 17.))
-                    .child(theme::tag("bêta", &theme::BUTTER)),
+                    .child(theme::heading(tr!("Raccourcis"), 17.))
+                    .child(theme::tag(tr!("bêta"), &theme::BUTTER)),
             )
             .child(labelled(
                 Field::DayShortcut.label(),
@@ -1160,7 +1183,7 @@ impl DevicePanel {
             .child(
                 div().flex().justify_end().child(theme::pill(
                     Button::new("save-shortcuts")
-                        .label("Enregistrer les raccourcis")
+                        .label(tr!("Enregistrer les raccourcis"))
                         .on_click(cx.listener(|p, _, _, cx| p.shortcuts(cx))),
                     Look::Soft(&theme::SKY),
                     Height::Medium,
@@ -1168,10 +1191,10 @@ impl DevicePanel {
                     cx,
                 )),
             )
-            .child(theme::heading("Commandes techniques", 17.));
+            .child(theme::heading(tr!("Commandes techniques"), 17.));
         let mut commands = div().flex().flex_wrap().gap(px(6.)).child(theme::pill(
             Button::new("rest-status")
-                .label("Actualiser l’état du lecteur")
+                .label(tr!("Actualiser l’état du lecteur"))
                 .on_click(cx.listener(|p, _, _, cx| {
                     p.send(
                         Command::DeviceStatus {
@@ -1206,9 +1229,9 @@ impl DevicePanel {
                             confirm_destructive(
                                 window,
                                 cx,
-                                format!("Redémarrer « {name} » ?"),
-                                "La lecture en cours s’arrête et le lecteur reste indisponible le temps de redémarrer.",
-                                "Redémarrer",
+                                tr!("Redémarrer « {name} » ?", name = name),
+                                tr!("La lecture en cours s’arrête et le lecteur reste indisponible le temps de redémarrer."),
+                                tr!("Redémarrer"),
                                 move |_, cx| {
                                     let _ = owner.update(cx, |p, cx| {
                                         p.player(PlayerCommand::Reboot, cx)

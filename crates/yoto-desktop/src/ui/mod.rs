@@ -961,6 +961,9 @@ impl AppView {
         for panel in self.trims.values() {
             panel.update(cx, |p, cx| p.relabel(window, cx));
         }
+        for panel in self.device_panels.values() {
+            panel.update(cx, |p, cx| p.relabel(window, cx));
+        }
     }
     /// Keep the interface settings for the next launch. Failing to write them only costs
     /// the choice at the next launch, so it is reported without interrupting.
