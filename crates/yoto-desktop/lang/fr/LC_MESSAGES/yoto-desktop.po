@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 01:03-0400\n"
+"POT-Creation-Date: 2026-10-14 01:22-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -33,6 +33,18 @@ msgstr ""
 "La mise à jour n’a pas pu être installée.\n"
 "\n"
 "{detail}"
+
+#: src/main.rs
+msgid ""
+"L’application n’a pas pu démarrer : certains de ses composants sont "
+"manquants ou abîmés.\n"
+"\n"
+"Réinstallez l’application pour les remettre en place."
+msgstr ""
+"L’application n’a pas pu démarrer : certains de ses composants sont "
+"manquants ou abîmés.\n"
+"\n"
+"Réinstallez l’application pour les remettre en place."
 
 #: src/main.rs
 #, rust-format
