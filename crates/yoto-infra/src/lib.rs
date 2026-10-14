@@ -3,6 +3,7 @@ pub mod assets;
 pub mod auth;
 pub mod db;
 pub mod media;
+pub mod pipeline;
 pub mod players;
 pub mod process;
 pub mod service;
