@@ -11,9 +11,9 @@ from pathlib import Path
 # sentence in the English catalogue is not a translation; make any new exception an
 # explicit review decision.
 UNCHANGED_ENGLISH = {
-    "Audio", "Image", "Image {number}", "Imports", "Original", "Original · {duration}", "Pause",
-    "Description", "Playlists", "Podcasts", "Radio", "Streaming", "Volume",
-    "{count} playlist", "{count} playlists", "Version {version} ({origin})",
+    "Audio", "Description", "Image", "Image {number}", "Imports", "Original",
+    "Original · {duration}", "Pause", "Playlists", "Podcasts", "Radio", "Streaming",
+    "Volume", "{count} playlist", "{count} playlists", "Version {version} ({origin})",
     # Units and numbers only.
     "{hours} h {minutes} min", "{minutes} min {seconds} s", "{seconds} s",
 }
