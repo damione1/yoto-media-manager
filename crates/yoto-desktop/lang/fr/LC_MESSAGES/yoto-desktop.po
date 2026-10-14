@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 09:28-0400\n"
+"POT-Creation-Date: 2026-10-14 09:45-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -904,6 +904,14 @@ msgstr "Suppression sur Yoto…"
 msgid "Playlist supprimée sur Yoto."
 msgstr "Playlist supprimée sur Yoto."
 
+#: src/ui/editor.rs
+msgid "Changer la couverture"
+msgstr "Changer la couverture"
+
+#: src/ui/editor.rs
+msgid "Choisir une couverture"
+msgstr "Choisir une couverture"
+
 #: src/ui/editor.rs src/ui/group.rs src/ui/pixelart.rs
 msgid "Image"
 msgstr "Image"
@@ -926,14 +934,6 @@ msgid "{count} piste · {duration}"
 msgid_plural "{count} pistes · {duration}"
 msgstr[0] "{count} piste · {duration}"
 msgstr[1] "{count} pistes · {duration}"
-
-#: src/ui/editor.rs
-msgid "Choisir une couverture"
-msgstr "Choisir une couverture"
-
-#: src/ui/editor.rs
-msgid "Changer la couverture"
-msgstr "Changer la couverture"
 
 #: src/ui/editor.rs
 msgid "Plus d’actions"
@@ -1968,16 +1968,28 @@ msgid "Préparation de l’image…"
 msgstr "Préparation de l’image…"
 
 #: src/ui/pixelart.rs
+msgid "Cet élément n’est plus ouvert. Fermez cette fenêtre et rouvrez-le."
+msgstr "Cet élément n’est plus ouvert. Fermez cette fenêtre et rouvrez-le."
+
+#: src/ui/pixelart.rs
+msgid "Une de vos images"
+msgstr "Une de vos images"
+
+#: src/ui/pixelart.rs
 msgid "Mes icônes"
 msgstr "Mes icônes"
 
 #: src/ui/pixelart.rs
+msgid "Mes images"
+msgstr "Mes images"
+
+#: src/ui/pixelart.rs
 msgid ""
-"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez aussi "
-"importer une image."
+"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez déjà "
+"reprendre une de vos images ou en importer une."
 msgstr ""
-"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez aussi "
-"importer une image."
+"Connectez votre compte Yoto pour choisir parmi ses icônes. Vous pouvez déjà "
+"reprendre une de vos images ou en importer une."
 
 #: src/ui/pixelart.rs
 msgid "Chargement des icônes…"
@@ -1991,6 +2003,14 @@ msgstr "Chargement impossible : {failure}"
 #: src/ui/pixelart.rs
 msgid "Aucune icône dans cette collection. Vous pouvez importer une image."
 msgstr "Aucune icône dans cette collection. Vous pouvez importer une image."
+
+#: src/ui/pixelart.rs
+msgid ""
+"Aucune image pour l’instant. Importez-en une : vous pourrez la reprendre "
+"pour d’autres médias."
+msgstr ""
+"Aucune image pour l’instant. Importez-en une : vous pourrez la reprendre "
+"pour d’autres médias."
 
 #: src/ui/pixelart.rs
 msgid ""

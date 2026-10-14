@@ -66,6 +66,8 @@ pub struct TrimPanel {
     icon_window: Option<AnyWindowHandle>,
     /// A new icon for the media is being saved.
     saving_icon: bool,
+    /// Why the icon chosen in the open picker was not saved, shown inside the picker.
+    icon_error: Option<String>,
     tasks: Vec<Task<()>>,
     status: String,
     more_open: bool,
@@ -195,6 +197,7 @@ impl TrimPanel {
             editor_window: None,
             icon_window: None,
             saving_icon: false,
+            icon_error: None,
             tasks: vec![],
             status: String::new(),
             more_open: false,
@@ -439,7 +442,9 @@ impl TrimPanel {
                     | Ok(Ok(Reply::Player(_)))
                     | Ok(Ok(Reply::Data(_)))
                     | Ok(Ok(Reply::Asset(_)))
-                    | Ok(Ok(Reply::PixelArt(_) | Reply::Image(_) | Reply::Images(_))) => {
+                    | Ok(Ok(
+                        Reply::PixelArt(_) | Reply::Picture(_) | Reply::Image(_) | Reply::Images(_),
+                    )) => {
                         if let Some(metadata) = metadata {
                             view.media.title = metadata.title;
                             view.media.author = metadata.author;
@@ -1101,6 +1106,9 @@ impl TrimPanel {
     pub(super) fn status(&self) -> &str {
         &self.status
     }
+    pub(super) fn icon_error(&self) -> Option<&str> {
+        self.icon_error.as_deref()
+    }
     pub(super) fn backend(&self) -> (Arc<Service>, Arc<tokio::runtime::Runtime>) {
         (self.service.clone(), self.runtime.clone())
     }
@@ -1124,6 +1132,7 @@ impl TrimPanel {
             )
         });
         self.icon_window = Some(window.window_handle());
+        self.icon_error = None;
         self.status.clear();
         let weak = panel.downgrade();
         window.open_dialog(cx, move |dialog, _, _| {
@@ -1141,6 +1150,7 @@ impl TrimPanel {
                 .on_close(move |_, _, cx| {
                     let _ = close.update(cx, |v, cx| {
                         v.icon_window = None;
+                        v.icon_error = None;
                         cx.notify();
                     });
                 })
@@ -1163,6 +1173,7 @@ impl TrimPanel {
     /// get this icon; playlists that already hold it keep theirs.
     fn set_icon(&mut self, icon: Option<IconReference>, cx: &mut Context<Self>) {
         self.saving_icon = true;
+        self.icon_error = None;
         self.status = tr!("Enregistrement de l’icône…").into();
         cx.notify();
         let service = self.service.clone();
@@ -1207,6 +1218,11 @@ impl TrimPanel {
                             let _ = cx
                                 .update_window(handle, |_, window, cx| window.close_dialog(cx));
                         }
+                    }
+                    // With the picker open, the parent reads why there, and can try again.
+                    Err(error) if v.icon_window.is_some() => {
+                        v.status.clear();
+                        v.icon_error = Some(failure_text(&error));
                     }
                     Err(error) => v.status = failure_text(&error),
                 }

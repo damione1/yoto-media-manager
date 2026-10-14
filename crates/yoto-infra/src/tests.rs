@@ -1659,3 +1659,36 @@ async fn a_yoto_icon_of_another_account_is_not_copied_into_a_playlist() {
         assert!(same(stored.as_ref(), Some(&icon)), "{title}");
     }
 }
+#[tokio::test]
+async fn a_cover_preview_is_a_small_png_of_the_cover() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [15; 32]).unwrap();
+    let file = root.path().join("cover.png");
+    image::RgbaImage::from_pixel(960, 1520, image::Rgba([200, 40, 90, 255]))
+        .save(&file)
+        .unwrap();
+    let asset = service
+        .execute(Command::StoreImage {
+            path: file,
+            pixel_art: false,
+        })
+        .await
+        .unwrap()
+        .into_asset()
+        .unwrap();
+    let bytes = service
+        .execute(Command::CoverPreview(asset))
+        .await
+        .unwrap()
+        .into_picture()
+        .unwrap();
+    let preview = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png).unwrap();
+    assert_eq!((preview.width(), preview.height()), (303, 480));
+    assert_eq!(preview.to_rgba8().get_pixel(150, 240).0, [200, 40, 90, 255]);
+    assert!(
+        service
+            .execute(Command::CoverPreview(AssetId::new()))
+            .await
+            .is_err()
+    );
+}

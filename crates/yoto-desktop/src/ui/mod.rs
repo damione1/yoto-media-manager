@@ -52,6 +52,10 @@ pub struct AppView {
     /// Pixels of local media icons, read once and shared by every view of the library.
     pub icon_previews: BTreeMap<AssetId, PixelArt>,
     icon_requests: std::collections::BTreeSet<AssetId>,
+    /// Playlist covers kept on this computer, decoded once for every view that shows them.
+    /// `None` marks a cover that could not be read, so it is not asked again.
+    pub cover_previews: BTreeMap<AssetId, Option<Arc<Image>>>,
+    cover_requests: std::collections::BTreeSet<AssetId>,
     pub playlist_rows: Arc<Vec<editor::PlaylistRow>>,
     pub selected_playlist: Option<PlaylistId>,
     pub opening_playlist: Option<(AccountId, CardId)>,
@@ -209,6 +213,8 @@ impl AppView {
             playlist_icon_choices,
             icon_previews: BTreeMap::new(),
             icon_requests: Default::default(),
+            cover_previews: BTreeMap::new(),
+            cover_requests: Default::default(),
             playlist_rows,
             selected_playlist: None,
             opening_playlist: None,
@@ -574,6 +580,7 @@ impl AppView {
                             | Reply::Prepared(_)
                             | Reply::Asset(_)
                             | Reply::PixelArt(_)
+                            | Reply::Picture(_)
                             | Reply::Image(_)
                             | Reply::Images(_) => {}
                             Reply::OpenedPlaylist(id) => {
@@ -1606,6 +1613,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::ReleaseAsset(_)
         | Command::ReadPixelArt(_)
         | Command::Thumbnail(_)
+        | Command::CoverPreview(_)
         | Command::AppUpdate(_)
         | Command::YoutubeTool(_)
         | Command::CancelConnect
