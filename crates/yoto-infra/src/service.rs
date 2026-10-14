@@ -2968,15 +2968,63 @@ fn meaningful(v: &serde_json::Value) -> serde_json::Value {
     v
 }
 fn contains_document(actual: &serde_json::Value, expected: &serde_json::Value) -> bool {
-    match (actual, expected) {
-        (serde_json::Value::Object(a), serde_json::Value::Object(e)) => e
-            .iter()
-            .all(|(k, v)| a.get(k).is_some_and(|a| contains_document(a, v))),
-        (serde_json::Value::Array(a), serde_json::Value::Array(e)) => {
-            a.len() == e.len() && a.iter().zip(e).all(|(a, e)| contains_document(a, e))
+    match document_difference(actual, expected, "") {
+        None => true,
+        Some(difference) => {
+            eprintln!("Yoto document differs from the publication at {difference}");
+            false
         }
-        (a, e) => a == e,
     }
+}
+/// Audio measurements Yoto recomputes from its own transcode: a track sent as 86 s can come
+/// back as 87 s. They describe the audio, not which document was written, so the readback
+/// ignores them; titles, keys, audio references and icons still have to match.
+const MEASURED_BY_YOTO: [&str; 5] = [
+    "duration",
+    "fileSize",
+    "readableFileSize",
+    "format",
+    "channels",
+];
+/// The first place where `actual` lacks or changes something `expected` holds, as a JSON
+/// path with both values. Yoto may add fields and may write a whole number as `87` where
+/// `87.0` was sent, so extra fields and numeric representation are not differences.
+fn document_difference(
+    actual: &serde_json::Value,
+    expected: &serde_json::Value,
+    path: &str,
+) -> Option<String> {
+    use serde_json::Value;
+    match (actual, expected) {
+        (Value::Object(a), Value::Object(e)) => e.iter().find_map(|(k, v)| {
+            if MEASURED_BY_YOTO.contains(&k.as_str()) {
+                return None;
+            }
+            let path = format!("{path}.{k}");
+            match a.get(k) {
+                Some(a) => document_difference(a, v, &path),
+                None => Some(format!("{path}: missing, expected {}", excerpt(v))),
+            }
+        }),
+        (Value::Array(a), Value::Array(e)) if a.len() != e.len() => {
+            Some(format!("{path}: {} items, expected {}", a.len(), e.len()))
+        }
+        (Value::Array(a), Value::Array(e)) => a
+            .iter()
+            .zip(e)
+            .enumerate()
+            .find_map(|(i, (a, e))| document_difference(a, e, &format!("{path}[{i}]"))),
+        (Value::Number(a), Value::Number(e))
+            if a.as_f64().zip(e.as_f64()).is_some_and(|(a, e)| a == e) =>
+        {
+            None
+        }
+        (a, e) if a == e => None,
+        (a, e) => Some(format!("{path}: {}, expected {}", excerpt(a), excerpt(e))),
+    }
+}
+fn excerpt(value: &serde_json::Value) -> String {
+    value.to_string().chars().take(120).collect()
 }
 fn preview_loop(
     receiver: std::sync::mpsc::Receiver<PreviewCommand>,
@@ -3087,6 +3135,20 @@ fn db_account(db: &Database) -> Result<Option<AccountId>> {
 mod tests {
     use super::*;
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    #[test]
+    fn readback_accepts_added_fields_and_whole_numbers_but_reports_changes() {
+        let sent = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"duration": 87.0}]}]}});
+        let echoed = serde_json::json!({"cardId": "c", "content": {"chapters": [{"key": "a", "display": {}, "tracks": [{"duration": 87}]}]}});
+        assert!(contains_document(&echoed, &sent));
+        let transcoded = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"duration": 88}]}]}});
+        assert!(contains_document(&transcoded, &sent));
+        let sent = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"trackUrl": "yoto:#a"}]}]}});
+        let changed = serde_json::json!({"content": {"chapters": [{"key": "a", "tracks": [{"trackUrl": "yoto:#b"}]}]}});
+        assert_eq!(
+            document_difference(&changed, &sent, "").as_deref(),
+            Some(".content.chapters[0].tracks[0].trackUrl: \"yoto:#b\", expected \"yoto:#a\"")
+        );
+    }
     pub(super) fn streaming() -> Playlist {
         let mut p = Playlist::new("Publication test".into()).unwrap();
         p.chapters.push(Chapter {
