@@ -551,13 +551,71 @@ pub fn classify<T>(e: apis::Error<T>) -> Failure {
             429 => Failure::RateLimit {
                 retry_after_seconds: 30,
             },
-            400 | 404 | 422 => {
-                Failure::Validation(format!("Yoto rejected the request ({})", e.status.as_u16()))
-            }
+            status @ (400 | 404 | 413 | 422) => match limit_message(&e.content) {
+                Some(message) if status != 404 => Failure::Validation(message.into()),
+                Some(_) | None if status == 413 => {
+                    Failure::Compatibility(format!("Unexpected HTTP status {status}"))
+                }
+                Some(_) | None => {
+                    Failure::Validation(format!("Yoto rejected the request ({status})"))
+                }
+            },
             500..=599 => Failure::Connection,
             _ => Failure::Compatibility(format!("Unexpected HTTP status {}", e.status.as_u16())),
         },
     }
+}
+/// Recognise a refusal that names one of Yoto's playlist limits (100 tracks; 60 minutes or
+/// 100 MB per track; 5 hours or 500 MB in total) and return the matching message.
+pub fn limit_message(body: &str) -> Option<&'static str> {
+    let text = body.to_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| text.contains(w));
+    if !has(&[
+        "limit",
+        "exceed",
+        "max",
+        "too many",
+        "too long",
+        "too large",
+        "too big",
+        "greater than",
+        "more than",
+        "longer than",
+        "larger than",
+    ]) {
+        return None;
+    }
+    let duration = has(&[
+        "duration",
+        "minute",
+        "hour",
+        "length",
+        "too long",
+        "longer than",
+    ]);
+    let size = has(&[
+        "size",
+        "bytes",
+        "megabyte",
+        " mb",
+        "too large",
+        "too big",
+        "larger than",
+    ]);
+    let total = has(&["total", "card", "playlist"]);
+    let track = has(&["track", "chapter", "file", "audio"]);
+    Some(match (duration, size) {
+        (false, false) if has(&["too many", "tracks", "track count", "number of"]) => {
+            messages::PLAYLIST_TRACKS_MAX
+        }
+        (true, false) if total => messages::YOTO_PLAYLIST_TOO_LONG,
+        (false, true) if total => messages::YOTO_PLAYLIST_TOO_LARGE,
+        (true, true) if total => messages::PLAYLIST_EXCEEDS_LIMITS,
+        (true, false) if track => messages::YOTO_TRACK_TOO_LONG,
+        (false, true) if track => messages::YOTO_TRACK_TOO_LARGE,
+        (true, true) if track => messages::TRACK_EXCEEDS_LIMITS,
+        (false, false) | (true, false) | (false, true) | (true, true) => return None,
+    })
 }
 fn object(v: &Value) -> Result<Extra> {
     serde_json::from_value(v.clone()).map_err(|_| Failure::Compatibility("Expected object".into()))

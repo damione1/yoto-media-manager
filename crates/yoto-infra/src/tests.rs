@@ -512,6 +512,68 @@ async fn covers_are_converted_by_yoto_to_the_card_format() {
     );
 }
 #[test]
+fn yoto_limit_refusals_become_plain_messages() {
+    use crate::api::limit_message as limit;
+    let cases = [
+        (
+            r#"{"error":{"code":"bad-request","message":"Card cannot have more than 100 tracks"}}"#,
+            Some(messages::PLAYLIST_TRACKS_MAX),
+        ),
+        (
+            "Too many tracks in content",
+            Some(messages::PLAYLIST_TRACKS_MAX),
+        ),
+        (
+            "Track duration exceeds the 60 minute limit",
+            Some(messages::YOTO_TRACK_TOO_LONG),
+        ),
+        (
+            "Audio file size exceeds maximum of 100MB",
+            Some(messages::YOTO_TRACK_TOO_LARGE),
+        ),
+        (
+            "Total duration of the card exceeds 5 hours",
+            Some(messages::YOTO_PLAYLIST_TOO_LONG),
+        ),
+        (
+            "Playlist total size is larger than 500 MB",
+            Some(messages::YOTO_PLAYLIST_TOO_LARGE),
+        ),
+        (
+            "Track exceeds the maximum duration and file size",
+            Some(messages::TRACK_EXCEEDS_LIMITS),
+        ),
+        ("Invalid cardId", None),
+        ("title is required", None),
+        ("", None),
+    ];
+    for (body, expected) in cases {
+        assert_eq!(limit(body), expected, "{body}");
+    }
+}
+#[tokio::test]
+async fn a_refused_card_names_the_limit_it_broke() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("POST"))
+        .and(path("/content"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error":{"code":"bad-request","message":"Total duration exceeds the 5 hour limit"}
+        })))
+        .mount(&server)
+        .await;
+    let failure = api
+        .write_card(
+            "API-TOKEN",
+            &serde_json::json!({"title":"T","content":{"chapters":[]}}),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(failure, Failure::Validation(m) if m == messages::YOTO_PLAYLIST_TOO_LONG));
+}
+#[test]
 fn upload_time_grows_with_the_file_within_bounds() {
     use crate::api::upload_timeout;
     use std::time::Duration;

@@ -64,6 +64,10 @@ pub const PREPARED_TRACK_TOO_LARGE: &str =
 pub const PREVIEW_TOO_LONG: &str = "Preview exceeds the temporary audio limit";
 pub const TRACK_EXCEEDS_LIMITS: &str = "Track exceeds Yoto limits";
 pub const PLAYLIST_EXCEEDS_LIMITS: &str = "Playlist exceeds Yoto limits";
+pub const YOTO_TRACK_TOO_LONG: &str = "Yoto rejected a track longer than 60 minutes.";
+pub const YOTO_TRACK_TOO_LARGE: &str = "Yoto rejected a track larger than 100 MB.";
+pub const YOTO_PLAYLIST_TOO_LONG: &str = "Yoto rejected a playlist longer than 5 hours in total.";
+pub const YOTO_PLAYLIST_TOO_LARGE: &str = "Yoto rejected a playlist larger than 500 MB in total.";
 pub const STREAM_URL_INVALID: &str = "Invalid stream URL";
 pub const STREAM_HTTPS_ONLY: &str = "Streaming requires HTTPS";
 pub const MEDIA_IN_PLAYLIST: &str = "A playlist references this media/version";
@@ -177,6 +181,10 @@ pub const ALL: &[&str] = &[
     PREVIEW_TOO_LONG,
     TRACK_EXCEEDS_LIMITS,
     PLAYLIST_EXCEEDS_LIMITS,
+    YOTO_TRACK_TOO_LONG,
+    YOTO_TRACK_TOO_LARGE,
+    YOTO_PLAYLIST_TOO_LONG,
+    YOTO_PLAYLIST_TOO_LARGE,
     STREAM_URL_INVALID,
     STREAM_HTTPS_ONLY,
     MEDIA_IN_PLAYLIST,

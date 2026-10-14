@@ -148,6 +148,18 @@ fn known_message(message: &str) -> Option<&'static str> {
         m::PLAYLIST_EXCEEDS_LIMITS => {
             "Cette playlist dépasse ce que Yoto accepte (100 pistes, 5 h ou 500 Mo)."
         }
+        m::YOTO_TRACK_TOO_LONG => {
+            "Yoto refuse les pistes de plus de 60 minutes. Raccourcissez cette piste ou découpez-la en plusieurs pistes."
+        }
+        m::YOTO_TRACK_TOO_LARGE => {
+            "Yoto refuse les pistes de plus de 100 Mo. Raccourcissez cette piste ou découpez-la en plusieurs pistes."
+        }
+        m::YOTO_PLAYLIST_TOO_LONG => {
+            "Yoto refuse les playlists de plus de 5 heures au total. Retirez des pistes ou répartissez-les sur deux playlists."
+        }
+        m::YOTO_PLAYLIST_TOO_LARGE => {
+            "Yoto refuse les playlists de plus de 500 Mo au total. Retirez des pistes ou répartissez-les sur deux playlists."
+        }
         m::STREAM_URL_INVALID => {
             "Ce lien de flux n’est pas une adresse valide. Collez une adresse complète qui commence par https://."
         }
