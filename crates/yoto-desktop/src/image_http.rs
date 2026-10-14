@@ -3,7 +3,7 @@ use gpui_kit::http_client::{
     AsyncBody, HttpClient, RedirectPolicy, Request, RequestTimeout, Response, Url,
     http::HeaderValue,
 };
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 /// GPUI's image loader runs outside Tokio; use the application's existing runtime.
 /// This client is independent of OAuth and never adds account credentials to image requests.
@@ -11,6 +11,8 @@ pub(crate) struct ImageHttpClient {
     runtime: Arc<tokio::runtime::Runtime>,
     follow: reqwest::Client,
     no_follow: reqwest::Client,
+    /// One client per redirect limit, built once: each client owns a connection pool.
+    limited: std::sync::Mutex<BTreeMap<usize, reqwest::Client>>,
 }
 impl ImageHttpClient {
     pub(crate) fn new(runtime: Arc<tokio::runtime::Runtime>) -> reqwest::Result<Self> {
@@ -20,7 +22,20 @@ impl ImageHttpClient {
                 attempt.follow()
             }))?,
             no_follow: client(reqwest::redirect::Policy::none())?,
+            limited: std::sync::Mutex::new(BTreeMap::new()),
         })
+    }
+    fn limited(&self, limit: usize) -> reqwest::Result<reqwest::Client> {
+        let mut clients = self
+            .limited
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(client) = clients.get(&limit) {
+            return Ok(client.clone());
+        }
+        let created = client(reqwest::redirect::Policy::limited(limit))?;
+        clients.insert(limit, created.clone());
+        Ok(created)
     }
 }
 fn client(policy: reqwest::redirect::Policy) -> reqwest::Result<reqwest::Client> {
@@ -45,9 +60,7 @@ impl HttpClient for ImageHttpClient {
         let (head, body) = request.into_parts();
         let selected = match head.extensions.get::<RedirectPolicy>() {
             Some(RedirectPolicy::FollowAll) => Ok(self.follow.clone()),
-            Some(RedirectPolicy::FollowLimit(limit)) => {
-                client(reqwest::redirect::Policy::limited(*limit as usize))
-            }
+            Some(RedirectPolicy::FollowLimit(limit)) => self.limited(*limit as usize),
             Some(RedirectPolicy::NoFollow) | None => Ok(self.no_follow.clone()),
         };
         let runtime = self.runtime.clone();

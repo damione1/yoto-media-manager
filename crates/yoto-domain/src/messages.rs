@@ -99,6 +99,7 @@ pub const AUDIO_OUTPUT_SILENT: &str = "Audio output did not respond";
 pub const RECOVERY_KEY_FORMAT: &str =
     "Recovery key must contain 64 hexadecimal characters (256 random bits)";
 pub const RECOVERY_KEY_LENGTH: &str = "Recovery key must contain exactly 256 bits";
+pub const UNEXPECTED_REPLY: &str = "Unexpected reply for this command";
 pub const EXPORT_EXISTS: &str = "Export destination already exists";
 pub const BACKUP_AUTH_FAILED: &str =
     "Backup authentication failed: wrong recovery key or altered manifest";
@@ -197,6 +198,7 @@ pub const ALL: &[&str] = &[
     AUDIO_OUTPUT_SILENT,
     RECOVERY_KEY_FORMAT,
     RECOVERY_KEY_LENGTH,
+    UNEXPECTED_REPLY,
     EXPORT_EXISTS,
     BACKUP_AUTH_FAILED,
     BACKUP_UNSUPPORTED,

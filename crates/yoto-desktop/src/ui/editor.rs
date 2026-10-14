@@ -433,25 +433,9 @@ impl PlaylistEditor {
                 .spawn(async move { service.execute(command).await })
                 .await;
             let _ = weak.update(cx, |view, cx| {
-                view.status = match result {
-                    Ok(Ok(
-                        Reply::AppUpdate(_)
-                        | Reply::Updated
-                        | Reply::Saved(_)
-                        | Reply::OpenedPlaylist(_)
-                        | Reply::PlaylistOperation { .. }
-                        | Reply::Entries(_)
-                        | Reply::Waveform(_)
-                        | Reply::Prepared(_)
-                        | Reply::Asset(_)
-                        | Reply::PixelArt(_)
-                        | Reply::Image(_)
-                        | Reply::Images(_)
-                        | Reply::Player(_)
-                        | Reply::Data(_),
-                    )) => "Opération terminée.".into(),
-                    Ok(Err(e)) => failure_text(&e),
-                    Err(e) => failure_text(&Failure::Storage(e.to_string())),
+                view.status = match joined(result) {
+                    Ok(_) => "Opération terminée.".into(),
+                    Err(e) => failure_text(&e),
                 };
                 cx.notify();
             });
@@ -684,8 +668,8 @@ impl PlaylistEditor {
                 .spawn(async move { service.execute(command).await })
                 .await;
             let _ = weak.update(cx, |v, cx| {
-                match result {
-                    Ok(Ok(Reply::PlaylistOperation { job, .. })) => {
+                match joined(result).and_then(Reply::into_operation) {
+                    Ok((_, job)) => {
                         v.operation = Some(PlaylistOperation::Pending {
                             job,
                             state: JobState::Queued,
@@ -693,28 +677,7 @@ impl PlaylistEditor {
                         });
                         v.status = "Envoi et vérification sur Yoto…".into();
                     }
-                    Ok(Err(e)) => v.fail_operation(e, cx),
-                    Err(e) => v.fail_operation(Failure::Storage(e.to_string()), cx),
-                    Ok(Ok(
-                        Reply::AppUpdate(_)
-                        | Reply::Updated
-                        | Reply::Saved(_)
-                        | Reply::OpenedPlaylist(_)
-                        | Reply::Entries(_)
-                        | Reply::Waveform(_)
-                        | Reply::Prepared(_)
-                        | Reply::Asset(_)
-                        | Reply::PixelArt(_)
-                        | Reply::Image(_)
-                        | Reply::Images(_)
-                        | Reply::Player(_)
-                        | Reply::Data(_),
-                    )) => v.fail_operation(
-                        Failure::Compatibility(
-                            "Yoto n’a pas fourni d’identifiant de suivi.".into(),
-                        ),
-                        cx,
-                    ),
+                    Err(e) => v.fail_operation(e, cx),
                 }
                 if let Some(parent) = v.parent.upgrade() {
                     let snapshot = parent.read(cx).snapshot.clone();
@@ -1580,8 +1543,8 @@ impl PlaylistEditor {
                 })
                 .await;
             let _ = weak.update(cx, |v, cx| {
-                match result {
-                    Ok(Ok(Reply::Updated)) => {
+                match joined(result).and_then(Reply::into_unit) {
+                    Ok(()) => {
                         v.save_updates.finish();
                         v.operation = None;
                         let _ = v.parent.update(cx, |parent, cx| {
@@ -1593,26 +1556,7 @@ impl PlaylistEditor {
                             cx.notify();
                         });
                     }
-                    Ok(Err(e)) => v.fail_operation(e, cx),
-                    Err(e) => v.fail_operation(Failure::Storage(e.to_string()), cx),
-                    Ok(Ok(
-                        Reply::AppUpdate(_)
-                        | Reply::Saved(_)
-                        | Reply::OpenedPlaylist(_)
-                        | Reply::PlaylistOperation { .. }
-                        | Reply::Entries(_)
-                        | Reply::Waveform(_)
-                        | Reply::Prepared(_)
-                        | Reply::Asset(_)
-                        | Reply::PixelArt(_)
-                        | Reply::Image(_)
-                        | Reply::Images(_)
-                        | Reply::Player(_)
-                        | Reply::Data(_),
-                    )) => v.fail_operation(
-                        Failure::Compatibility("Suppression non confirmée.".into()),
-                        cx,
-                    ),
+                    Err(e) => v.fail_operation(e, cx),
                 }
                 let _ = v.parent.update(cx, |_, cx| cx.notify());
                 cx.notify();
@@ -1657,27 +1601,11 @@ impl PlaylistEditor {
                 .spawn(async move { service.execute(Command::ReadPixelArt(asset)).await })
                 .await;
             let _ = weak.update(cx, |v, cx| {
-                match result {
-                    Ok(Ok(Reply::PixelArt(art))) => {
-                        v.icon_previews.insert(asset, *art);
+                match joined(result).and_then(Reply::into_pixel_art) {
+                    Ok(art) => {
+                        v.icon_previews.insert(asset, art);
                     }
-                    Ok(Ok(
-                        Reply::AppUpdate(_)
-                        | Reply::Updated
-                        | Reply::Saved(_)
-                        | Reply::OpenedPlaylist(_)
-                        | Reply::PlaylistOperation { .. }
-                        | Reply::Entries(_)
-                        | Reply::Waveform(_)
-                        | Reply::Prepared(_)
-                        | Reply::Asset(_)
-                        | Reply::Image(_)
-                        | Reply::Images(_)
-                        | Reply::Player(_)
-                        | Reply::Data(_),
-                    )) => v.status = "Aperçu d’icône indisponible.".into(),
-                    Ok(Err(e)) => v.status = failure_text(&e),
-                    Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
+                    Err(e) => v.status = failure_text(&e),
                 }
                 cx.notify();
             });
@@ -1772,28 +1700,12 @@ impl PlaylistEditor {
                     })
                     .await;
                 let _ = weak.update(cx, |v, cx| {
-                    match r {
-                        Ok(Ok(Reply::Asset(id))) => {
+                    match joined(r).and_then(Reply::into_asset) {
+                        Ok(id) => {
                             v.draft.metadata.cover = Some(id);
                             v.save(cx);
                         }
-                        Ok(Ok(
-                            Reply::AppUpdate(_)
-                            | Reply::Updated
-                            | Reply::Saved(_)
-                            | Reply::OpenedPlaylist(_)
-                            | Reply::PlaylistOperation { .. }
-                            | Reply::Entries(_)
-                            | Reply::Waveform(_)
-                            | Reply::Prepared(_)
-                            | Reply::PixelArt(_)
-                            | Reply::Image(_)
-                            | Reply::Images(_)
-                            | Reply::Player(_)
-                            | Reply::Data(_),
-                        )) => v.status = "L’image n’a pas pu être ajoutée.".into(),
-                        Ok(Err(e)) => v.status = failure_text(&e),
-                        Err(e) => v.status = failure_text(&Failure::Storage(e.to_string())),
+                        Err(e) => v.status = failure_text(&e),
                     }
                     cx.notify();
                 });

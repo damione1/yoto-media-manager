@@ -40,8 +40,8 @@ impl AppView {
                     cx.notify();
                     return;
                 }
-                match result {
-                    Ok(Ok(Reply::Entries(inspection))) => match inspection.kind {
+                match joined(result).and_then(Reply::into_entries) {
+                    Ok(inspection) => match inspection.kind {
                         SourceShape::Video => {
                             if let [entry] = inspection.entries.as_slice() {
                                 view.youtube_titles
@@ -77,28 +77,7 @@ impl AppView {
                             };
                         }
                     },
-                    Ok(Ok(
-                        Reply::AppUpdate(_)
-                        | Reply::Updated
-                        | Reply::Saved(_)
-                        | Reply::OpenedPlaylist(_)
-                        | Reply::PlaylistOperation { .. }
-                        | Reply::Waveform(_)
-                        | Reply::Prepared(_)
-                        | Reply::Asset(_)
-                        | Reply::PixelArt(_)
-                        | Reply::Image(_)
-                        | Reply::Images(_)
-                        | Reply::Player(_)
-                        | Reply::Data(_),
-                    )) => view.report_error(
-                        Failure::Validation(
-                            "Impossible de lire les informations de cette vidéo. Réessayez.".into(),
-                        ),
-                        cx,
-                    ),
-                    Ok(Err(error)) => view.report_error(error, cx),
-                    Err(error) => view.report_error(Failure::Storage(error.to_string()), cx),
+                    Err(error) => view.report_error(error, cx),
                 }
                 cx.notify();
             });

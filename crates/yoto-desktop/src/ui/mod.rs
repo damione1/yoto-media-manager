@@ -343,38 +343,21 @@ impl AppView {
         cx.spawn(async move |weak, cx| {
             let result = rt
                 .spawn(async move {
-                    match service
+                    let page = service
                         .execute(Command::JobsPage { offset, limit: 200 })
                         .await?
-                    {
-                        Reply::Data(value) => serde_json::from_value::<Vec<Job>>(value)
-                            .map_err(|e| Failure::Storage(e.to_string())),
-                        Reply::AppUpdate(_)
-                        | Reply::Updated
-                        | Reply::Saved(_)
-                        | Reply::OpenedPlaylist(_)
-                        | Reply::PlaylistOperation { .. }
-                        | Reply::Entries(_)
-                        | Reply::Waveform(_)
-                        | Reply::Prepared(_)
-                        | Reply::Asset(_)
-                        | Reply::PixelArt(_)
-                        | Reply::Image(_)
-                        | Reply::Images(_)
-                        | Reply::Player(_) => {
-                            Err(Failure::Compatibility("Unexpected job page reply".into()))
-                        }
-                    }
+                        .into_data()?;
+                    serde_json::from_value::<Vec<Job>>(page)
+                        .map_err(|e| Failure::Storage(e.to_string()))
                 })
                 .await;
             let _ = weak.update(cx, |view, cx| {
-                match result {
-                    Ok(Ok(jobs)) => {
+                match joined(result) {
+                    Ok(jobs) => {
                         view.job_page = Some(Arc::new(jobs));
                         view.job_offset = offset;
                     }
-                    Ok(Err(e)) => view.report_error(e, cx),
-                    Err(e) => view.report_error(Failure::Storage(e.to_string()), cx),
+                    Err(e) => view.report_error(e, cx),
                 };
                 cx.notify();
             });
@@ -384,13 +367,15 @@ impl AppView {
     /// Show a failure where a parent will see it: the status line and a toast.
     pub fn report_error(&mut self, failure: Failure, cx: &mut Context<Self>) {
         let text = failure_text(&failure);
+        // A hint about what was typed fades by itself; real failures stay until dismissed.
+        let persistent = !matches!(failure, Failure::Validation(_));
         self.status = text.clone();
         self.error = Some(failure);
         if let Some(window) = cx.windows().first().copied() {
             cx.defer(move |cx| {
                 let _ = cx.update_window(window, |_, window, cx| {
                     use gpui_kit::component::{WindowExt, notification::Notification};
-                    window.push_notification(Notification::error(text).autohide(false), cx);
+                    window.push_notification(Notification::error(text).autohide(!persistent), cx);
                 });
             });
         }
@@ -818,6 +803,13 @@ impl AppView {
         }
         cx.notify();
     }
+}
+/// A service call run on the Tokio runtime, with a failed runtime task reported like any
+/// other local failure.
+fn joined<T>(
+    result: std::result::Result<yoto_domain::Result<T>, tokio::task::JoinError>,
+) -> yoto_domain::Result<T> {
+    result.unwrap_or_else(|error| Err(Failure::Storage(error.to_string())))
 }
 /// Audio formats accepted by the file picker and by drag-and-drop.
 const AUDIO_EXTENSIONS: &[&str] = &[

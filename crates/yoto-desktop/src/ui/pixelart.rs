@@ -147,26 +147,9 @@ impl IconPicker {
                         .await
                 })
                 .await;
-            let staged = match result {
-                Ok(Ok(Reply::Asset(asset))) => Ok(asset),
-                Ok(Ok(
-                    Reply::AppUpdate(_)
-                    | Reply::Updated
-                    | Reply::Saved(_)
-                    | Reply::OpenedPlaylist(_)
-                    | Reply::PlaylistOperation { .. }
-                    | Reply::Entries(_)
-                    | Reply::Waveform(_)
-                    | Reply::Prepared(_)
-                    | Reply::PixelArt(_)
-                    | Reply::Image(_)
-                    | Reply::Images(_)
-                    | Reply::Player(_)
-                    | Reply::Data(_),
-                )) => Err("Résultat d’image inattendu.".into()),
-                Ok(Err(error)) => Err(failure_text(&error)),
-                Err(error) => Err(failure_text(&Failure::Storage(error.to_string()))),
-            };
+            let staged = joined(result)
+                .and_then(Reply::into_asset)
+                .map_err(|error| failure_text(&error));
             let asset = staged.as_ref().ok().copied();
             let accepted = weak
                 .update(cx, |v, cx| {

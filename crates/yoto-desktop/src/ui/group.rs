@@ -183,37 +183,24 @@ impl GroupEditor {
         self.tasks.push(cx.spawn(async move |weak, cx| {
             let result = rt
                 .spawn(async move {
-                    let reply = service
+                    let asset = service
                         .execute(Command::FamilyImage {
                             account,
                             image,
                             size: FamilyImageSize::Square,
                         })
-                        .await?;
-                    match reply {
-                        Reply::Asset(asset) => service.execute(Command::Thumbnail(asset)).await,
-                        Reply::AppUpdate(_)
-                        | Reply::Updated
-                        | Reply::Saved(_)
-                        | Reply::OpenedPlaylist(_)
-                        | Reply::PlaylistOperation { .. }
-                        | Reply::Entries(_)
-                        | Reply::Waveform(_)
-                        | Reply::Prepared(_)
-                        | Reply::PixelArt(_)
-                        | Reply::Image(_)
-                        | Reply::Images(_)
-                        | Reply::Player(_)
-                        | Reply::Data(_) => {
-                            Err(Failure::Compatibility("Image reply missing".into()))
-                        }
-                    }
+                        .await?
+                        .into_asset()?;
+                    service
+                        .execute(Command::Thumbnail(asset))
+                        .await?
+                        .into_pixel_art()
                 })
                 .await;
             let _ = weak.update(cx, |v, cx| {
                 // A missing preview only shows the image's number; it is not worth an error.
-                if let Ok(Ok(Reply::PixelArt(art))) = result {
-                    v.previews.insert(id, *art);
+                if let Ok(art) = joined(result) {
+                    v.previews.insert(id, art);
                     cx.notify();
                 }
             });

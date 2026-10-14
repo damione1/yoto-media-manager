@@ -247,6 +247,62 @@ pub enum Reply {
     Player(crate::players::CommandResult),
     Data(serde_json::Value),
 }
+/// Typed access to the reply a command is documented to return. Any other reply is a
+/// compatibility failure, so callers handle one success shape and the usual failures.
+impl Reply {
+    fn unexpected() -> Failure {
+        Failure::Compatibility(messages::UNEXPECTED_REPLY.into())
+    }
+    pub fn into_unit(self) -> Result<()> {
+        if let Self::Updated = self {
+            Ok(())
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_data(self) -> Result<serde_json::Value> {
+        if let Self::Data(value) = self {
+            Ok(value)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_asset(self) -> Result<AssetId> {
+        if let Self::Asset(asset) = self {
+            Ok(asset)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_pixel_art(self) -> Result<PixelArt> {
+        if let Self::PixelArt(art) = self {
+            Ok(*art)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_entries(self) -> Result<SourceInspection> {
+        if let Self::Entries(entries) = self {
+            Ok(entries)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_app_update(self) -> Result<Arc<yoto_updater::UpdateState>> {
+        if let Self::AppUpdate(state) = self {
+            Ok(state)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_operation(self) -> Result<(PlaylistId, JobId)> {
+        if let Self::PlaylistOperation { playlist, job } = self {
+            Ok((playlist, job))
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+}
 type InterfaceBytes = (String, Vec<u64>, Arc<Vec<u8>>);
 type PlayerOwners =
     tokio::sync::Mutex<BTreeMap<(AccountId, DeviceId), Arc<tokio::sync::Mutex<()>>>>;

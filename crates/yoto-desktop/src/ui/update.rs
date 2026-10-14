@@ -26,34 +26,18 @@ impl UpdatePanel {
                 let before = previous.clone();
                 let response = rt
                     .spawn(async move {
-                        match service
+                        let state = service
                             .execute(Command::AppUpdate(UpdateAction::State))
                             .await?
-                        {
-                            Reply::AppUpdate(state) => Ok::<_, Failure>((
-                                state.clone(),
-                                if Arc::ptr_eq(&state, &before) || state == before {
-                                    None
-                                } else {
-                                    Some(state)
-                                },
-                            )),
-                            Reply::Updated
-                            | Reply::Saved(_)
-                            | Reply::OpenedPlaylist(_)
-                            | Reply::PlaylistOperation { .. }
-                            | Reply::Entries(_)
-                            | Reply::Waveform(_)
-                            | Reply::Prepared(_)
-                            | Reply::Asset(_)
-                            | Reply::PixelArt(_)
-                            | Reply::Image(_)
-                            | Reply::Images(_)
-                            | Reply::Player(_)
-                            | Reply::Data(_) => {
-                                Err(Failure::Validation("Unexpected updater response".into()))
-                            }
-                        }
+                            .into_app_update()?;
+                        Ok::<_, Failure>((
+                            state.clone(),
+                            if Arc::ptr_eq(&state, &before) || state == before {
+                                None
+                            } else {
+                                Some(state)
+                            },
+                        ))
                     })
                     .await;
                 match response {
