@@ -70,4 +70,5 @@ for name in ['yt-dlp','deno']:
     if 'source' in m[name]:f=fetch(m[name]['source'],cache);shutil.copy2(f,sources/f.name)
 shutil.copy2(ROOT/'distribution/sidecars.json',out/'sidecars.json')
 shutil.copy2(ROOT/'distribution/THIRD-PARTY-NOTICES.md',out/'THIRD-PARTY-NOTICES.md')
+shutil.copy2(ROOT/'LICENSE',out/'LICENSE')
 write_manifest(out,a.target)

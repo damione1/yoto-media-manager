@@ -91,6 +91,39 @@ impl TrimRange {
     pub fn duration(self) -> MediaTime {
         MediaTime::try_from(self.end.micros() - self.start.micros()).expect("validated range")
     }
+    /// What is heard when playback of this range starts at `position`: from there to the end.
+    /// A position outside the range starts at its beginning, and one in its last second starts
+    /// a second before the end, so a preview is never shorter than the tail a source's decoded
+    /// audio may lack (see the infra preview check).
+    pub fn played_from(self, position: MediaTime) -> Self {
+        let latest = self
+            .end
+            .micros()
+            .saturating_sub(Self::SHORTEST_PREVIEW_MICROS)
+            .max(self.start.micros());
+        let start = if position < self.start || position >= self.end {
+            self.start.micros()
+        } else {
+            position.micros().min(latest)
+        };
+        Self {
+            start: MediaTime::try_from(start).expect("inside the range"),
+            end: self.end,
+        }
+    }
+    /// The last `length` of this range, or all of it when it is shorter.
+    pub fn ending(self, length: MediaTime) -> Self {
+        let start = self
+            .end
+            .micros()
+            .saturating_sub(length.micros())
+            .max(self.start.micros());
+        Self {
+            start: MediaTime::try_from(start).expect("inside the range"),
+            end: self.end,
+        }
+    }
+    const SHORTEST_PREVIEW_MICROS: u64 = 1_000_000;
 }
 impl TryFrom<(MediaTime, MediaTime)> for TrimRange {
     type Error = Failure;

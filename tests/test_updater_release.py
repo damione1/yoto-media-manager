@@ -62,6 +62,7 @@ class UpdaterReleaseTests(unittest.TestCase):
         self.addCleanup(self.environment.stop)
         (self.root / "distribution").mkdir()
         (self.root / "distribution/THIRD-PARTY-NOTICES.md").write_text("Test notices\n")
+        (self.root / "LICENSE").write_text("Test licence\n")
         self.patch = mock.patch.object(release, "ROOT", self.root)
         self.patch.start()
         self.addCleanup(self.patch.stop)
@@ -128,6 +129,7 @@ class UpdaterReleaseTests(unittest.TestCase):
                         "YotoMediaManager/yoto-desktop.exe", "YotoMediaManager/yoto-mcp.exe",
                         "YotoMediaManager/tools/ffmpeg.exe", "YotoMediaManager/tools/nested/manifest.json",
                         "YotoMediaManager/THIRD-PARTY-NOTICES.md",
+                        "YotoMediaManager/LICENSE",
                     })
         self.assertFalse(list(self.root.rglob("private.key")))
 

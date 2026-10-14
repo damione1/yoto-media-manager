@@ -169,6 +169,19 @@ fn whole_webm_opus_preview_accepts_the_shorter_decoded_tail() {
     let decoded = tools.preview(&input, lease.path(), whole).unwrap();
     assert!(decoded.duration <= source.duration);
     assert!(source.duration.seconds() - decoded.duration.seconds() < 0.1);
+    // « Écouter la fin de la sélection » and a playhead dropped near the end both decode
+    // a range running to the source's end, which may also end early.
+    let five = MediaTime::from_seconds(5.).unwrap();
+    let ending = tools
+        .preview(&input, lease.path(), whole.ending(five))
+        .unwrap();
+    assert!(ending.duration <= five);
+    assert!(five.seconds() - ending.duration.seconds() < 0.1);
+    let near_end = MediaTime::from_seconds(source.duration.seconds() - 0.1).unwrap();
+    let last = tools
+        .preview(&input, lease.path(), whole.played_from(near_end))
+        .unwrap();
+    assert!(last.duration.seconds() > 0.9 && last.duration.seconds() <= 1.);
 }
 #[tokio::test]
 async fn device_contract_requires_online_and_preserves_unmanaged_settings() {
@@ -767,7 +780,9 @@ fn mcp_redacts_capabilities() {
 fn child_timeout_kills_descendants_and_cancellation_is_typed() {
     use std::sync::{Arc, atomic::AtomicBool};
     let mut cmd = std::process::Command::new("/bin/sh");
-    cmd.args(["-c", "sleep 60 & wait"]);
+    // `wait $!` names the child: a bare `wait` in macOS's sh can return before the
+    // background job is registered, ending the script cleanly before the timeout.
+    cmd.args(["-c", "sleep 60 & wait $!"]);
     let start = std::time::Instant::now();
     let output = crate::process::output(cmd, 1024, std::time::Duration::from_millis(100)).unwrap();
     assert!(!output.status.success());
@@ -776,10 +791,12 @@ fn child_timeout_kills_descendants_and_cancellation_is_typed() {
     let _guard = crate::process::OperationGuard::install(flag);
     let mut cmd = std::process::Command::new("/bin/sh");
     cmd.args(["-c", "sleep 60"]);
-    assert!(matches!(
-        crate::process::output(cmd, 1024, std::time::Duration::from_secs(10)),
-        Err(Failure::Cancelled)
-    ));
+    let cancelled = crate::process::output(cmd, 1024, std::time::Duration::from_secs(10));
+    assert!(
+        matches!(cancelled, Err(Failure::Cancelled)),
+        "{:?}",
+        cancelled.map(|o| o.status)
+    );
 }
 
 pub(crate) fn catalogue_fixture(

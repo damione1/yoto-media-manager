@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<title>Yoto Media Manager</title>
+<defs>
+<path id="tile-shape" d="M928 516C928 334.7 933.4 222.3 871 160.5C808.6 98.7 695 104 512 104C329 104 215.4 98.7 153 160.5C90.6 222.3 96 334.7 96 516C96 697.3 90.6 809.7 153 871.5C215.4 933.3 329 928 512 928C695 928 808.6 933.3 871 871.5C933.4 809.7 928 697.3 928 516Z"/>
+<clipPath id="tile-clip"><use href="#tile-shape"/></clipPath>
+<linearGradient id="sky" x1="0" y1="105" x2="0" y2="600" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fcd04a"/><stop offset=".5" stop-color="#fcbb35"/><stop offset="1" stop-color="#fba52b"/></linearGradient>
+<radialGradient id="sky-glow" cx="930" cy="560" r="380" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f97a2c" stop-opacity=".95"/><stop offset=".45" stop-color="#f97f2c" stop-opacity=".55"/><stop offset="1" stop-color="#f98a2c" stop-opacity="0"/></radialGradient>
+<linearGradient id="sea-back" x1="0" y1="545" x2="0" y2="680" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1b8b90"/><stop offset="1" stop-color="#1a8790"/></linearGradient>
+<linearGradient id="sea-mid" x1="0" y1="640" x2="0" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#117689"/><stop offset=".5" stop-color="#0c6684"/><stop offset="1" stop-color="#03496c"/></linearGradient>
+<linearGradient id="sea-front" x1="0" y1="785" x2="0" y2="930" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2ea49f"/><stop offset=".4" stop-color="#177690"/><stop offset="1" stop-color="#05506f"/></linearGradient>
+<linearGradient id="green-slab" x1="0" y1="0" x2="0" y2="1"><stop offset=".01" stop-color="#7be3b5"/><stop offset=".05" stop-color="#43b78a"/><stop offset="1" stop-color="#1d7f63"/></linearGradient>
+<linearGradient id="green-face" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3db487"/><stop offset="1" stop-color="#279a74"/></linearGradient>
+<linearGradient id="green-bevel" x1="0" y1="0" x2="0" y2="1"><stop offset=".02" stop-color="#7be3b5"/><stop offset=".07" stop-color="#7be3b5" stop-opacity="0"/></linearGradient>
+<linearGradient id="blue-slab" x1="0" y1="0" x2="0" y2="1"><stop offset=".01" stop-color="#8ad0fb"/><stop offset=".05" stop-color="#3a8fd6"/><stop offset="1" stop-color="#2577c4"/></linearGradient>
+<linearGradient id="blue-face" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4797dc"/><stop offset="1" stop-color="#2f83cc"/></linearGradient>
+<linearGradient id="blue-bevel" x1="0" y1="0" x2="0" y2="1"><stop offset=".02" stop-color="#8ad0fb"/><stop offset=".07" stop-color="#8ad0fb" stop-opacity="0"/></linearGradient>
+<linearGradient id="cream-slab" x1="0" y1="0" x2="0" y2="1"><stop offset=".01" stop-color="#fdf9f0"/><stop offset=".05" stop-color="#efe1cb"/><stop offset="1" stop-color="#e3d0b4"/></linearGradient>
+<linearGradient id="cream-face" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fcf1df"/><stop offset="1" stop-color="#f5e6cf"/></linearGradient>
+<linearGradient id="cream-bevel" x1="0" y1="0" x2="0" y2="1"><stop offset=".02" stop-color="#fdf9f0"/><stop offset=".07" stop-color="#fdf9f0" stop-opacity="0"/></linearGradient>
+<linearGradient id="rim" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".15" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<linearGradient id="wave" x1="0" y1="383" x2="0" y2="713" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fda604"/><stop offset=".5" stop-color="#fb7413"/><stop offset="1" stop-color="#f8471b"/></linearGradient>
+<filter id="card-shadow" x="-25%" y="-20%" width="150%" height="145%"><feDropShadow dx="-14" dy="8" stdDeviation="11" flood-color="#03283a" flood-opacity=".7"/></filter>
+</defs>
+<g clip-path="url(#tile-clip)">
+<rect id="sky-base" x="96" y="100" width="832" height="832" fill="url(#sky)"/>
+<rect id="sky-sun" x="96" y="100" width="832" height="832" fill="url(#sky-glow)"/>
+<path id="sea-back-wave" d="M96 545C130 545 160 553 205 582L700 604C780 606 850 590 928 592V940H96Z" fill="url(#sea-back)"/>
+<path id="sea-mid-wave" d="M96 668C180 668 250 682 330 704L760 690C810 666 860 646 928 640V940H96Z" fill="url(#sea-mid)"/>
+<path id="sea-front-wave" d="M96 905C300 895 450 862 560 836C680 806 770 782 830 783C875 784 905 792 928 798V940H96Z" fill="url(#sea-front)"/>
+<g id="cards" transform="matrix(1 -0.17 0 1 0 87.04)">
+<g id="card-green" filter="url(#card-shadow)">
+<path d="M249 214H512A60 60 0 0 1 572 274V624A60 60 0 0 1 512 684H261A56 56 0 0 1 205 628V258A44 44 0 0 1 249 214ZM284.1 209.5L556.3 678.4L520.3 683.4L248.1 214.5Z" fill="url(#green-slab)"/>
+<path d="M291 209H548A60 60 0 0 1 608 269V619A60 60 0 0 1 548 679H301A60 60 0 0 1 241 619V259A50 50 0 0 1 291 209Z" fill="url(#green-face)"/>
+<path d="M291 214H548A55 55 0 0 1 603 269V619A55 55 0 0 1 548 674H301A55 55 0 0 1 246 619V259A45 45 0 0 1 291 214Z" fill="none" stroke="url(#green-bevel)" stroke-width="10"/>
+<path d="M291 210H548A59 59 0 0 1 607 269V619A59 59 0 0 1 548 678H301A59 59 0 0 1 242 619V259A49 49 0 0 1 291 210Z" fill="none" stroke="url(#rim)" stroke-width="2"/>
+</g>
+<g id="card-blue" filter="url(#card-shadow)">
+<path d="M329 264H595A66 66 0 0 1 661 330V686A60 60 0 0 1 601 746H341A56 56 0 0 1 285 690V308A44 44 0 0 1 329 264ZM364.1 259.5L645.3 740.4L609.3 745.4L328.1 264.5Z" fill="url(#blue-slab)"/>
+<path d="M371 259H631A66 66 0 0 1 697 325V681A60 60 0 0 1 637 741H381A60 60 0 0 1 321 681V309A50 50 0 0 1 371 259Z" fill="url(#blue-face)"/>
+<path d="M371 264H631A61 61 0 0 1 692 325V681A55 55 0 0 1 637 736H381A55 55 0 0 1 326 681V309A45 45 0 0 1 371 264Z" fill="none" stroke="url(#blue-bevel)" stroke-width="10"/>
+<path d="M371 260H631A65 65 0 0 1 696 325V681A59 59 0 0 1 637 740H381A59 59 0 0 1 322 681V309A49 49 0 0 1 371 260Z" fill="none" stroke="url(#rim)" stroke-width="2"/>
+</g>
+<g id="card-cream" filter="url(#card-shadow)">
+<path d="M417 310H680A110 110 0 0 1 790 420V743A64 64 0 0 1 726 807H429A64 64 0 0 1 365 743V362A52 52 0 0 1 417 310ZM444.1 306L765.3 801L737.3 806L416.1 311Z" fill="url(#cream-slab)"/>
+<path d="M455 305H708A110 110 0 0 1 818 415V738A64 64 0 0 1 754 802H463A70 70 0 0 1 393 732V367A62 62 0 0 1 455 305Z" fill="url(#cream-face)"/>
+<path d="M455 310H708A105 105 0 0 1 813 415V738A59 59 0 0 1 754 797H463A65 65 0 0 1 398 732V367A57 57 0 0 1 455 310Z" fill="none" stroke="url(#cream-bevel)" stroke-width="10"/>
+<path d="M455 306H708A109 109 0 0 1 817 415V738A63 63 0 0 1 754 801H463A69 69 0 0 1 394 732V367A61 61 0 0 1 455 306Z" fill="none" stroke="url(#rim)" stroke-width="2"/>
+</g>
+</g>
+<g id="waveform-rim" fill="#fffbf3"><rect x="421" y="558" width="36" height="57" rx="18"/><rect x="468" y="510.5" width="40" height="132" rx="20"/><rect x="519.5" y="453.5" width="45" height="226" rx="22.5"/><rect x="579" y="382.5" width="54" height="334" rx="27"/><rect x="647.5" y="436" width="47" height="227" rx="23.5"/><rect x="709" y="475" width="40" height="147" rx="20"/><rect x="759.5" y="509" width="35" height="75" rx="17.5"/></g>
+<g id="waveform" fill="url(#wave)"><rect x="422.5" y="558" width="33" height="54" rx="16.5"/><rect x="469.5" y="510.5" width="37" height="129" rx="18.5"/><rect x="521" y="453.5" width="42" height="223" rx="21"/><rect x="580.5" y="382.5" width="51" height="331" rx="25.5"/><rect x="649" y="436" width="44" height="224" rx="22"/><rect x="710.5" y="475" width="37" height="144" rx="18.5"/><rect x="761" y="509" width="32" height="72" rx="16"/></g>
+</g>
+</svg>

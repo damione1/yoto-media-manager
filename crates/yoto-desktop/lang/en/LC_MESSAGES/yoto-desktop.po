@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 09:45-0400\n"
+"POT-Creation-Date: 2026-10-14 10:38-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -1977,8 +1977,7 @@ msgstr "No icons in this collection. You can import an image."
 msgid ""
 "Aucune image pour l’instant. Importez-en une : vous pourrez la reprendre "
 "pour d’autres médias."
-msgstr ""
-"No image yet. Import one: you can reuse it for other media."
+msgstr "No image yet. Import one: you can reuse it for other media."
 
 #: src/ui/pixelart.rs
 msgid ""
@@ -2206,6 +2205,10 @@ msgid "Déplacez les poignées pour garder la partie qui vous plaît."
 msgstr "Move the handles to keep the part you like."
 
 #: src/ui/trim.rs
+msgid "Cliquez sur la forme d’onde pour écouter à partir de cet endroit."
+msgstr "Click the waveform to listen from that spot."
+
+#: src/ui/trim.rs
 msgid "Début"
 msgstr "Start"
 
@@ -2216,6 +2219,10 @@ msgstr "End"
 #: src/ui/trim.rs
 msgid "Durée gardée"
 msgstr "Kept length"
+
+#: src/ui/trim.rs
+msgid "Écouter la fin de la sélection"
+msgstr "Play the end of the selection"
 
 #: src/ui/trim.rs
 msgid "Préparation de l’écoute…"

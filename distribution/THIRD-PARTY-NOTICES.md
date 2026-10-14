@@ -1,4 +1,4 @@
-Yoto's own code has no licence selected by its author yet. This notice does not assign it GPL or any other licence.
+YotoMediaManager is free software, licensed under the GNU General Public License, version 3 or (at your option) any later version (GPL-3.0-or-later). The full licence text is in the LICENSE file accompanying the source code and at https://www.gnu.org/licenses/gpl-3.0.html. The programs, libraries and typefaces below keep their own licences.
 
 The application invokes separately distributed programs; it does not link their GPL code into the GUI. Their redistribution conditions remain applicable to those programs.
 

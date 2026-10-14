@@ -36,6 +36,7 @@ def build(target):
             for path in sorted(tools.rglob('*')):
                 if path.is_file(): writer.write(path, f'{APP_NAME}/tools/' + path.relative_to(tools).as_posix())
             writer.write(ROOT / 'distribution' / 'THIRD-PARTY-NOTICES.md', f'{APP_NAME}/THIRD-PARTY-NOTICES.md')
+            writer.write(ROOT / 'LICENSE', f'{APP_NAME}/LICENSE')
     private_b64 = os.environ.get('YOTO_UPDATER_PRIVATE_KEY')
     if not private_b64: raise SystemExit('Missing required secret: YOTO_UPDATER_PRIVATE_KEY')
     signature = archive.with_name(archive.name + '.minisig')

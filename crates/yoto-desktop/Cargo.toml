@@ -2,6 +2,7 @@
 name = "yoto-desktop"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 [dependencies]
 gpui-kit = "=0.7.3"
 yoto-domain = { path = "../yoto-domain" }
