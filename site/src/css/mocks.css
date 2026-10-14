@@ -254,6 +254,8 @@
 }
 .mock.has-cursor .m-cursor { opacity: 1; }
 .m-cursor.is-click { animation: m-click 0.3s ease; }
+/* Carrying the dragged song: same timing as .m-drag, so the pointer holds it. */
+.m-cursor.is-carrying { transition: transform 0.9s cubic-bezier(0.3, 0.7, 0.2, 1), opacity 0.3s ease; }
 
 @keyframes m-spin { to { transform: rotate(360deg); } }
 @keyframes m-blink { 50% { opacity: 0; } }

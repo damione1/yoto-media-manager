@@ -74,9 +74,10 @@
     this.el.style.setProperty("--cy", y - 3 + "px");
     if (instant) { void this.el.offsetWidth; this.el.style.transition = ""; }
   };
-  Cursor.prototype.to = function (el, fx, fy) {
+  /* `instant` makes the pointer drag what it holds instead of easing after it. */
+  Cursor.prototype.to = function (el, fx, fy, instant) {
     var p = spot(this.root, el, fx, fy);
-    if (p) this.place(p.x, p.y);
+    if (p) this.place(p.x, p.y, instant);
     return !!p;
   };
   Cursor.prototype.click = function (target, run) {
@@ -275,13 +276,13 @@
       run.after(750, function () {
         self.run.tween(1000, function (t) {
           self.a = 0.14 * t; self.p = self.a; self.render();
-          self.cursor.to(self.ha, 0.5, 0.5);
+          self.cursor.to(self.ha, 0.5, 0.5, true);
         }, function () {
           self.cursor.to(self.hb, 0.5, 0.5);
           run.after(750, function () {
             self.run.tween(900, function (t) {
               self.b = 1 - 0.12 * t; self.render();
-              self.cursor.to(self.hb, 0.5, 0.5);
+              self.cursor.to(self.hb, 0.5, 0.5, true);
             }, listen);
           });
         });
@@ -384,8 +385,10 @@
       var tx = target ? target.x : 24, ty = target ? target.y : 200;
       root.classList.remove("slot-closed");
       self.moveDrag(tx + 4, ty + 2);
+      if (self.cursor.el) self.cursor.el.classList.add("is-carrying");
       self.cursor.place(tx + 4 + self.drag.offsetWidth * 0.55, ty + 28);
       run.after(1000, function () {
+        if (self.cursor.el) self.cursor.el.classList.remove("is-carrying");
         self.drag.classList.remove("is-shown");
         self.saving(true);
         self.meta.textContent = self.meta.getAttribute("data-after");
