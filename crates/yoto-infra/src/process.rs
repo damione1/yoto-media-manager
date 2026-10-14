@@ -10,17 +10,21 @@ use std::{
     time::{Duration, Instant},
 };
 use yoto_domain::*;
-thread_local! {static CANCELLATION:RefCell<Option<Arc<AtomicBool>>>=const{RefCell::new(None)};}
+thread_local! {static CANCELLATION:RefCell<Vec<Arc<AtomicBool>>>=const{RefCell::new(Vec::new())};}
 pub struct OperationGuard;
 impl OperationGuard {
     pub fn install(cancel: Arc<AtomicBool>) -> Self {
-        CANCELLATION.with(|v| *v.borrow_mut() = Some(cancel));
+        Self::install_any(vec![cancel])
+    }
+    /// Cancel this thread's child processes when any of `flags` is raised.
+    pub fn install_any(flags: Vec<Arc<AtomicBool>>) -> Self {
+        CANCELLATION.with(|v| *v.borrow_mut() = flags);
         Self
     }
 }
 impl Drop for OperationGuard {
     fn drop(&mut self) {
-        CANCELLATION.with(|v| v.borrow_mut().take());
+        CANCELLATION.with(|v| v.borrow_mut().clear());
     }
 }
 pub struct ControlledChild {
@@ -75,15 +79,13 @@ pub fn spawn(mut command: Command, timeout: Duration) -> Result<ControlledChild>
     }
     let child = command.spawn().map_err(crate::media_error)?;
     let pid = child.id();
-    let cancel = CANCELLATION
-        .with(|v| v.borrow().clone())
-        .unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+    let cancel = CANCELLATION.with(|v| v.borrow().clone());
     let finished = Arc::new(AtomicBool::new(false));
     let flag = finished.clone();
     let watcher = std::thread::spawn(move || {
         let start = Instant::now();
         while !flag.load(Ordering::SeqCst) {
-            if cancel.load(Ordering::SeqCst) || start.elapsed() >= timeout {
+            if cancel.iter().any(|c| c.load(Ordering::SeqCst)) || start.elapsed() >= timeout {
                 kill_group(pid);
                 break;
             }
@@ -165,11 +167,7 @@ fn read_tail(mut source: impl Read, keep: usize) -> Vec<u8> {
     tail
 }
 fn cancelled() -> bool {
-    CANCELLATION.with(|v| {
-        v.borrow()
-            .as_ref()
-            .is_some_and(|c| c.load(Ordering::SeqCst))
-    })
+    CANCELLATION.with(|v| v.borrow().iter().any(|c| c.load(Ordering::SeqCst)))
 }
 /// Wait before trying again, ending early when the operation is cancelled.
 pub fn pause(duration: Duration) -> Result<()> {
