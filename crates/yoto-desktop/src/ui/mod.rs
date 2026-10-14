@@ -83,6 +83,9 @@ pub struct AppView {
 }
 impl AppView {
     pub fn navigate(&mut self, route: Route, cx: &mut Context<Self>) {
+        if self.route == Route::Playlists && route != Route::Playlists {
+            self.flush_playlists(cx);
+        }
         let entering_playlists = self.route != Route::Playlists && route == Route::Playlists;
         self.route = route;
         self.error = None;
@@ -796,6 +799,9 @@ impl AppView {
         self.send(Command::Waveform(id), cx);
     }
     pub fn select_playlist(&mut self, id: PlaylistId, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_playlist != Some(id) {
+            self.flush_playlists(cx);
+        }
         self.playlist_open_generation = self.playlist_open_generation.wrapping_add(1);
         self.opening_playlist = None;
         self.selected_playlist = Some(id);
@@ -818,6 +824,13 @@ impl AppView {
             self.editors.insert(id, editor);
         }
         cx.notify();
+    }
+    /// Write the playlists' pending changes now: the parent is leaving them. A write that
+    /// fails is reported in a toast naming the playlist.
+    pub fn flush_playlists(&mut self, cx: &mut Context<Self>) {
+        for editor in self.editors.values() {
+            editor.update(cx, |e, cx| e.flush_before_leaving(cx));
+        }
     }
     /// Turn « Mode avancé » on or off everywhere it applies.
     pub fn set_advanced(&mut self, advanced: bool, cx: &mut Context<Self>) {

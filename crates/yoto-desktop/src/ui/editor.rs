@@ -595,6 +595,12 @@ impl PlaylistEditor {
         self.schedule(cx);
         cx.notify();
     }
+    /// The parent leaves this playlist (another playlist, another page, quitting): write
+    /// what is pending now, and report a failure in a toast since the editor is out of sight.
+    pub(super) fn flush_before_leaving(&mut self, cx: &mut Context<Self>) {
+        self.report_failures = true;
+        self.flush(cx);
+    }
     /// Writes wait while something needs the parent first.
     fn held(&self) -> bool {
         self.blocked() || self.external.is_some() || self.deleted
@@ -2841,6 +2847,7 @@ pub fn open_remote(
     if view.opening_playlist.is_some() {
         return;
     }
+    view.flush_playlists(cx);
     view.send(Command::LoadRemote { account, card }, cx);
 }
 pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView>) -> AnyElement {
