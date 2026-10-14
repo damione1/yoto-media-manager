@@ -6,6 +6,49 @@ use std::{
     process::{Command, Stdio},
 };
 use yoto_domain::*;
+/// Loudness the prepared audio aims for: −16 LUFS, true peak −1.5 dBTP, range 11 LU.
+const LOUDNESS_TARGET: &str = "I=-16:TP=-1.5:LRA=11";
+/// What the first loudness pass measured, as FFmpeg's loudnorm filter reports it.
+#[derive(Debug, Clone, PartialEq)]
+struct LoudnessMeasure {
+    integrated: f64,
+    true_peak: f64,
+    range: f64,
+    threshold: f64,
+    offset: f64,
+}
+impl LoudnessMeasure {
+    /// Read the JSON summary loudnorm prints last on FFmpeg's error output. Silence measures
+    /// as « -inf », which cannot drive a linear correction, so it is refused.
+    fn parse(stderr: &str) -> Option<Self> {
+        #[derive(Deserialize)]
+        struct Summary {
+            input_i: String,
+            input_tp: String,
+            input_lra: String,
+            input_thresh: String,
+            target_offset: String,
+        }
+        let start = stderr.rfind('{')?;
+        let end = start + stderr[start..].find('}')?;
+        let summary: Summary = serde_json::from_str(&stderr[start..=end]).ok()?;
+        let number = |text: &str| text.trim().parse::<f64>().ok().filter(|n| n.is_finite());
+        Some(Self {
+            integrated: number(&summary.input_i)?,
+            true_peak: number(&summary.input_tp)?,
+            range: number(&summary.input_lra)?,
+            threshold: number(&summary.input_thresh)?,
+            offset: number(&summary.target_offset)?,
+        })
+    }
+    /// Second-pass filter applying the measured correction linearly.
+    fn filter(&self) -> String {
+        format!(
+            "loudnorm={LOUDNESS_TARGET}:measured_I={:.2}:measured_TP={:.2}:measured_LRA={:.2}:measured_thresh={:.2}:offset={:.2}:linear=true",
+            self.integrated, self.true_peak, self.range, self.threshold, self.offset
+        )
+    }
+}
 #[derive(Clone)]
 pub struct Tools {
     pub ffmpeg: PathBuf,
@@ -139,7 +182,16 @@ impl Tools {
         );
         match recipe.normalization {
             Normalization::Preserve => {}
-            Normalization::Loudness => filters.push_str(",loudnorm=I=-16:TP=-1.5:LRA=11"),
+            Normalization::Loudness => {
+                // Linear correction from a measured first pass keeps the track's dynamics;
+                // when the measure fails, the single-pass dynamic filter still evens it out.
+                let loudnorm = match self.measure_loudness(input, &filters) {
+                    Some(measure) => measure.filter(),
+                    None => format!("loudnorm={LOUDNESS_TARGET}"),
+                };
+                filters.push(',');
+                filters.push_str(&loudnorm);
+            }
         };
         let mut cmd = command(&self.ffmpeg);
         cmd.args(["-nostdin", "-v", "error", "-y", "-i"])
@@ -182,6 +234,28 @@ impl Tools {
             ));
         }
         Ok(info)
+    }
+    /// First loudness pass: measure the selected range without writing any audio.
+    fn measure_loudness(&self, input: &Path, range_filters: &str) -> Option<LoudnessMeasure> {
+        let mut cmd = command(&self.ffmpeg);
+        cmd.args(["-nostdin", "-hide_banner", "-nostats", "-v", "info", "-i"])
+            .arg(input)
+            .args([
+                "-map",
+                "0:a:0",
+                "-vn",
+                "-af",
+                &format!("{range_filters},loudnorm={LOUDNESS_TARGET}:print_format=json"),
+                "-f",
+                "null",
+                "-",
+            ]);
+        let output =
+            crate::process::output(cmd, 16_000, std::time::Duration::from_secs(1800)).ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        LoudnessMeasure::parse(&String::from_utf8_lossy(&output.stderr))
     }
     /// Decode the selected range locally to a transient, universally playable PCM WAV.
     /// This never creates a recipe or a persistent asset, and accepts the same formats as import.
@@ -504,4 +578,41 @@ pub fn verify_manifest(root: &Path, target: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod loudness_tests {
+    use super::LoudnessMeasure;
+    const REPORT: &str = r#"Input #0, mp3, from 'in.mp3':
+  Duration: 00:00:03.00, start: 0.000000, bitrate: 192 kb/s
+[Parsed_loudnorm_2 @ 0x600000] 
+{
+	"input_i" : "-23.54",
+	"input_tp" : "-7.12",
+	"input_lra" : "5.30",
+	"input_thresh" : "-33.90",
+	"output_i" : "-16.02",
+	"output_tp" : "-1.50",
+	"output_lra" : "4.80",
+	"output_thresh" : "-26.40",
+	"normalization_type" : "dynamic",
+	"target_offset" : "0.02"
+}
+"#;
+    #[test]
+    fn the_first_pass_summary_drives_a_linear_second_pass() {
+        let measure = LoudnessMeasure::parse(REPORT).unwrap();
+        assert_eq!(measure.integrated, -23.54);
+        assert_eq!(measure.offset, 0.02);
+        assert_eq!(
+            measure.filter(),
+            "loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=-23.54:measured_TP=-7.12:measured_LRA=5.30:measured_thresh=-33.90:offset=0.02:linear=true"
+        );
+    }
+    #[test]
+    fn silence_or_missing_output_falls_back() {
+        assert!(LoudnessMeasure::parse(&REPORT.replace("\"-23.54\"", "\"-inf\"")).is_none());
+        assert!(LoudnessMeasure::parse("Conversion failed!").is_none());
+        assert!(LoudnessMeasure::parse("").is_none());
+    }
 }
