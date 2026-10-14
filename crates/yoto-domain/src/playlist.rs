@@ -452,6 +452,15 @@ impl Playlist {
         self.validate_structure_against(old)
     }
     pub fn remove_track(&mut self, id: TrackId) -> Result<()> {
+        // Removing nothing must not pass for a removal waiting to be written.
+        if !self
+            .chapters
+            .iter()
+            .flat_map(|c| &c.tracks)
+            .any(|t| t.id == id)
+        {
+            return Err(Failure::Validation(crate::messages::TRACK_ABSENT.into()));
+        }
         let old = self.clone();
         for c in &mut self.chapters {
             c.tracks.retain(|t| t.id != id);

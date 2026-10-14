@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 10:38-0400\n"
+"POT-Creation-Date: 2026-10-14 13:24-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -916,6 +916,14 @@ msgstr "Choisir une couverture"
 msgid "Image"
 msgstr "Image"
 
+#: src/ui/editor.rs src/ui/imports.rs
+msgid "Vérifier auprès de Yoto"
+msgstr "Vérifier auprès de Yoto"
+
+#: src/ui/editor.rs src/ui/imports.rs
+msgid "Garder la version de Yoto"
+msgstr "Garder la version de Yoto"
+
 #: src/ui/editor.rs src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
 msgid "Réessayer"
 msgstr "Réessayer"
@@ -1520,10 +1528,6 @@ msgstr ""
 "pas créer la playlist deux fois."
 
 #: src/ui/imports.rs
-msgid "Vérifier auprès de Yoto"
-msgstr "Vérifier auprès de Yoto"
-
-#: src/ui/imports.rs
 msgid ""
 "Vous avez regardé dans l’application Yoto et la playlist vous convient ? "
 "Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour "
@@ -1532,10 +1536,6 @@ msgstr ""
 "Vous avez regardé dans l’application Yoto et la playlist vous convient ? "
 "Gardez-la telle quelle : rien n’est renvoyé, et la playlist se met à jour "
 "ici."
-
-#: src/ui/imports.rs
-msgid "Garder la version de Yoto"
-msgstr "Garder la version de Yoto"
 
 #: src/ui/imports.rs
 msgid "La carte existe déjà ?"

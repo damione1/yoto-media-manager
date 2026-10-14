@@ -171,6 +171,8 @@ fn shuffle_targets_and_wire_keys_survive_safe_moves_and_copy_and_gate_unsafe_edi
     assert_eq!(serde_json::to_value(&p).unwrap(), before);
     let first = p.chapters[0].tracks[0].id;
     assert!(p.remove_track(first).is_err());
+    assert!(p.remove_track(TrackId::new()).is_err());
+    assert_eq!(serde_json::to_value(&p).unwrap(), before);
     let mut event = Event::new(EventCommand::Goto);
     event.params = Some(std::collections::HashMap::from([(
         "trackKey".into(),
