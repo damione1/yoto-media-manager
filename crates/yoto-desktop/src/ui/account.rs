@@ -610,7 +610,7 @@ fn backup(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
 /// The « Mode avancé » switch: technical settings stay out of sight until a parent asks.
 fn advanced_mode(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
     use gpui_kit::component::switch::Switch;
-    theme::card()
+    let card = theme::card()
         .p(px(22.))
         .child(
             div()
@@ -628,6 +628,42 @@ fn advanced_mode(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
         )
         .child(theme::note(
             "Affiche les réglages techniques : lecture interactive, événements des pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, raccourcis et commandes techniques des lecteurs. Inutile au quotidien.",
+        ));
+    if view.advanced {
+        card.child(youtube_tool(view, cx)).into_any_element()
+    } else {
+        card.into_any_element()
+    }
+}
+
+/// The YouTube tool imports use, with a button to update it without waiting.
+fn youtube_tool(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
+    use wording::youtube_tool as text;
+    use yoto_infra::youtube_tool::{ToolActivity, YoutubeToolAction};
+    let checking = view
+        .youtube_tool
+        .as_ref()
+        .is_some_and(|s| s.activity == ToolActivity::Checking);
+    let mut section = theme::inset()
+        .gap(px(8.))
+        .child(div().font_weight(FontWeight::EXTRA_BOLD).child(text::TITLE))
+        .child(theme::note(text::NOTE));
+    if let Some(status) = &view.youtube_tool {
+        section = section.child(div().text_size(px(14.)).child(text::version(status)));
+        if let Some(activity) = text::activity(&status.activity) {
+            section = section.child(theme::note(activity));
+        }
+    }
+    section
+        .child(theme::pill(
+            Button::new("update-youtube-tool")
+                .label(text::UPDATE)
+                .disabled(checking)
+                .on_click(cx.listener(|v, _, _, cx| v.youtube_tool(YoutubeToolAction::Update, cx))),
+            Look::Outline,
+            Height::Medium,
+            checking,
+            cx,
         ))
         .into_any_element()
 }

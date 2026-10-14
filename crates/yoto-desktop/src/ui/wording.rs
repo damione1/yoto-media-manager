@@ -90,6 +90,49 @@ pub fn phase_text(phase: &JobPhase) -> String {
     }
 }
 
+/// « Outil YouTube » in « Compte » (advanced mode): the tool imports use and its updates.
+pub mod youtube_tool {
+    use yoto_infra::youtube_tool::{ToolActivity, ToolOrigin, ToolProblem, YoutubeToolStatus};
+    pub const TITLE: &str = "Outil YouTube";
+    pub const NOTE: &str = "Il sert à importer les vidéos YouTube. L’application le met à jour toute seule une fois par jour, et aussitôt qu’un import échoue parce que YouTube a changé.";
+    pub const UPDATE: &str = "Mettre à jour l’outil YouTube";
+    /// Which version imports use, and where it comes from.
+    pub fn version(status: &YoutubeToolStatus) -> String {
+        let origin = match status.origin {
+            ToolOrigin::Bundled => "fournie avec l’application",
+            ToolOrigin::Downloaded => "mise à jour par l’application",
+        };
+        match &status.version {
+            Some(version) => format!("Version {version} ({origin})"),
+            None => format!("Version inconnue ({origin})"),
+        }
+    }
+    /// What the last or current update attempt says, when there is something to say.
+    pub fn activity(activity: &ToolActivity) -> Option<&'static str> {
+        Some(match activity {
+            ToolActivity::Idle => return None,
+            ToolActivity::Checking => "Recherche d’une nouvelle version…",
+            ToolActivity::Current => "L’outil YouTube est à jour.",
+            ToolActivity::Updated => "L’outil YouTube a été mis à jour.",
+            ToolActivity::Failed(ToolProblem::Network) => {
+                "Impossible de vérifier les mises à jour. Vérifiez votre connexion Internet puis réessayez."
+            }
+            ToolActivity::Failed(ToolProblem::Integrity) => {
+                "La nouvelle version n’a pas passé la vérification de sécurité : elle n’a pas été installée. L’outil actuel reste utilisé."
+            }
+            ToolActivity::Failed(ToolProblem::Unusable) => {
+                "La nouvelle version ne démarre pas sur cet ordinateur. L’outil actuel reste utilisé."
+            }
+            ToolActivity::Failed(ToolProblem::Storage) => {
+                "La nouvelle version n’a pas pu être enregistrée sur cet ordinateur. L’outil actuel reste utilisé."
+            }
+            ToolActivity::Failed(ToolProblem::Unsupported) => {
+                "Cet ordinateur ne permet pas de mettre à jour l’outil YouTube. Il le sera avec la prochaine version de l’application."
+            }
+        })
+    }
+}
+
 const PERMISSION_DENIED: &str = "Yoto n’autorise pas cette action pour ce compte. Reconnectez votre compte pour accorder l’accès.";
 const AMBIGUOUS: &str = "Yoto a peut-être reçu la modification. Vérifiez le résultat dans « Imports » avant de réessayer.";
 
@@ -117,7 +160,7 @@ fn known_message(message: &str) -> Option<&'static str> {
             "Cette vidéo YouTube n’existe plus ou a été retirée. Vérifiez le lien."
         }
         m::YOUTUBE_OUTDATED => {
-            "YouTube a changé et l’application ne sait plus lire cette vidéo. Réessayez plus tard ou installez la prochaine mise à jour de l’application."
+            "YouTube a changé et l’application ne sait plus lire cette vidéo, même après avoir cherché une version plus récente de son outil YouTube. Réessayez plus tard."
         }
         m::YOUTUBE_BOT_CHECK => {
             "YouTube bloque pour un moment les téléchargements depuis votre connexion. Réessayez dans quelques minutes."

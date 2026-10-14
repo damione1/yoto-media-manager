@@ -18,6 +18,8 @@ Open the link in your browser and check that it is a publicly accessible YouTube
 
 Private, deleted, region-restricted, or login-required videos may be inaccessible to the app. Task details help distinguish access problems, size limits, and processing errors.
 
+When YouTube changes, the tool the app uses to read videos can stop working until it is updated. The app checks for a newer version of this tool once a day, and again as soon as an import fails for this reason; it then tries the import once more. To update it right away, turn on `Mode avancé` in `Compte` and choose `Mettre à jour l’outil YouTube`. The same place shows the version in use.
+
 ## Trimming does not work
 
 Check that the start precedes the end and both positions stay within the audio duration. Enter positions in seconds. Wait for the import to finish before starting preparation.
