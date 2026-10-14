@@ -92,8 +92,10 @@ impl Field {
             Self::NightLight => "Lumière de nuit #RRGGBB",
             Self::Dim => "Délai avant atténuation",
             Self::Shutdown => "Délai avant arrêt",
-            Self::DayShortcut => "Raccourcis jour : carte/chapitre/piste (un par ligne)",
-            Self::NightShortcut => "Raccourcis nuit : carte/chapitre/piste (un par ligne)",
+            Self::DayShortcut => "Raccourcis jour : carte/chapitre/piste, séparés par des virgules",
+            Self::NightShortcut => {
+                "Raccourcis nuit : carte/chapitre/piste, séparés par des virgules"
+            }
         }
     }
     fn wire(self) -> Option<&'static str> {
@@ -228,6 +230,26 @@ impl DevicePanel {
     fn send(&mut self, command: Command, cx: &mut Context<Self>) {
         let service = self.service.clone();
         let rt = self.runtime.clone();
+        // Pause and resume change the button only once the player confirms them.
+        let paused_after = if matches!(
+            &command,
+            Command::Player {
+                command: PlayerCommand::Pause,
+                ..
+            }
+        ) {
+            Some(true)
+        } else if matches!(
+            &command,
+            Command::Player {
+                command: PlayerCommand::Resume,
+                ..
+            }
+        ) {
+            Some(false)
+        } else {
+            None
+        };
         self.status = "Connexion au lecteur…".into();
         self.tasks.push(cx.spawn(async move |weak, cx| {
             let r = rt
@@ -263,7 +285,7 @@ impl DevicePanel {
                                                 )
                                             })
                                             .collect::<Vec<_>>()
-                                            .join("\n")
+                                            .join(", ")
                                     })
                                     .unwrap_or_default()
                             };
@@ -315,6 +337,15 @@ impl DevicePanel {
                         };
                     }
                     Ok(Ok(Reply::Player(result))) => {
+                        if let Some(paused) = paused_after
+                            && matches!(
+                                result,
+                                yoto_infra::players::CommandResult::Accepted
+                                    | yoto_infra::players::CommandResult::Observed { .. }
+                            )
+                        {
+                            v.paused = paused;
+                        }
                         v.status = match result {
                             yoto_infra::players::CommandResult::Sent => {
                                 "Commande envoyée ; effet non confirmé.".into()
@@ -349,8 +380,47 @@ impl DevicePanel {
         }));
         cx.notify();
     }
+    /// Read the player's current volume so the slider starts where the player is. This
+    /// needs a permission some accounts lack, so a failure just leaves the slider as it is.
+    fn read_volume(&mut self, cx: &mut Context<Self>) {
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        let command = Command::DeviceStatus {
+            account: self.account.clone(),
+            device: self.device.clone(),
+        };
+        self.tasks.push(cx.spawn(async move |weak, cx| {
+            let result = rt
+                .spawn(async move { service.execute(command).await })
+                .await;
+            let Ok(Ok(Reply::Data(status))) = result else {
+                return;
+            };
+            let Some(level) = status
+                .get("userVolumePercentage")
+                .and_then(serde_json::Value::as_f64)
+                .filter(|level| (0. ..=100.).contains(level))
+            else {
+                return;
+            };
+            let _ = weak.update(cx, |v, cx| {
+                if v.volume_set {
+                    return;
+                }
+                v.volume_set = true;
+                let slider = v.volume.clone();
+                if let Some(window) = cx.windows().first().copied() {
+                    let _ = cx.update_window(window, move |_, window, cx| {
+                        slider.update(cx, |s, cx| s.set_value(level as f32, window, cx))
+                    });
+                }
+                cx.notify();
+            });
+        }));
+    }
     /// Read the player's settings from Yoto.
     pub fn load(&mut self, cx: &mut Context<Self>) {
+        self.read_volume(cx);
         self.loading = true;
         self.send(
             Command::DeviceConfig {
@@ -468,8 +538,9 @@ impl DevicePanel {
         }
     }
 }
+/// Shortcuts typed as « carte/chapitre/piste », separated by commas or line breaks.
 fn shortcuts(s: &str) -> yoto_domain::Result<Vec<Shortcut>> {
-    s.lines()
+    s.split([',', '\n'])
         .filter(|s| !s.trim().is_empty())
         .map(|line| {
             let parts: Vec<_> = line.trim().split('/').collect();
@@ -727,7 +798,6 @@ impl DevicePanel {
                                 } else {
                                     PlayerCommand::Pause
                                 };
-                                p.paused = !p.paused;
                                 p.player(command, cx);
                             })),
                         Look::Outline,
