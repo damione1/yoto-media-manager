@@ -1125,7 +1125,7 @@ impl Service {
                             "Cette version n’appartient pas au média choisi.".into(),
                         ));
                     }
-                    draft.add_media(&media, recipe)?;
+                    self.add_to_playlist(&mut draft, &media, recipe)?;
                 }
                 self.auth.access(&account, Scope::UserContentManage).await?;
                 self.enqueue_cloud(account, draft, CloudPlaylistWrite::Update { expected })
@@ -1646,7 +1646,7 @@ impl Service {
                             "Recipe does not belong to this media".into(),
                         ));
                     }
-                    p.add_media(&m, recipe)?;
+                    self.add_to_playlist(&mut p, &m, recipe)?;
                 }
                 self.db.save_playlist_cas(&p, base)?;
                 Ok(Reply::Updated)
@@ -2356,6 +2356,16 @@ impl Service {
                 Ok(JobOutput::Encoded { asset })
             }
             JobRequest::Publish { account, snapshot } => {
+                // A track over Yoto's limit would only be refused after its upload.
+                for track in snapshot.chapters.iter().flat_map(|c| &c.tracks) {
+                    if let TrackMedia::Local { recipe, .. } = &track.media
+                        && self.recipe(*recipe)?.trim.duration().micros() > Rules::TRACK_MICROS_MAX
+                    {
+                        return Err(Failure::Validation(
+                            messages::TRACK_LONGER_THAN_YOTO_ALLOWS.into(),
+                        ));
+                    }
+                }
                 let mut mappings = vec![];
                 for chapter in &snapshot.chapters {
                     for track in &chapter.tracks {
@@ -2599,6 +2609,59 @@ impl Service {
                 })
             }
         }
+    }
+    /// Add a media version to a playlist. A version too long for one Yoto track becomes
+    /// one track per part; parts already cut earlier are reused, so their prepared audio
+    /// and Yoto uploads are too.
+    fn add_to_playlist(
+        &self,
+        playlist: &mut Playlist,
+        media: &MediaItem,
+        recipe: RecipeId,
+    ) -> Result<()> {
+        let version = self.recipe(recipe)?;
+        let ranges = plan_parts(version.trim);
+        if ranges.len() == 1 {
+            return playlist.add_media(media, recipe);
+        }
+        let count = u16::try_from(ranges.len()).map_err(storage)?;
+        let existing: Vec<MediaRecipe> = self
+            .db
+            .list::<MediaRecipe>(Table::Recipe)?
+            .into_iter()
+            .filter(|r| r.part.is_some_and(|p| p.of == recipe && p.count == count))
+            .collect();
+        let mut parts = Vec::with_capacity(ranges.len());
+        for (index, trim) in (1..=count).zip(ranges) {
+            let part = RecipePart {
+                of: recipe,
+                index,
+                count,
+            };
+            let reused = existing.iter().find(|r| {
+                r.part == Some(part) && r.trim == trim && r.normalization == version.normalization
+            });
+            let id = match reused {
+                Some(r) => r.id,
+                None => {
+                    let r = MediaRecipe {
+                        id: RecipeId::new(),
+                        media: media.id,
+                        original: version.original,
+                        trim,
+                        normalization: version.normalization,
+                        result: None,
+                        info: None,
+                        tool_version: version.tool_version.clone(),
+                        part: Some(part),
+                    };
+                    self.db.add_recipe(&r)?;
+                    r.id
+                }
+            };
+            parts.push(id);
+        }
+        playlist.add_media_parts(media, &parts)
     }
     /// Acquire, analyse and record one import with the given tools.
     async fn import(

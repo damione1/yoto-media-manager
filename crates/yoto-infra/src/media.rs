@@ -228,7 +228,14 @@ impl Tools {
                 "Encoded duration differs by {error:.3} seconds."
             )));
         }
-        if info.bytes > Rules::TRACK_BYTES_MAX || info.duration.micros() > Rules::TRACK_MICROS_MAX {
+        // A version longer than one part is never sent as is: its parts are, each checked
+        // here against Yoto's track limits when it is prepared.
+        let (bytes_max, micros_max) = if trim.duration().micros() > Rules::PART_MICROS_MAX {
+            (Rules::CARD_BYTES_MAX, Rules::CARD_MICROS_MAX)
+        } else {
+            (Rules::TRACK_BYTES_MAX, Rules::TRACK_MICROS_MAX)
+        };
+        if info.bytes > bytes_max || info.duration.micros() > micros_max {
             return Err(Failure::Validation(
                 messages::PREPARED_TRACK_TOO_LARGE.into(),
             ));

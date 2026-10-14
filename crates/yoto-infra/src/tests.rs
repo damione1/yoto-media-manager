@@ -1234,3 +1234,87 @@ fn full_settings_patch_validates_once_preserves_open_values_and_unmanaged_fields
         );
     }
 }
+#[tokio::test]
+async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [13; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"long source fixture").unwrap();
+    let asset = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &asset.id.to_string(), &asset)
+        .unwrap();
+    let (mut media, _) = catalogue_fixture(&service, asset.id, "Livre audio");
+    media.info.duration = MediaTime::from_seconds(7_200.).unwrap();
+    service
+        .db
+        .put(Table::Media, &media.id.to_string(), &media)
+        .unwrap();
+    let version = MediaRecipe {
+        id: RecipeId::new(),
+        media: media.id,
+        original: asset.id,
+        trim: TrimRange::new(MediaTime::ZERO, media.info.duration, media.info.duration).unwrap(),
+        normalization: Normalization::Loudness,
+        result: None,
+        info: None,
+        tool_version: "fixture".into(),
+        part: None,
+    };
+    service.db.add_recipe(&version).unwrap();
+    let playlist = Playlist::new("Soirée".into()).unwrap();
+    service.db.save_playlist(&playlist).unwrap();
+    for _ in 0..2 {
+        service
+            .execute(Command::AddMedia {
+                playlist: playlist.id,
+                media: vec![(media.id, version.id)],
+            })
+            .await
+            .unwrap();
+    }
+    let saved = service.playlist(playlist.id).unwrap();
+    let parts = |chapter: &Chapter| -> Vec<RecipeId> {
+        chapter
+            .tracks
+            .iter()
+            .map(|t| match t.media {
+                TrackMedia::Local { recipe, .. } => recipe,
+                TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => panic!("local"),
+            })
+            .collect()
+    };
+    assert_eq!(saved.chapters.len(), 2);
+    assert_eq!(
+        saved.chapters[0].tracks[2].title,
+        "Livre audio — partie 3/3"
+    );
+    // Adding it again reuses the same parts, so nothing is prepared or uploaded twice.
+    assert_eq!(parts(&saved.chapters[0]), parts(&saved.chapters[1]));
+    let first = parts(&saved.chapters[0]);
+    for (index, id) in first.iter().enumerate() {
+        let part = service.recipe(*id).unwrap();
+        assert_eq!(part.normalization, Normalization::Loudness);
+        assert_eq!(part.trim.duration().seconds(), 2_400.);
+        assert_eq!(part.part.unwrap().index as usize, index + 1);
+    }
+    // Parts are not versions a person picks.
+    assert!(
+        service
+            .media(media.id)
+            .unwrap()
+            .recipes
+            .iter()
+            .all(|id| !first.contains(id))
+    );
+    service
+        .execute(Command::DeleteRecipe {
+            recipe: version.id,
+            policy: ReferencePolicy::RemovePlaylistTracks,
+        })
+        .await
+        .unwrap();
+    assert!(service.playlist(playlist.id).unwrap().chapters.is_empty());
+    assert!(first.iter().all(|id| service.recipe(*id).is_err()));
+}

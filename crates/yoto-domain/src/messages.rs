@@ -61,6 +61,7 @@ pub const ENCODING_FAILED: &str = "Local MP3 encoding failed.";
 pub const WAVEFORM_FAILED: &str = "Waveform decoding failed";
 pub const PREPARED_TRACK_TOO_LARGE: &str =
     "This prepared track exceeds Yoto’s size or duration limit.";
+pub const TRACK_LONGER_THAN_YOTO_ALLOWS: &str = "This track is longer than Yoto allows; add the media to the playlist again to split it into parts.";
 pub const PREVIEW_TOO_LONG: &str = "Preview exceeds the temporary audio limit";
 pub const TRACK_EXCEEDS_LIMITS: &str = "Track exceeds Yoto limits";
 pub const PLAYLIST_EXCEEDS_LIMITS: &str = "Playlist exceeds Yoto limits";
@@ -178,6 +179,7 @@ pub const ALL: &[&str] = &[
     ENCODING_FAILED,
     WAVEFORM_FAILED,
     PREPARED_TRACK_TOO_LARGE,
+    TRACK_LONGER_THAN_YOTO_ALLOWS,
     PREVIEW_TOO_LONG,
     TRACK_EXCEEDS_LIMITS,
     PLAYLIST_EXCEEDS_LIMITS,

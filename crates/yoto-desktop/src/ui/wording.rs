@@ -185,6 +185,9 @@ fn known_message(message: &str) -> Option<&'static str> {
         m::PREPARED_TRACK_TOO_LARGE | m::TRACK_EXCEEDS_LIMITS => {
             "Cet extrait dépasse ce que Yoto accepte (1 h ou 100 Mo par piste). Raccourcissez-le."
         }
+        m::TRACK_LONGER_THAN_YOTO_ALLOWS => {
+            "Une piste de cette playlist dure plus d’une heure, la limite de Yoto. Retirez-la puis ajoutez de nouveau ce média : il sera découpé en plusieurs parties."
+        }
         m::PREVIEW_TOO_LONG => {
             "Cet audio est trop long pour être écouté ici. Découpez-le en parties plus courtes."
         }

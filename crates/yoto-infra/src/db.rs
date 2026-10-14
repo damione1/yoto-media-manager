@@ -682,7 +682,10 @@ impl Database {
             params![recipe.id.to_string(), json],
         )
         .map_err(storage)?;
-        media.recipes.push(recipe.id);
+        // A part is not a version a person chooses: it stays out of the media's list.
+        if recipe.part.is_none() {
+            media.recipes.push(recipe.id);
+        }
         let json = serde_json::to_string(&Envelope {
             version: 1,
             value: media,
@@ -1181,7 +1184,11 @@ fn delete_media_tx(
         .collect::<Result<Vec<_>>>()?;
     let ids = recipes
         .iter()
-        .filter(|r| r.media == media && recipe.is_none_or(|id| id == r.id))
+        // Removing a version also removes the parts it was cut into.
+        .filter(|r| {
+            r.media == media
+                && recipe.is_none_or(|id| id == r.id || r.part.is_some_and(|p| p.of == id))
+        })
         .map(|r| r.id)
         .collect::<std::collections::BTreeSet<_>>();
     if ids.is_empty() {
