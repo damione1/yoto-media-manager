@@ -1,4 +1,5 @@
 use super::*;
+use gpui_kit::base::ElementExt as _;
 use gpui_kit::component::{
     WindowExt,
     slider::{Slider, SliderState},
@@ -33,6 +34,27 @@ impl Preparation {
         }
     }
 }
+/// What a press on the trim waveform holds until it is released.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WaveGrab {
+    Start,
+    End,
+    Playhead,
+}
+/// The waveform dragged with the pointer; it draws nothing of its own.
+#[derive(Clone)]
+struct WaveDrag;
+impl Render for WaveDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        Empty
+    }
+}
+/// How far from a selection handle drawn on the waveform a press still grabs it, in pixels.
+const HANDLE_REACH: f32 = 12.;
+/// « Écouter la fin de la sélection » starts this many seconds before the end.
+const ENDING_SECONDS: u64 = 5;
+/// How far the arrow keys move the playhead, in seconds.
+const NUDGE_SECONDS: f64 = 5.;
 struct TrimDraft {
     before: TrimRange,
     normalization: Normalization,
@@ -53,6 +75,11 @@ pub struct TrimPanel {
     range: Entity<SliderState>,
     cursor: Entity<SliderState>,
     cursor_seconds: f64,
+    /// What the pointer holds on the trim waveform, while pressed.
+    wave_grab: Option<WaveGrab>,
+    /// The trim waveform's drawing area as last painted, to read a pointer as a time.
+    wave_bounds: Bounds<Pixels>,
+    wave_focus: FocusHandle,
     playing: bool,
     preview_pending: Option<u64>,
     generation: u64,
@@ -174,6 +201,9 @@ impl TrimPanel {
         let mut view = Self {
             cursor,
             cursor_seconds: 0.,
+            wave_grab: None,
+            wave_bounds: Bounds::default(),
+            wave_focus: cx.focus_handle(),
             playing: false,
             preview_pending: None,
             generation: 0,
@@ -229,6 +259,12 @@ impl TrimPanel {
                                     position,
                                 } if id == media => {
                                     v.playing = true;
+                                    // The playhead held by the pointer, or moved while the
+                                    // next playback is being decoded, stays where it was put.
+                                    if v.wave_grab.is_some() || v.preview_pending.is_some() {
+                                        cx.notify();
+                                        return;
+                                    }
                                     v.cursor_seconds = position.seconds();
                                     let input = v.cursor.clone();
                                     let range = v.playback_range();
@@ -243,6 +279,20 @@ impl TrimPanel {
                                     }
                                 }
                                 PreviewStatus::Playing { .. } | PreviewStatus::Stopped => {
+                                    // Playback that ran to its end brings the playhead back
+                                    // to the start, ready for the next listen.
+                                    if v.playing && v.preview_pending.is_none() {
+                                        v.cursor_seconds = v.playback_range().start().seconds();
+                                        let input = v.cursor.clone();
+                                        if let Some(window) = cx.windows().first().copied() {
+                                            let _ =
+                                                cx.update_window(window, move |_, window, cx| {
+                                                    input.update(cx, |s, cx| {
+                                                        s.set_value(0., window, cx)
+                                                    })
+                                                });
+                                        }
+                                    }
                                     v.playing = false
                                 }
                             }
@@ -290,6 +340,11 @@ impl TrimPanel {
             self.stop(cx);
         }
         self.selection = trim;
+        if self.editing.is_some()
+            && !(trim.start().seconds()..=trim.end().seconds()).contains(&self.cursor_seconds)
+        {
+            self.cursor_seconds = trim.start().seconds();
+        }
         match origin {
             SelectionOrigin::Handles | SelectionOrigin::Canonical => {
                 self.start.update(cx, |v, cx| {
@@ -544,14 +599,9 @@ impl TrimPanel {
     }
     fn play_from_cursor(&mut self, cx: &mut Context<Self>) {
         let range = self.playback_range();
-        let start = MediaTime::from_seconds(self.cursor_seconds).unwrap_or(range.start());
-        let start = if start < range.start() || start >= range.end() {
-            range.start()
-        } else {
-            start
-        };
-        let trim = TrimRange::new(start, range.end(), self.media.info.duration)
-            .expect("bounded playback cursor");
+        let trim = range
+            .played_from(MediaTime::from_seconds(self.cursor_seconds).unwrap_or(range.start()));
+        self.cursor_seconds = trim.start().seconds();
         self.send(
             Command::PreviewTrim {
                 media: self.media.id,
@@ -559,6 +609,98 @@ impl TrimPanel {
             },
             cx,
         );
+    }
+    /// Move the playhead to `seconds`, kept inside what is being listened to. Playback that
+    /// is running (or about to) continues from there; otherwise the next listen starts there.
+    fn seek(&mut self, seconds: f64, cx: &mut Context<Self>) {
+        let range = self.playback_range();
+        self.cursor_seconds = seconds.clamp(range.start().seconds(), range.end().seconds());
+        if self.playing || self.preview_pending.is_some() {
+            // The playback being replaced must not report back as a failure.
+            self.generation = self.generation.wrapping_add(1);
+            self.play_from_cursor(cx);
+        }
+        cx.notify();
+    }
+    /// Play the last seconds of the selection, to check where it ends.
+    fn play_ending(&mut self, cx: &mut Context<Self>) {
+        let trim = self
+            .selection
+            .ending(MediaTime::try_from(ENDING_SECONDS * 1_000_000).expect("a few seconds"));
+        self.generation = self.generation.wrapping_add(1);
+        self.cursor_seconds = trim.start().seconds();
+        self.send(
+            Command::PreviewTrim {
+                media: self.media.id,
+                trim,
+            },
+            cx,
+        );
+    }
+    /// The pointer pressed the trim waveform: a selection handle within reach is grabbed,
+    /// anywhere else moves the playhead.
+    fn wave_press(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.editing.as_ref().is_some_and(|d| d.preparation.busy()) {
+            return;
+        }
+        window.focus(&self.wave_focus, cx);
+        let (x, width) = self.wave_pointer(position);
+        let duration = self.media.info.duration.seconds().max(0.001);
+        self.wave_grab = Some(wave_grab(
+            x,
+            width,
+            (self.selection.start().seconds() / duration) as f32,
+            (self.selection.end().seconds() / duration) as f32,
+        ));
+        self.wave_move(position, window, cx);
+    }
+    fn wave_move(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(grab) = self.wave_grab else {
+            return;
+        };
+        let (x, width) = self.wave_pointer(position);
+        let duration = self.media.info.duration;
+        let Ok(time) = MediaTime::from_seconds(wave_time(x, width, duration)) else {
+            return;
+        };
+        let moved = match grab {
+            WaveGrab::Playhead => {
+                let range = self.playback_range();
+                self.cursor_seconds = time
+                    .seconds()
+                    .clamp(range.start().seconds(), range.end().seconds());
+                cx.notify();
+                return;
+            }
+            WaveGrab::Start => TrimRange::new(time, self.selection.end(), duration),
+            WaveGrab::End => TrimRange::new(self.selection.start(), time, duration),
+        };
+        // A handle pushed onto the other one stays where it last was.
+        if let Ok(trim) = moved {
+            self.set_selection(trim, SelectionOrigin::Canonical, window, cx);
+        }
+    }
+    fn wave_release(&mut self, cx: &mut Context<Self>) {
+        if self.wave_grab.take() == Some(WaveGrab::Playhead) {
+            self.seek(self.cursor_seconds, cx);
+        }
+    }
+    /// The arrow keys move the playhead a few seconds while the waveform has focus.
+    fn wave_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+        let step = match event.keystroke.key.as_str() {
+            "left" => -NUDGE_SECONDS,
+            "right" => NUDGE_SECONDS,
+            _ => return,
+        };
+        cx.stop_propagation();
+        self.seek(self.cursor_seconds + step, cx);
+    }
+    /// The pointer's distance from the waveform's left edge, and the waveform's width.
+    fn wave_pointer(&self, position: Point<Pixels>) -> (f32, f32) {
+        (
+            (position.x - self.wave_bounds.left()).as_f32(),
+            self.wave_bounds.size.width.as_f32(),
+        )
     }
     fn prepare(&mut self, cx: &mut Context<Self>) {
         if self.editing.as_ref().is_some_and(|d| d.preparation.busy()) {
@@ -601,6 +743,7 @@ impl TrimPanel {
                     preparation: Preparation::Idle,
                 });
                 self.set_selection(initial, SelectionOrigin::Canonical, window, cx);
+                self.cursor_seconds = initial.start().seconds();
             }
             AudioEditor::Metadata => {
                 self.title.update(cx, |v, cx| {
@@ -662,6 +805,10 @@ impl TrimPanel {
                                     );
                                 }
                             }
+                            // The player outside starts again from the beginning.
+                            v.wave_grab = None;
+                            v.cursor_seconds = v.playback_range().start().seconds();
+                            v.cursor.update(cx, |s, cx| s.set_value(0., window, cx));
                         }
                         cx.notify();
                     });
@@ -748,9 +895,8 @@ impl TrimPanel {
         let selection = self.selection;
         let start = (selection.start().seconds() / duration) as f32;
         let end = (selection.end().seconds() / duration) as f32;
-        let cursor = (self.playing)
-            .then(|| (self.cursor_seconds / duration) as f32)
-            .filter(|c| (start..=end).contains(c));
+        let cursor =
+            Some((self.cursor_seconds / duration) as f32).filter(|c| (start..=end).contains(c));
         let mut bars = div().size_full().flex().items_center().gap(px(2.));
         if let Some(w) = &self.waveform {
             if let Some(peaks) = w
@@ -812,12 +958,47 @@ impl TrimPanel {
                         .bg(theme::c(theme::SURFACE)),
                 )
         };
+        let panel = cx.entity();
         let mut overlay = div()
+            .id("trim-wave")
+            .track_focus(&self.wave_focus)
             .absolute()
             .top_0()
             .bottom_0()
             .left(px(14.))
             .right(px(14.))
+            .cursor(if busy {
+                CursorStyle::Arrow
+            } else {
+                CursorStyle::PointingHand
+            })
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|v, event: &MouseDownEvent, window, cx| {
+                    v.wave_press(event.position, window, cx)
+                }),
+            )
+            .on_drag(WaveDrag, |drag, _, _, cx| {
+                cx.stop_propagation();
+                cx.new(|_| drag.clone())
+            })
+            .on_drag_move(
+                cx.listener(|v, event: &DragMoveEvent<WaveDrag>, window, cx| {
+                    v.wave_move(event.event.position, window, cx)
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|v, _: &MouseUpEvent, _, cx| v.wave_release(cx)),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|v, _: &MouseUpEvent, _, cx| v.wave_release(cx)),
+            )
+            .on_key_down(cx.listener(|v, event: &KeyDownEvent, _, cx| v.wave_key(event, cx)))
+            .on_prepaint(move |bounds, _, cx| {
+                panel.update(cx, |v, _| v.wave_bounds = bounds);
+            })
             .child(
                 div()
                     .absolute()
@@ -903,7 +1084,8 @@ impl TrimPanel {
                                 div()
                                     .text_size(px(15.))
                                     .text_color(theme::c(theme::MUTED))
-                                    .child(tr!("Déplacez les poignées pour garder la partie qui vous plaît.")),
+                                    .child(div().child(tr!("Déplacez les poignées pour garder la partie qui vous plaît.")))
+                                    .child(div().child(tr!("Cliquez sur la forme d’onde pour écouter à partir de cet endroit."))),
                             ),
                     )
                     .child(close),
@@ -957,8 +1139,25 @@ impl TrimPanel {
                                     .items_center()
                                     .text_color(theme::c(theme::SKY.ink)),
                             ),
-                    )
-                    .child(div().flex_1())
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_end()
+                    .gap(px(10.))
+                    .child(theme::pill(
+                        Button::new("preview-trim-ending")
+                            .icon(IconName::ArrowRightToLine)
+                            .label(tr!("Écouter la fin de la sélection"))
+                            .on_click(cx.listener(|v, _, _, cx| v.play_ending(cx))),
+                        Look::Soft(&theme::MINT),
+                        Height::Hero,
+                        busy || self.preview_pending.is_some(),
+                        cx,
+                    ))
                     .child(theme::pill(
                         Button::new("preview-trim")
                             .icon(if self.playing {
@@ -977,13 +1176,8 @@ impl TrimPanel {
                                 if v.playing {
                                     v.stop(cx);
                                 } else {
-                                    v.send(
-                                        Command::PreviewTrim {
-                                            media: v.media.id,
-                                            trim: v.selection,
-                                        },
-                                        cx,
-                                    );
+                                    // From the playhead, which a click on the waveform moves.
+                                    v.play_from_cursor(cx);
                                 }
                             })),
                         Look::Solid(&theme::MINT),
@@ -1599,9 +1793,57 @@ fn bounded_slider_range(
         duration,
     )
 }
+/// What a press `x` pixels into a waveform `width` pixels wide grabs, its selection handles
+/// standing at `start` and `end` (fractions of the media). A handle within reach wins, the
+/// nearer one first; handles drawn on top of each other go by the side pressed.
+fn wave_grab(x: f32, width: f32, start: f32, end: f32) -> WaveGrab {
+    let (start, end) = (start * width, end * width);
+    let (to_start, to_end) = ((x - start).abs(), (x - end).abs());
+    if to_start.min(to_end) > HANDLE_REACH {
+        WaveGrab::Playhead
+    } else if to_end < to_start || (to_end == to_start && x >= end) {
+        WaveGrab::End
+    } else {
+        WaveGrab::Start
+    }
+}
+/// The media time, in seconds, under a pointer `x` pixels into a waveform `width` pixels
+/// wide. A pointer dragged past either edge stays at that edge.
+fn wave_time(x: f32, width: f32, duration: MediaTime) -> f64 {
+    if width <= 0. {
+        return 0.;
+    }
+    f64::from((x / width).clamp(0., 1.)) * duration.seconds()
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[core::prelude::v1::test]
+    fn a_press_on_the_waveform_grabs_a_handle_within_reach_or_moves_the_playhead() {
+        // 500 px wide; handles at 100 px and 400 px.
+        assert_eq!(wave_grab(250., 500., 0.2, 0.8), WaveGrab::Playhead);
+        assert_eq!(wave_grab(20., 500., 0.2, 0.8), WaveGrab::Playhead);
+        assert_eq!(wave_grab(110., 500., 0.2, 0.8), WaveGrab::Start);
+        assert_eq!(wave_grab(90., 500., 0.2, 0.8), WaveGrab::Start);
+        assert_eq!(wave_grab(395., 500., 0.2, 0.8), WaveGrab::End);
+        assert_eq!(wave_grab(413., 500., 0.2, 0.8), WaveGrab::Playhead);
+        // Close handles: the nearer one, then the side pressed.
+        assert_eq!(wave_grab(102., 500., 0.2, 0.21), WaveGrab::Start);
+        assert_eq!(wave_grab(104., 500., 0.2, 0.21), WaveGrab::End);
+        assert_eq!(wave_grab(95., 500., 0.5, 0.5), WaveGrab::Playhead);
+        assert_eq!(wave_grab(245., 500., 0.5, 0.5), WaveGrab::Start);
+        assert_eq!(wave_grab(255., 500., 0.5, 0.5), WaveGrab::End);
+    }
+    #[core::prelude::v1::test]
+    fn the_waveform_reads_a_pointer_as_a_time_inside_the_media() {
+        let duration = MediaTime::from_seconds(120.).unwrap();
+        assert_eq!(wave_time(0., 600., duration), 0.);
+        assert_eq!(wave_time(150., 600., duration), 30.);
+        assert_eq!(wave_time(600., 600., duration), 120.);
+        assert_eq!(wave_time(-40., 600., duration), 0.);
+        assert_eq!(wave_time(900., 600., duration), 120.);
+        assert_eq!(wave_time(10., 0., duration), 0.);
+    }
     #[core::prelude::v1::test]
     fn float_slider_end_does_not_exceed_probed_duration() {
         let duration = MediaTime::from_seconds(131.181).unwrap();

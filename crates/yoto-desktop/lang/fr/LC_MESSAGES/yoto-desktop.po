@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 09:45-0400\n"
+"POT-Creation-Date: 2026-10-14 10:38-0400\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -2244,6 +2244,10 @@ msgid "Déplacez les poignées pour garder la partie qui vous plaît."
 msgstr "Déplacez les poignées pour garder la partie qui vous plaît."
 
 #: src/ui/trim.rs
+msgid "Cliquez sur la forme d’onde pour écouter à partir de cet endroit."
+msgstr "Cliquez sur la forme d’onde pour écouter à partir de cet endroit."
+
+#: src/ui/trim.rs
 msgid "Début"
 msgstr "Début"
 
@@ -2254,6 +2258,10 @@ msgstr "Fin"
 #: src/ui/trim.rs
 msgid "Durée gardée"
 msgstr "Durée gardée"
+
+#: src/ui/trim.rs
+msgid "Écouter la fin de la sélection"
+msgstr "Écouter la fin de la sélection"
 
 #: src/ui/trim.rs
 msgid "Préparation de l’écoute…"
