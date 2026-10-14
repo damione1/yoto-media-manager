@@ -97,16 +97,25 @@ pub fn spawn(mut command: Command, timeout: Duration) -> Result<ControlledChild>
         watcher: Some(watcher),
     })
 }
+/// Most of a child's error output kept for diagnosis: its last lines, where tools report
+/// why they failed.
+pub const STDERR_TAIL: usize = 32_000;
+/// Run `command` to completion within `timeout`. Standard output is capped at `limit`
+/// bytes; the last [`STDERR_TAIL`] bytes of error output are returned with it.
 pub fn output(mut command: Command, limit: usize, timeout: Duration) -> Result<Output> {
     command
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .stdin(Stdio::null());
     let mut child = spawn(command, timeout)?;
     let stdout = child
         .stdout
         .take()
         .ok_or_else(|| Failure::Media("No process output".into()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| Failure::Media("No process error output".into()))?;
     let reader = std::thread::spawn(move || {
         let mut bytes = vec![];
         stdout
@@ -114,26 +123,67 @@ pub fn output(mut command: Command, limit: usize, timeout: Duration) -> Result<O
             .read_to_end(&mut bytes)
             .map(|_| bytes)
     });
+    let errors = std::thread::spawn(move || read_tail(stderr, STDERR_TAIL));
     let status = child.wait().map_err(crate::media_error)?;
     let stdout = reader
         .join()
         .map_err(|_| Failure::Media("Process output reader failed".into()))?
         .map_err(crate::media_error)?;
+    let stderr = errors
+        .join()
+        .map_err(|_| Failure::Media("Process error reader failed".into()))?;
     if stdout.len() > limit {
         return Err(Failure::Media("Process output exceeds its limit".into()));
     }
-    if CANCELLATION.with(|v| {
-        v.borrow()
-            .as_ref()
-            .is_some_and(|c| c.load(Ordering::SeqCst))
-    }) {
+    if cancelled() {
         return Err(Failure::Cancelled);
     }
     Ok(Output {
         status,
         stdout,
-        stderr: vec![],
+        stderr,
     })
+}
+/// Drain `source` completely, keeping only its last `keep` bytes.
+fn read_tail(mut source: impl Read, keep: usize) -> Vec<u8> {
+    let mut tail = Vec::with_capacity(keep.min(64_000));
+    let mut chunk = [0u8; 8192];
+    loop {
+        match source.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                tail.extend_from_slice(&chunk[..n]);
+                if tail.len() > keep * 2 {
+                    tail.drain(..tail.len() - keep);
+                }
+            }
+        }
+    }
+    if tail.len() > keep {
+        tail.drain(..tail.len() - keep);
+    }
+    tail
+}
+fn cancelled() -> bool {
+    CANCELLATION.with(|v| {
+        v.borrow()
+            .as_ref()
+            .is_some_and(|c| c.load(Ordering::SeqCst))
+    })
+}
+/// Wait before trying again, ending early when the operation is cancelled.
+pub fn pause(duration: Duration) -> Result<()> {
+    let start = Instant::now();
+    while start.elapsed() < duration {
+        if cancelled() {
+            return Err(Failure::Cancelled);
+        }
+        std::thread::sleep(Duration::from_millis(50).min(duration.saturating_sub(start.elapsed())));
+    }
+    if cancelled() {
+        return Err(Failure::Cancelled);
+    }
+    Ok(())
 }
 fn kill_group(pid: u32) {
     #[cfg(unix)]
@@ -149,5 +199,16 @@ fn kill_group(pid: u32) {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
+    }
+}
+
+#[cfg(test)]
+mod tail_tests {
+    #[test]
+    fn only_the_end_of_long_error_output_is_kept() {
+        let text: Vec<u8> = (0..100_000u32).map(|i| b'a' + (i % 26) as u8).collect();
+        let tail = super::read_tail(&text[..], 1000);
+        assert_eq!(tail, &text[text.len() - 1000..]);
+        assert_eq!(super::read_tail(&b"short"[..], 1000), b"short");
     }
 }

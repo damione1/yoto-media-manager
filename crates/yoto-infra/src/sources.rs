@@ -80,12 +80,157 @@ fn setup(tools: &Tools) -> std::process::Command {
     .arg(format!("deno:{}", tools.deno.display()));
     c
 }
-fn bounded_output(command: std::process::Command, limit: usize) -> Result<Vec<u8>> {
-    let output = crate::process::output(command, limit, std::time::Duration::from_secs(600))?;
-    if !output.status.success() {
-        return Err(Failure::Media(messages::YOUTUBE_FAILED.into()));
+/// Why yt-dlp could not fetch a video, read from its error output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum YoutubeProblem {
+    Private,
+    AgeRestricted,
+    GeoRestricted,
+    Unavailable,
+    Outdated,
+    BotCheck,
+    Network,
+    Unknown,
+}
+impl YoutubeProblem {
+    /// Recognise the failure from yt-dlp's error output. Order matters: YouTube's bot check
+    /// and age gate both say « Sign in to confirm ».
+    fn classify(stderr: &str) -> Self {
+        let text = stderr.to_lowercase().replace('’', "'");
+        let has = |needles: &[&str]| needles.iter().any(|n| text.contains(n));
+        if has(&[
+            "not a bot",
+            "confirm you are not",
+            "http error 429",
+            "too many requests",
+        ]) {
+            Self::BotCheck
+        } else if has(&[
+            "private video",
+            "video is private",
+            "members-only",
+            "members only",
+            "join this channel",
+        ]) {
+            Self::Private
+        } else if has(&[
+            "confirm your age",
+            "age-restricted",
+            "age restricted",
+            "inappropriate for some users",
+        ]) {
+            Self::AgeRestricted
+        } else if has(&[
+            "in your country",
+            "geo restricted",
+            "geo-restricted",
+            "geo restriction",
+            "from your location",
+        ]) {
+            Self::GeoRestricted
+        } else if has(&[
+            "video unavailable",
+            "has been removed",
+            "no longer available",
+            "has been terminated",
+            "does not exist",
+            "http error 404",
+            "this video is not available",
+            "unsupported url",
+        ]) {
+            Self::Unavailable
+        } else if has(&[
+            "unable to extract",
+            "extraction failed",
+            "failed to extract",
+            "please update",
+            "is outdated",
+            "precondition check failed",
+            "requested format is not available",
+            "no video formats found",
+        ]) {
+            Self::Outdated
+        } else if has(&[
+            "unable to download",
+            "urlopen error",
+            "connection reset",
+            "connection refused",
+            "connection aborted",
+            "timed out",
+            "name resolution",
+            "nodename nor servname",
+            "getaddrinfo",
+            "network is unreachable",
+            "remote end closed",
+            "incompleteread",
+            "ssl:",
+            "http error 5",
+        ]) {
+            Self::Network
+        } else {
+            Self::Unknown
+        }
     }
-    Ok(output.stdout)
+    /// Another attempt, possibly with another YouTube client, may succeed.
+    fn transient(self) -> bool {
+        match self {
+            Self::Outdated | Self::BotCheck | Self::Network | Self::Unknown => true,
+            Self::Private | Self::AgeRestricted | Self::GeoRestricted | Self::Unavailable => false,
+        }
+    }
+    fn failure(self) -> Failure {
+        Failure::Media(
+            match self {
+                Self::Private => messages::YOUTUBE_PRIVATE,
+                Self::AgeRestricted => messages::YOUTUBE_AGE_RESTRICTED,
+                Self::GeoRestricted => messages::YOUTUBE_GEO_RESTRICTED,
+                Self::Unavailable => messages::YOUTUBE_UNAVAILABLE,
+                Self::Outdated => messages::YOUTUBE_OUTDATED,
+                Self::BotCheck => messages::YOUTUBE_BOT_CHECK,
+                Self::Network => messages::YOUTUBE_NETWORK,
+                Self::Unknown => messages::YOUTUBE_FAILED,
+            }
+            .into(),
+        )
+    }
+}
+/// YouTube player client used by each attempt; `None` keeps yt-dlp's own choice.
+const PLAYER_CLIENTS: [Option<&str>; 4] = [None, Some("android"), Some("ios"), Some("tv")];
+/// Pause before the second, third and fourth attempts.
+const RETRY_DELAYS: [std::time::Duration; 3] = [
+    std::time::Duration::from_secs(1),
+    std::time::Duration::from_secs(3),
+    std::time::Duration::from_secs(8),
+];
+/// Run yt-dlp with the arguments `prepare` adds, retrying passing failures with a pause
+/// and another YouTube player client each time. Returns standard output, capped at `limit`.
+fn run_youtube(
+    tools: &Tools,
+    limit: usize,
+    prepare: impl Fn(&mut std::process::Command) -> Result<()>,
+) -> Result<Vec<u8>> {
+    let mut problem = YoutubeProblem::Unknown;
+    for (attempt, client) in PLAYER_CLIENTS.iter().enumerate() {
+        if attempt > 0 {
+            crate::process::pause(RETRY_DELAYS[attempt - 1])?;
+        }
+        let mut command = setup(tools);
+        if let Some(client) = client {
+            command
+                .arg("--extractor-args")
+                .arg(format!("youtube:player_client={client}"));
+        }
+        prepare(&mut command)?;
+        let output = crate::process::output(command, limit, std::time::Duration::from_secs(600))?;
+        if output.status.success() {
+            return Ok(output.stdout);
+        }
+        problem = YoutubeProblem::classify(&String::from_utf8_lossy(&output.stderr));
+        if !problem.transient() {
+            break;
+        }
+    }
+    Err(problem.failure())
 }
 #[derive(Deserialize)]
 struct YoutubeInfo {
@@ -99,17 +244,18 @@ struct YoutubeInfo {
 }
 pub fn inspect_youtube(tools: &Tools, url: &str) -> Result<SourceInspection> {
     let u = youtube_url(url)?;
-    let mut c = setup(tools);
-    c.args([
-        "--flat-playlist",
-        "--playlist-end",
-        "100",
-        "--dump-single-json",
-        "--",
-    ])
-    .arg(u.as_str());
-    let info: YoutubeInfo =
-        serde_json::from_slice(&bounded_output(c, 4_000_000)?).map_err(media_error)?;
+    let stdout = run_youtube(tools, 4_000_000, |c| {
+        c.args([
+            "--flat-playlist",
+            "--playlist-end",
+            "100",
+            "--dump-single-json",
+            "--",
+        ])
+        .arg(u.as_str());
+        Ok(())
+    })?;
+    let info: YoutubeInfo = serde_json::from_slice(&stdout).map_err(media_error)?;
     inspection(info)
 }
 fn inspection(info: YoutubeInfo) -> Result<SourceInspection> {
@@ -161,33 +307,39 @@ impl SourceProvider for YoutubeSource<'_> {
                     }
                     None => u.into(),
                 };
-                let mut metadata = setup(self.tools);
-                metadata
-                    .args(["--no-playlist", "--dump-single-json", "--"])
-                    .arg(&chosen);
-                let info: YoutubeInfo =
-                    serde_json::from_slice(&bounded_output(metadata, 1_000_000)?)
-                        .map_err(media_error)?;
+                let metadata = run_youtube(self.tools, 1_000_000, |c| {
+                    c.args(["--no-playlist", "--dump-single-json", "--"])
+                        .arg(&chosen);
+                    Ok(())
+                })?;
+                let info: YoutubeInfo = serde_json::from_slice(&metadata).map_err(media_error)?;
                 if info.duration.unwrap_or(0.0) > 7200.0 {
                     return Err(Failure::Validation(messages::VIDEO_TOO_LONG.into()));
                 }
                 let workspace = store.workspace()?;
                 let output = workspace.path().join("source.audio");
-                let mut c = setup(self.tools);
-                c.args([
-                    "--no-playlist",
-                    "--format",
-                    "bestaudio",
-                    "--max-filesize",
-                    "1G",
-                    "--ffmpeg-location",
-                ])
-                .arg(&self.tools.ffmpeg)
-                .arg("--output")
-                .arg(&output)
-                .arg("--")
-                .arg(&chosen);
-                bounded_output(c, 1_000_000)?;
+                run_youtube(self.tools, 1_000_000, |c| {
+                    // A failed attempt must not leave a finished-looking output behind.
+                    match std::fs::remove_file(&output) {
+                        Ok(()) => {}
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => return Err(storage(e)),
+                    }
+                    c.args([
+                        "--no-playlist",
+                        "--format",
+                        "bestaudio",
+                        "--max-filesize",
+                        "1G",
+                        "--ffmpeg-location",
+                    ])
+                    .arg(&self.tools.ffmpeg)
+                    .arg("--output")
+                    .arg(&output)
+                    .arg("--")
+                    .arg(&chosen);
+                    Ok(())
+                })?;
                 Ok(Acquired {
                     path: output,
                     title: info.title.unwrap_or_else(|| info.id.clone()),
@@ -303,6 +455,133 @@ printf 'resume' > "$output.ytdl"
     }
 }
 
+#[cfg(all(test, unix))]
+mod retry_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    /// A stand-in downloader that logs its arguments and fails with `stderr` until
+    /// `failures` attempts have been made.
+    fn downloader(root: &std::path::Path, failures: u32, stderr: &str) -> Tools {
+        let tool = root.join("downloader");
+        let log = root.join("calls");
+        std::fs::write(
+            &tool,
+            format!(
+                r#"#!/bin/sh
+echo "$*" >> '{log}'
+count=$(wc -l < '{log}')
+if [ "$count" -le {failures} ]; then echo '{stderr}' >&2; exit 1; fi
+printf '{{"id":"video1","title":"Song","duration":3}}'
+"#,
+                log = log.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut tools = Tools::at(root.to_owned());
+        tools.youtube = tool;
+        tools
+    }
+    fn calls(root: &std::path::Path) -> Vec<String> {
+        std::fs::read_to_string(root.join("calls"))
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    }
+    #[test]
+    fn a_passing_network_failure_is_retried_with_another_player_client() {
+        let root = tempfile::tempdir().unwrap();
+        let tools = downloader(
+            root.path(),
+            1,
+            "ERROR: [youtube] video1: Unable to download webpage: <urlopen error timed out>",
+        );
+        let inspection = inspect_youtube(&tools, "https://www.youtube.com/watch?v=video1").unwrap();
+        assert_eq!(inspection.entries[0].title, "Song");
+        let calls = calls(root.path());
+        assert_eq!(calls.len(), 2);
+        assert!(!calls[0].contains("player_client"));
+        assert!(calls[1].contains("youtube:player_client=android"));
+    }
+    #[test]
+    fn a_private_video_fails_at_once_with_its_own_message() {
+        let root = tempfile::tempdir().unwrap();
+        let tools = downloader(
+            root.path(),
+            9,
+            "ERROR: [youtube] video1: Private video. Sign in if you have been granted access",
+        );
+        let failure = inspect_youtube(&tools, "https://www.youtube.com/watch?v=video1")
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains(messages::YOUTUBE_PRIVATE), "{failure}");
+        assert_eq!(calls(root.path()).len(), 1);
+    }
+}
+#[cfg(test)]
+mod classification_tests {
+    use super::YoutubeProblem as P;
+    #[test]
+    fn yt_dlp_errors_are_recognised() {
+        let cases = [
+            (
+                "ERROR: [youtube] abc: Sign in to confirm you’re not a bot. Use --cookies",
+                P::BotCheck,
+            ),
+            (
+                "ERROR: unable to download video data: HTTP Error 429: Too Many Requests",
+                P::BotCheck,
+            ),
+            (
+                "ERROR: [youtube] abc: Private video. Sign in if you've been granted access",
+                P::Private,
+            ),
+            (
+                "ERROR: [youtube] abc: Join this channel to get access to members-only content",
+                P::Private,
+            ),
+            (
+                "ERROR: [youtube] abc: Sign in to confirm your age. This video may be inappropriate for some users.",
+                P::AgeRestricted,
+            ),
+            (
+                "ERROR: [youtube] abc: The uploader has not made this video available in your country",
+                P::GeoRestricted,
+            ),
+            (
+                "ERROR: [youtube] abc: Video unavailable. This video has been removed by the uploader",
+                P::Unavailable,
+            ),
+            (
+                "ERROR: [youtube] abc: Unable to extract uploader id; please report this issue",
+                P::Outdated,
+            ),
+            (
+                "WARNING: nsig extraction failed: Some formats may be missing",
+                P::Outdated,
+            ),
+            (
+                "ERROR: [youtube] abc: Unable to download API page: <urlopen error [Errno 8] nodename nor servname provided>",
+                P::Network,
+            ),
+            (
+                "ERROR: unable to download video data: HTTP Error 503: Service Unavailable",
+                P::Network,
+            ),
+            ("", P::Unknown),
+        ];
+        for (stderr, expected) in cases {
+            assert_eq!(P::classify(stderr), expected, "{stderr}");
+        }
+    }
+    #[test]
+    fn only_passing_failures_are_retried() {
+        assert!(P::Network.transient() && P::BotCheck.transient() && P::Outdated.transient());
+        assert!(!P::Private.transient() && !P::AgeRestricted.transient());
+        assert!(!P::GeoRestricted.transient() && !P::Unavailable.transient());
+    }
+}
 #[cfg(test)]
 mod inspection_tests {
     use super::*;

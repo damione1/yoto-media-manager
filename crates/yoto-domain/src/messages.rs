@@ -40,6 +40,15 @@ pub const URL_NO_HOST: &str = "URL has no host";
 pub const YOUTUBE_HTTPS_ONLY: &str = "Only HTTPS YouTube URLs are supported";
 pub const VIDEO_TOO_LONG: &str = "Video duration exceeds the 2-hour import limit.";
 pub const YOUTUBE_FAILED: &str = "YouTube acquisition failed or timed out. The video may be unavailable or require authorization.";
+pub const YOUTUBE_PRIVATE: &str = "This YouTube video is private or restricted to channel members.";
+pub const YOUTUBE_AGE_RESTRICTED: &str =
+    "This YouTube video is age-restricted and requires signing in.";
+pub const YOUTUBE_GEO_RESTRICTED: &str = "This YouTube video is not available in this country.";
+pub const YOUTUBE_UNAVAILABLE: &str = "This YouTube video is unavailable or was removed.";
+pub const YOUTUBE_OUTDATED: &str =
+    "The bundled YouTube downloader cannot read this video; it probably needs an update.";
+pub const YOUTUBE_BOT_CHECK: &str = "YouTube asked to confirm that the request is not from a bot.";
+pub const YOUTUBE_NETWORK: &str = "YouTube could not be reached.";
 pub const YOUTUBE_PLAYLIST_SELECT: &str = "Inspect the playlist and select entries explicitly.";
 pub const VIDEO_ID_INVALID: &str = "Invalid video id";
 pub const AUDIO_FILE_MISSING: &str = "Select an existing audio file";
@@ -147,6 +156,13 @@ pub const ALL: &[&str] = &[
     YOUTUBE_HTTPS_ONLY,
     VIDEO_TOO_LONG,
     YOUTUBE_FAILED,
+    YOUTUBE_PRIVATE,
+    YOUTUBE_AGE_RESTRICTED,
+    YOUTUBE_GEO_RESTRICTED,
+    YOUTUBE_UNAVAILABLE,
+    YOUTUBE_OUTDATED,
+    YOUTUBE_BOT_CHECK,
+    YOUTUBE_NETWORK,
     YOUTUBE_PLAYLIST_SELECT,
     VIDEO_ID_INVALID,
     AUDIO_FILE_MISSING,

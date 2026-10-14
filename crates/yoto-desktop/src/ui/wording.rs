@@ -106,6 +106,25 @@ fn known_message(message: &str) -> Option<&'static str> {
         m::YOUTUBE_FAILED => {
             "Le téléchargement YouTube a échoué. La vidéo est peut-être privée, supprimée ou indisponible dans votre pays."
         }
+        m::YOUTUBE_PRIVATE => {
+            "Cette vidéo YouTube est privée ou réservée aux membres d’une chaîne : elle ne peut pas être importée."
+        }
+        m::YOUTUBE_AGE_RESTRICTED => {
+            "Cette vidéo YouTube est réservée aux adultes : YouTube demande une connexion pour la lire, elle ne peut donc pas être importée."
+        }
+        m::YOUTUBE_GEO_RESTRICTED => "Cette vidéo YouTube n’est pas disponible dans votre pays.",
+        m::YOUTUBE_UNAVAILABLE => {
+            "Cette vidéo YouTube n’existe plus ou a été retirée. Vérifiez le lien."
+        }
+        m::YOUTUBE_OUTDATED => {
+            "YouTube a changé et l’application ne sait plus lire cette vidéo. Réessayez plus tard ou installez la prochaine mise à jour de l’application."
+        }
+        m::YOUTUBE_BOT_CHECK => {
+            "YouTube bloque pour un moment les téléchargements depuis votre connexion. Réessayez dans quelques minutes."
+        }
+        m::YOUTUBE_NETWORK => {
+            "YouTube ne répond pas. Vérifiez votre connexion Internet puis réessayez."
+        }
         m::YOUTUBE_PLAYLIST_SELECT => {
             "Ce lien est une playlist YouTube : choisissez les vidéos à importer."
         }
