@@ -30,15 +30,17 @@ Yoto accepts tracks of up to one hour. Audio longer than 55 minutes, such as an 
 
 Enter a title and choose `Créer une playlist`. The playlist is created on Yoto, and the editor opens after confirmation, even if it has no audio yet.
 
-Confirm a title change with Enter or by leaving the field. Changes to titles, metadata, order, illustrations, and settings are sent directly to Yoto. There is no separate local save or publish step.
+Changes are saved to Yoto automatically; there is no save or publish button. Text is sent a moment after you stop typing, or as soon as you leave the field or press Enter. Several quick changes, such as moving a track up three times or changing a few icons, are grouped and sent together.
 
-A progress indicator shows the current operation. The displayed playlist keeps its confirmed content until the result arrives. If an error occurs, the message and task details explain what still needs attention.
+The tag next to the title shows `Enregistrement…` while changes are on their way and `Enregistré sur Yoto` once Yoto has them. You can keep editing meanwhile: what you change during a save is sent right after it. Changes still waiting are sent when you open another playlist or page and before the app quits. If they cannot be saved, a message names the playlist and explains why; when quitting, you can stay or choose `Quitter quand même`.
+
+If an error occurs, the message and task details explain what still needs attention.
 
 ## Choose illustrations
 
 A cover represents the playlist. Small icons represent its chapters or tracks on the player.
 
-Choose `Changer l’icône` from the audio's menu. The dialog offers the `Yoto` catalog and your personal images in `Mes icônes`. Select an icon to apply it, or import an image to add it to your personal icons. The change is sent to Yoto with a progress indicator.
+Choose `Changer l’icône` from the audio's menu. The dialog offers the `Yoto` catalog and your personal images in `Mes icônes`. Select an icon to apply it, or import an image to add it to your personal icons. The dialog closes and the change is saved to Yoto with your other changes.
 
 A song displays a single title. Playlists with chapters containing multiple tracks keep that structure; their detailed settings remain available in the menus.
 
