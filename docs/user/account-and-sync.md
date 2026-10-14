@@ -59,7 +59,7 @@ If another app changed the playlist, the update may require a choice between you
 
 ## Advanced mode
 
-`Mode avancé`, in `Compte`, shows technical settings most families never need: interactive playback, track events, random playback ranges and streams in playlists; raw Yoto values, shortcuts and technical commands for players; and manually linking a card after an uncertain upload. It is off each time the app starts.
+`Mode avancé`, in `Compte`, shows technical settings most families never need: interactive playback, track events, random playback ranges and streams in playlists; raw Yoto values, shortcuts and technical commands for players; manually linking a card after an uncertain upload; and `Ouvrir une autre médiathèque`, to open another library of this computer, such as an imported one, in a new window. It is off each time the app starts.
 
 ## Disconnect
 

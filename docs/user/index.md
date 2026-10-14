@@ -28,11 +28,11 @@ The [getting started guide](getting-started.md) walks you through your first pla
 
 | App screen | What you can do |
 | --- | --- |
-| `Médiathèque` | Find, sort, and select media; listen to and prepare audio. |
+| `Médiathèque` | Find, sort, and select media; listen to and prepare audio; export or import the whole library. |
 | `Playlists` | Create, illustrate, and edit your playlists. |
 | `Imports` | Add a YouTube link and follow imports, processing, and uploads. |
 | `Lecteurs` | Refresh Yoto data, select a player, and manage groups. |
-| `Compte` | Connect or disconnect Yoto and back up your library. |
+| `Compte` | Connect or disconnect Yoto and turn on `Mode avancé`. |
 
 ## Current availability
 

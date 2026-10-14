@@ -50,9 +50,13 @@ Check the selected player, its Wi-Fi connection, and whether it is online. Refre
 
 The media or its version is still used by a playlist or task. Remove the relevant track or wait for the task to finish, then try again.
 
-## Open a restored library
+## Open an imported library
 
-After restoring, choose `Ouvrir la médiathèque restaurée` in the `Sauvegarde` card in `Compte`. A new window opens that library and the original window stays available. To find an existing profile, open `Options avancées` in the same card, choose `Ouvrir une autre médiathèque` and select its folder. You must reconnect Yoto in a restored profile.
+Right after an import, choose `Ouvrir la médiathèque importée` in the import dialog. A new window opens that library and the original window stays available. To open it again later, turn on `Mode avancé` in `Compte`, choose `Ouvrir une autre médiathèque` and select its folder, next to your usual library. You must reconnect Yoto in an imported library.
+
+## The recovery key is refused
+
+Type the key exactly as it was shown at export time: eight groups of eight letters and digits. Spaces, dashes and letter case do not matter. Each export has its own key, so a key from another export does not work. Without the right key, the export cannot be opened.
 
 ## Report a problem
 

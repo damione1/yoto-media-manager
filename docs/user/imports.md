@@ -30,6 +30,6 @@ An error with one link does not remove other media from your library. Check the 
 
 ## Organize imported media
 
-In `Médiathèque`, search for a title and open `Trier` to choose title (`Titre`), author (`Auteur`), duration (`Durée`), or recent imports (`Récents`). Use the checkboxes to select multiple media. The `⋯` menu offers selection of all results and cache cleanup.
+In `Médiathèque`, search for a title and open `Trier` to choose title (`Titre`), author (`Auteur`), duration (`Durée`), or recent imports (`Récents`). Use the checkboxes to select multiple media. The `⋯` menu next to `Ajouter un fichier audio` offers selection of all results, cache cleanup, and exporting or importing the whole library.
 
-Local deletion is refused while a playlist still uses the media. Remove the relevant tracks first. The [backup guide](backups.md) explains how to keep a copy of your originals.
+Local deletion is refused while a playlist still uses the media. Remove the relevant tracks first. The [export guide](backups.md) explains how to keep a copy of your library.
