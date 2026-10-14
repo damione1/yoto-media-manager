@@ -311,9 +311,7 @@ impl Tools {
             ));
         }
         let info = self.probe(output)?;
-        if info.bytes > size_limit
-            || (info.duration.seconds() - trim.duration().seconds()).abs() > 0.002
-        {
+        if info.bytes > size_limit || !preview_covers_range(info.duration, trim, source.duration) {
             return Err(Failure::Media(
                 "Preview duration disagrees with the selected range".into(),
             ));
@@ -396,6 +394,30 @@ impl Tools {
         }
         Ok(Waveform { levels })
     }
+}
+/// Rounding allowed between the decoded PCM and the selected range: under one 44.1 kHz
+/// block of output, anywhere in the file.
+const PREVIEW_ROUNDING_SECONDS: f64 = 0.002;
+/// How much shorter than its container claims a source's decoded audio may end. WebM and
+/// Matroska store a millisecond-rounded duration that counts Opus pre-skip and the padding of
+/// the last packet; MP4 and MP3 count encoder priming the same way. A YouTube Opus download
+/// typically decodes 10 to 20 ms short of its announced length.
+const CONTAINER_TAIL_SLACK_SECONDS: f64 = 0.25;
+/// Whether a decoded preview really holds the selected range. It may never be longer, nor
+/// shorter inside the source. Only a range running to the source's announced end may stop
+/// early, by the container's tail slack, since the audio there simply ends sooner; a decode
+/// that gave up midway is still refused.
+fn preview_covers_range(decoded: MediaTime, trim: TrimRange, source: MediaTime) -> bool {
+    let decoded = decoded.seconds();
+    let wanted = trim.duration().seconds();
+    let reaches_end = source.seconds() - trim.end().seconds() <= CONTAINER_TAIL_SLACK_SECONDS;
+    let shortfall_allowed = if reaches_end {
+        CONTAINER_TAIL_SLACK_SECONDS
+    } else {
+        0.0
+    };
+    decoded <= wanted + PREVIEW_ROUNDING_SECONDS
+        && decoded >= wanted - PREVIEW_ROUNDING_SECONDS - shortfall_allowed
 }
 pub fn command(path: &Path) -> Command {
     let c = Command::new(path);
@@ -621,5 +643,34 @@ mod loudness_tests {
         assert!(LoudnessMeasure::parse(&REPORT.replace("\"-23.54\"", "\"-inf\"")).is_none());
         assert!(LoudnessMeasure::parse("Conversion failed!").is_none());
         assert!(LoudnessMeasure::parse("").is_none());
+    }
+}
+#[cfg(test)]
+mod preview_range_tests {
+    use super::preview_covers_range;
+    use yoto_domain::{MediaTime, TrimRange};
+    fn at(seconds: f64) -> MediaTime {
+        MediaTime::from_seconds(seconds).unwrap()
+    }
+    fn range(start: f64, end: f64, source: f64) -> TrimRange {
+        TrimRange::new(at(start), at(end), at(source)).unwrap()
+    }
+    #[test]
+    fn a_whole_youtube_opus_track_may_end_where_its_audio_ends() {
+        // Container announces 99.421 s; the decoded Opus audio stops at 99.404649 s.
+        let whole = range(0., 99.421, 99.421);
+        assert!(preview_covers_range(at(99.404649), whole, at(99.421)));
+        assert!(preview_covers_range(at(99.421), whole, at(99.421)));
+    }
+    #[test]
+    fn truncation_and_overrun_are_still_refused() {
+        let whole = range(0., 99.421, 99.421);
+        assert!(!preview_covers_range(at(60.), whole, at(99.421)));
+        assert!(!preview_covers_range(at(99.1), whole, at(99.421)));
+        assert!(!preview_covers_range(at(99.5), whole, at(99.421)));
+        // Inside the source the range must be decoded exactly.
+        let middle = range(10., 40., 99.421);
+        assert!(preview_covers_range(at(30.001), middle, at(99.421)));
+        assert!(!preview_covers_range(at(29.98), middle, at(99.421)));
     }
 }

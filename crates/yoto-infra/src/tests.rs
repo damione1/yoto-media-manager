@@ -133,6 +133,43 @@ fn opus_preview_uses_exact_transient_pcm_and_validates_cancel_and_duration() {
     drop(lease);
     assert!(!path.exists());
 }
+#[test]
+fn whole_webm_opus_preview_accepts_the_shorter_decoded_tail() {
+    // WebM announces a millisecond-rounded duration that counts Opus pre-skip and padding,
+    // so the decoded audio ends a few milliseconds early, as with YouTube downloads.
+    let root = tempfile::tempdir().unwrap();
+    let tools = tools();
+    let input = root.path().join("fixture.webm");
+    let mut generate = crate::media::command(&tools.ffmpeg);
+    generate
+        .args([
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=6.01",
+            "-ac",
+            "2",
+            "-c:a",
+            "libopus",
+            "-y",
+        ])
+        .arg(&input);
+    assert!(
+        crate::process::output(generate, 100_000, std::time::Duration::from_secs(30))
+            .unwrap()
+            .status
+            .success()
+    );
+    let source = tools.probe(&input).unwrap();
+    let whole = TrimRange::new(MediaTime::ZERO, source.duration, source.duration).unwrap();
+    let store = AssetStore::new(root.path().join("catalogue"), [80; 32]).unwrap();
+    let lease = store.lease("wav").unwrap();
+    let decoded = tools.preview(&input, lease.path(), whole).unwrap();
+    assert!(decoded.duration <= source.duration);
+    assert!(source.duration.seconds() - decoded.duration.seconds() < 0.1);
+}
 #[tokio::test]
 async fn device_contract_requires_online_and_preserves_unmanaged_settings() {
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
