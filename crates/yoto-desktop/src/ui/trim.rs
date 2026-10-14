@@ -1246,6 +1246,10 @@ impl Render for TrimPanel {
                         .text_size(px(14.)),
                     ),
             )
+            .children({
+                let parts = plan_parts(range).len();
+                (parts > 1).then(|| theme::note(wording::split_note(parts)))
+            })
             .child(tags)
             .child(player)
             .child(theme::pill(

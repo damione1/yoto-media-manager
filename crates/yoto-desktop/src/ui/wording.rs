@@ -90,6 +90,13 @@ pub fn phase_text(phase: &JobPhase) -> String {
     }
 }
 
+/// Under a media too long for one Yoto track: what happens when it joins a playlist.
+pub fn split_note(parts: usize) -> String {
+    format!(
+        "Trop long pour une seule piste Yoto (1 h au plus) : ajouté à une playlist, il sera découpé en {parts} parties."
+    )
+}
+
 /// « Outil YouTube » in « Compte » (advanced mode): the tool imports use and its updates.
 pub mod youtube_tool {
     use yoto_infra::youtube_tool::{ToolActivity, ToolOrigin, ToolProblem, YoutubeToolStatus};

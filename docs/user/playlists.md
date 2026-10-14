@@ -24,6 +24,8 @@ The list represents your Yoto playlists. A cache keeps the latest loaded data av
 
 Versions already uploaded to the active account are reused. A new trim may require another upload. The original remains on your computer.
 
+Yoto accepts tracks of up to one hour. Audio longer than 55 minutes, such as an audiobook, is cut automatically when you add it: it becomes one chapter with several tracks named « <titre> — partie 1/3 », « partie 2/3 »… of equal length. Each part is prepared separately so the cuts are clean, and parts already prepared or uploaded are reused when you add the same audio again. The audio's detail panel in `Médiathèque` tells you in advance how many parts it will become. Playlists stay limited to 100 tracks and 5 hours in total.
+
 ## Create and edit
 
 Enter a title and choose `Créer une playlist`. The playlist is created on Yoto, and the editor opens after confirmation, even if it has no audio yet.
