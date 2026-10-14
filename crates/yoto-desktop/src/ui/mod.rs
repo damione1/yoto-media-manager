@@ -744,7 +744,18 @@ impl AppView {
         .detach();
     }
     pub fn select_media(&mut self, id: MediaId, window: &mut Window, cx: &mut Context<Self>) {
-        if self.selected_media != Some(id) {
+        self.open_media(id, false, window, cx);
+    }
+    /// Open a media in the side panel; with `play`, start listening to it at once (a new
+    /// playback replaces the previous one, so nothing is stopped first).
+    pub fn open_media(
+        &mut self,
+        id: MediaId,
+        play: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected_media != Some(id) && !play {
             self.send(Command::StopPreview, cx);
         }
         self.selected_media = Some(id);
@@ -766,6 +777,9 @@ impl AppView {
             });
             panel.update(cx, |p, cx| p.apply_snapshot(&self.snapshot, cx));
             self.trims.insert(id, panel);
+        }
+        if play && let Some(panel) = self.trims.get(&id).cloned() {
+            panel.update(cx, |p, cx| p.toggle_play(cx));
         }
         self.send(Command::Waveform(id), cx);
     }

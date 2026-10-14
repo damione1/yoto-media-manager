@@ -29,6 +29,16 @@ fn media_meta(media: &MediaItem) -> String {
         format!("{duration} · {}", media.author)
     }
 }
+/// « Découpé » only once a cut is ready: the first version is the original, and a cut
+/// still preparing or failed does not count.
+fn has_finished_cut(snapshot: &Snapshot, media: &MediaItem) -> bool {
+    media.recipes.iter().skip(1).any(|id| {
+        snapshot
+            .recipes
+            .iter()
+            .any(|recipe| recipe.id == *id && recipe.result.is_some())
+    })
+}
 /// The version a playlist receives by default: the latest finished cut, else the original.
 fn default_recipe(snapshot: &Snapshot, media: &MediaItem) -> Option<RecipeId> {
     media
@@ -60,7 +70,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     let id = media.id;
                     let selected = view.selected_media_set.contains(&id);
                     let open = view.selected_media == Some(id);
-                    let trimmed = media.recipes.len() > 1;
+                    let trimmed = has_finished_cut(&view.snapshot, media);
                     rows.push(
                         div().h(px(76.)).pb(px(8.)).child(
                             div()
@@ -124,12 +134,10 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                             "Ouvrir et écouter"
                                         })
                                         .on_click(cx.listener(move |v, _, window, cx| {
-                                            if v.selected_media == Some(id)
-                                                && let Some(panel) = v.trims.get(&id).cloned()
-                                            {
+                                            if v.selected_media != Some(id) {
+                                                v.open_media(id, true, window, cx);
+                                            } else if let Some(panel) = v.trims.get(&id).cloned() {
                                                 panel.update(cx, |p, cx| p.toggle_play(cx));
-                                            } else {
-                                                v.select_media(id, window, cx);
                                             }
                                         })),
                                     Look::Soft(&theme::PEACH),

@@ -23,6 +23,48 @@ enum PlaylistOperation {
     },
     Failed(Failure),
 }
+/// Where the open playlist stands with Yoto, as its tags show it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SyncState {
+    /// A save is on its way to Yoto.
+    Sending,
+    /// Something needs the parent: a blocked upload, a newer or deleted Yoto version.
+    ToCheck,
+    /// What is shown is what Yoto has.
+    OnYoto,
+}
+impl SyncState {
+    /// A running save wins over anything to check, which wins over « on Yoto ».
+    fn of(busy: bool, needs_attention: bool) -> Self {
+        if busy {
+            Self::Sending
+        } else if needs_attention {
+            Self::ToCheck
+        } else {
+            Self::OnYoto
+        }
+    }
+    fn track_label(self) -> &'static str {
+        match self {
+            Self::Sending => "Envoi sur Yoto…",
+            Self::ToCheck => "À vérifier",
+            Self::OnYoto => "Sur Yoto",
+        }
+    }
+    fn playlist_label(self) -> &'static str {
+        match self {
+            Self::Sending | Self::ToCheck => self.track_label(),
+            Self::OnYoto => "Enregistré sur Yoto",
+        }
+    }
+    fn family(self) -> &'static theme::Family {
+        match self {
+            Self::Sending => &theme::BUTTER,
+            Self::ToCheck => &theme::ROSE,
+            Self::OnYoto => &theme::MINT,
+        }
+    }
+}
 pub struct PlaylistEditor {
     pub draft: Playlist,
     parent: WeakEntity<AppView>,
@@ -878,7 +920,7 @@ impl PlaylistEditor {
         &mut self,
         index: usize,
         snapshot: &Snapshot,
-        state: (&'static str, &'static theme::Family),
+        state: SyncState,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         use theme::{Height, Look};
@@ -986,7 +1028,15 @@ impl PlaylistEditor {
             let tid = track.id;
             let track_count = chapter.tracks.len();
             let owner = cx.entity().downgrade();
-            let has_icon = track.icon.is_some();
+            // The tile shows the chapter's icon when the track has none, so « Retirer
+            // l’icône » removes whichever icon is visible.
+            let removal = if track.icon.is_some() {
+                Some(Some(tid))
+            } else if chapter.icon.is_some() {
+                Some(None)
+            } else {
+                None
+            };
             let (meta, playable) = match &track.media {
                 TrackMedia::Local { recipe, media } => (
                     snapshot
@@ -1026,11 +1076,21 @@ impl PlaylistEditor {
                     move |v, window, cx| v.open_icon_picker(id, Some(tid), window, cx),
                 ))
                 .item(
-                    editor_menu_item(&owner, "Retirer l’icône", move |v, _, cx| {
-                        v.assign_icon(id, Some(tid), None);
-                        v.save(cx);
-                    })
-                    .disabled(!has_icon),
+                    editor_menu_item(
+                        &owner,
+                        if removal == Some(None) {
+                            "Retirer l’icône du chapitre"
+                        } else {
+                            "Retirer l’icône"
+                        },
+                        move |v, _, cx| {
+                            if let Some(target) = removal {
+                                v.assign_icon(id, target, None);
+                                v.save(cx);
+                            }
+                        },
+                    )
+                    .disabled(removal.is_none()),
                 )
                 .separator()
                 .item(editor_menu_item(
@@ -1162,7 +1222,7 @@ impl PlaylistEditor {
                                 )
                                 .child(theme::meta(meta).pl(px(8.))),
                         )
-                        .child(theme::tag(state.0, state.1))
+                        .child(theme::tag(state.track_label(), state.family()))
                         .children(playable.map(|(recipe, media)| {
                             let playing = self.previewing == Some(recipe);
                             theme::round(
@@ -1473,6 +1533,11 @@ impl PlaylistEditor {
             {
                 t.media = TrackMedia::Local { media, recipe };
                 self.persist(CommitTarget::MediaPicker, cx);
+            } else {
+                self.status =
+                    "Cette piste n’existe plus dans la playlist ; l’audio n’a pas été remplacé."
+                        .into();
+                cx.notify();
             }
         } else {
             self.start_operation(
@@ -1750,14 +1815,11 @@ fn title_field(input: Input, size: f32) -> Input {
 }
 impl PlaylistEditor {
     /// The sending state shown on every track and in the header.
-    fn sync_state(&self) -> (&'static str, &'static theme::Family) {
-        if self.busy() {
-            ("Envoi sur Yoto…", &theme::BUTTER)
-        } else if self.blocked() || self.external.is_some() || self.deleted {
-            ("À vérifier", &theme::ROSE)
-        } else {
-            ("Sur Yoto", &theme::MINT)
-        }
+    fn sync_state(&self) -> SyncState {
+        SyncState::of(
+            self.busy(),
+            self.blocked() || self.external.is_some() || self.deleted,
+        )
     }
     fn header(&self, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
         use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
@@ -1787,7 +1849,7 @@ impl PlaylistEditor {
             n => format!("{n} pistes · {}", duration_text(seconds)),
         };
         let blocked = self.blocked();
-        let (state, family) = self.sync_state();
+        let state = self.sync_state();
         let seed = self.base.id.to_string();
         let cover_family = theme::family_for(&seed);
         let creating = self
@@ -1828,14 +1890,7 @@ impl PlaylistEditor {
                 &theme::LILAC,
             ));
         }
-        tags = tags.child(theme::tag(
-            if state == "Sur Yoto" {
-                "Enregistré sur Yoto"
-            } else {
-                state
-            },
-            family,
-        ));
+        tags = tags.child(theme::tag(state.playlist_label(), state.family()));
         div()
             .flex()
             .gap(px(20.))
@@ -2243,7 +2298,7 @@ impl Render for PlaylistEditor {
                 )),
             );
             body = body.child(pending);
-            let (state, family) = self.sync_state();
+            let state = self.sync_state();
             for (index, chapter) in self.base.chapters.iter().enumerate() {
                 for track in &chapter.tracks {
                     body = body.child(
@@ -2265,7 +2320,7 @@ impl Render for PlaylistEditor {
                                     .child(format!("{}", index + 1)),
                             )
                             .child(theme::heading(track.title.clone(), 17.).flex_1().truncate())
-                            .child(theme::tag(state, family)),
+                            .child(theme::tag(state.track_label(), state.family())),
                     );
                 }
             }
@@ -2604,7 +2659,15 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                 cx,
             ));
     }
-    if view.snapshot.active_account.is_some() && view.playlist_rows.is_empty() {
+    // During the first sync the list is empty because it is still loading, not because
+    // there is no playlist.
+    if view.snapshot.active_account.is_some()
+        && view.playlist_rows.is_empty()
+        && matches!(
+            view.snapshot.remote_sync.get(&RemoteCollection::Playlists),
+            Some(RemoteSyncState::Ready { .. })
+        )
+    {
         list = list.child(theme::note(
             "Aucune playlist Yoto. Créez votre première playlist ou actualisez la liste.",
         ));
