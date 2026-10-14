@@ -54,7 +54,7 @@ impl AppView {
                                     cx,
                                 );
                                 view.status = format!(
-                                    "Import de « {} » lancé. Suivez-le dans « Activités ».",
+                                    "Import de « {} » lancé. Suivez sa progression dans « Imports ».",
                                     entry.title
                                 );
                                 view.clear_youtube_link(cx);
@@ -381,7 +381,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                                     v.youtube_entries.clear();
                                     v.youtube_selection_url = None;
                                     v.status = format!(
-                                        "{count} vidéo(s) en cours d’import. Suivez-les dans « Activités »."
+                                        "{count} vidéo(s) en cours d’import. Suivez leur progression dans « Imports »."
                                     );
                                     v.clear_youtube_link(cx);
                                     cx.notify();
