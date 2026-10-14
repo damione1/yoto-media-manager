@@ -899,7 +899,6 @@ fn conflict_label(choice: ConflictChoice) -> &'static str {
     }
 }
 fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement {
-    use gpui_kit::component::dialog::DialogClose;
     use theme::{Height, Look};
     let id = job.id;
     let state_family = match &job.state {
@@ -1074,7 +1073,7 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
         div()
             .flex()
             .justify_end()
-            .child(DialogClose::new().child(theme::pill(
+            .child(theme::dialog_close(theme::pill(
                 Button::new(element_id("close-job-details", id)).label(tr!("Fermer")),
                 Look::Outline,
                 Height::Medium,

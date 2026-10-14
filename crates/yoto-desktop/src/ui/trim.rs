@@ -1,7 +1,6 @@
 use super::*;
 use gpui_kit::component::{
     WindowExt,
-    dialog::DialogClose,
     slider::{Slider, SliderState},
     spinner::Spinner,
 };
@@ -683,7 +682,7 @@ impl TrimPanel {
                     .flex()
                     .gap(px(8.))
                     .justify_end()
-                    .child(DialogClose::new().child(theme::pill(
+                    .child(theme::dialog_close(theme::pill(
                         Button::new("cancel-metadata").label(tr!("Annuler")),
                         Look::Outline,
                         Height::Medium,
@@ -859,7 +858,7 @@ impl TrimPanel {
                 .text_size(px(17.))
                 .font_weight(FontWeight::EXTRA_BOLD)
         };
-        let close = DialogClose::new().child(theme::round(
+        let close = theme::dialog_close(theme::round(
             Button::new("close-trim")
                 .icon(IconName::X)
                 .accessibility_label(tr!("Fermer")),
@@ -1046,7 +1045,7 @@ impl TrimPanel {
                                 self.status.clone()
                             }),
                     )
-                    .child(DialogClose::new().child(theme::pill(
+                    .child(theme::dialog_close(theme::pill(
                         Button::new("cancel-trim").label(if ready { tr!("Fermer") } else { tr!("Annuler") }),
                         Look::Outline,
                         Height::Large,

@@ -1,5 +1,5 @@
 use super::*;
-use gpui_kit::component::{WindowExt, dialog::DialogClose, spinner::Spinner};
+use gpui_kit::component::{WindowExt, spinner::Spinner};
 use yoto_updater::{CURRENT_VERSION, UpdateAction, UpdateState};
 pub(super) struct UpdatePanel {
     state: Arc<UpdateState>,
@@ -326,7 +326,7 @@ impl Render for UpdatePanel {
                 .flex()
                 .justify_end()
                 .gap(px(8.))
-                .child(DialogClose::new().child(theme::pill(
+                .child(theme::dialog_close(theme::pill(
                     Button::new("close-update").label(tr!("Fermer")),
                     Look::Outline,
                     Height::Medium,

@@ -319,6 +319,15 @@ pub fn screen_header(title: impl Into<SharedString>, subtitle: impl Into<SharedS
         .child(heading(title, 32.).whitespace_nowrap())
         .child(meta(subtitle).text_size(px(14.)).whitespace_nowrap())
 }
+/// A button that closes its dialog, for a row of dialog actions. The kit's close
+/// wrapper fills whatever holds it (`size_full`): dropped straight into a row it
+/// claims the whole width and squeezes its siblings, so it is boxed at the
+/// button's own size.
+pub fn dialog_close(trigger: impl IntoElement) -> impl IntoElement {
+    div()
+        .flex_none()
+        .child(gpui_kit::component::dialog::DialogClose::new().child(trigger))
+}
 /// Secondary information under a title: bold, muted, small.
 pub fn meta(text: impl Into<SharedString>) -> Div {
     div()

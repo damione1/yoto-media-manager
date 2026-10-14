@@ -1,7 +1,6 @@
 use super::*;
 use gpui_kit::component::{
     checkbox::Checkbox,
-    dialog::DialogClose,
     menu::{DropdownMenu, PopupMenuItem},
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -271,7 +270,7 @@ impl Render for MediaPicker {
                 cx,
             ))
             .child(div().flex_1())
-            .child(DialogClose::new().child(theme::pill(
+            .child(theme::dialog_close(theme::pill(
                 Button::new("picker-cancel").label(tr!("Annuler")),
                 theme::Look::Ghost,
                 theme::Height::Medium,
