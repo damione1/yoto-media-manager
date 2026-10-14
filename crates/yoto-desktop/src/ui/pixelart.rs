@@ -1,7 +1,6 @@
 use super::*;
 use gpui_kit::component::{
     button::{ButtonCustomVariant, ButtonRounded},
-    dialog::DialogClose,
     spinner::Spinner,
 };
 use theme::{Height, Look};
@@ -363,7 +362,7 @@ impl Render for IconPicker {
                         .border_color(theme::c(theme::BOX_BORDER)),
                     )
                     .child(div().flex_1())
-                    .child(DialogClose::new().child(theme::pill(
+                    .child(theme::dialog_close(theme::pill(
                         Button::new("cancel-icon").label(tr!("Annuler")),
                         Look::Ghost,
                         Height::Medium,

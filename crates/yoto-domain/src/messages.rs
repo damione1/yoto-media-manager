@@ -88,6 +88,7 @@ pub const PUBLICATION_DURABLE: &str =
     "This publication has a durable remote effect; reconcile it rather than retrying";
 pub const TASK_NEEDS_RESOLUTION: &str = "This task requires a separate resolution";
 pub const TASK_COMPLETED: &str = "This task is already completed";
+pub const TASK_STILL_ACTIVE: &str = "This task is still in progress";
 pub const RESTART_BUSY: &str =
     "Finish imports, audio processing and Yoto uploads before restarting";
 pub const RESTART_PENDING: &str = "An application restart is already pending";
@@ -227,6 +228,7 @@ pub const ALL: &[&str] = &[
     PUBLICATION_DURABLE,
     TASK_NEEDS_RESOLUTION,
     TASK_COMPLETED,
+    TASK_STILL_ACTIVE,
     RESTART_BUSY,
     RESTART_PENDING,
     RESTARTING,

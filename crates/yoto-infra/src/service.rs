@@ -178,6 +178,9 @@ pub enum Command {
         card: CardId,
     },
     Cancel(JobId),
+    /// Remove finished, failed or cancelled tasks from the activity list. They stay
+    /// recorded; a task still in progress is refused and nothing is changed.
+    DismissJobs(Vec<JobId>),
     Player {
         account: AccountId,
         device: DeviceId,
@@ -804,6 +807,7 @@ impl Service {
             | Command::CollectGarbage
             | Command::ReleaseAsset(_)
             | Command::JobsPage { .. }
+            | Command::DismissJobs(_)
             | Command::Backup { .. }
             | Command::Restore { .. }
             | Command::Prepare { .. }
@@ -1532,6 +1536,7 @@ impl Service {
             | Command::CollectGarbage
             | Command::ReleaseAsset(_)
             | Command::JobsPage { .. }
+            | Command::DismissJobs(_)
             | Command::Backup { .. }
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
@@ -1609,6 +1614,7 @@ impl Service {
             | Command::CollectGarbage
             | Command::ReleaseAsset(_)
             | Command::JobsPage { .. }
+            | Command::DismissJobs(_)
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
             | Command::StopPreview
@@ -1744,6 +1750,10 @@ impl Service {
                         .map_err(storage)?,
                 ))
             }
+            Command::DismissJobs(ids) => {
+                self.db.dismiss_jobs(&ids)?;
+                Ok(Reply::Updated)
+            }
             Command::ReleaseAsset(asset) => {
                 self.db.release_draft_asset(asset)?;
                 Ok(Reply::Updated)
@@ -1876,6 +1886,7 @@ impl Service {
                     | JobState::Retry { .. }
                     | JobState::Cancelled => {
                         job.state = JobState::Queued;
+                        job.dismissed = false;
                         self.db.admit_job(&job)?;
                         self.notify.notify_one();
                         Ok(Reply::Updated)
@@ -2256,6 +2267,7 @@ impl Service {
             attempts: 0,
             created: now(),
             checkpoint: None,
+            dismissed: false,
         };
         self.db.admit_job(&j)?;
         self.notify.notify_one();

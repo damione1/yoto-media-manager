@@ -228,39 +228,41 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                 .into_any_element()
         });
     let count = view.snapshot.media.len();
-    let header = div()
-        .flex()
-        .items_center()
-        .gap(px(12.))
-        .child(div().flex_1().min_w_0().child(theme::screen_header(
+    let header = theme::header_row(
+        theme::screen_header(
             tr!("Médiathèque"),
             trn!(
                 "{count} audio · sur cet ordinateur",
                 "{count} audios · sur cet ordinateur",
                 count
             ),
-        )))
-        .child(theme::pill(
-            Button::new("add-youtube")
-                .icon(IconName::Link)
-                .label(tr!("Lien YouTube"))
-                .on_click(cx.listener(|v, _, _, cx| v.navigate(Route::Imports, cx))),
-            Look::Outline,
-            Height::Large,
-            false,
-            cx,
-        ))
-        .child(theme::pill(
-            Button::new("add-file")
-                .icon(IconName::Plus)
-                .label(tr!("Ajouter un fichier audio"))
-                .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
-            Look::Primary,
-            Height::Large,
-            false,
-            cx,
-        ))
-        .child(library_menu(count > 0, cx));
+        ),
+        vec![
+            theme::pill(
+                Button::new("add-youtube")
+                    .icon(IconName::Link)
+                    .label(tr!("Lien YouTube"))
+                    .on_click(cx.listener(|v, _, _, cx| v.navigate(Route::Imports, cx))),
+                Look::Outline,
+                Height::Large,
+                false,
+                cx,
+            )
+            .into_any_element(),
+            theme::pill(
+                Button::new("add-file")
+                    .icon(IconName::Plus)
+                    .label(tr!("Ajouter un fichier audio"))
+                    .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
+                Look::Primary,
+                Height::Large,
+                false,
+                cx,
+            )
+            .into_any_element(),
+            library_menu(count > 0, cx).into_any_element(),
+        ],
+    );
     div()
         .size_full()
         .flex()

@@ -1,7 +1,7 @@
 //! « Exporter la médiathèque… » and « Importer une médiathèque… »: the encrypted backup
 //! and restore of the whole library, as two short dialogs.
 use super::*;
-use gpui_kit::component::{WindowExt, dialog::DialogClose, spinner::Spinner};
+use gpui_kit::component::{WindowExt, spinner::Spinner};
 use theme::{Height, Look};
 use wording::library_transfer as text;
 
@@ -409,7 +409,7 @@ impl Render for LibraryTransfer {
                 .flex()
                 .justify_end()
                 .gap(px(8.))
-                .child(DialogClose::new().child(theme::pill(
+                .child(theme::dialog_close(theme::pill(
                     Button::new("transfer-close").label(text::close()),
                     Look::Outline,
                     Height::Medium,

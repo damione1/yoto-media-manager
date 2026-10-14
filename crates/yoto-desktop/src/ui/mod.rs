@@ -27,6 +27,8 @@ use wording::{confirm_destructive, duration_text};
 use yoto_domain::*;
 use yoto_infra::{Command, Reply, Session as Service, Snapshot};
 pub struct AppView {
+    /// The window itself, focused when a click lands outside the text field being edited.
+    focus_handle: FocusHandle,
     updater: Entity<update::UpdatePanel>,
     pub service: Arc<Service>,
     pub runtime: Arc<tokio::runtime::Runtime>,
@@ -181,6 +183,7 @@ impl AppView {
         let settings = yoto_infra::settings::Settings::load(service.profile());
         subscriptions.push(cx.observe(&updater, |_, _, cx| cx.notify()));
         let mut view = Self {
+            focus_handle: cx.focus_handle(),
             updater,
             service,
             runtime,
@@ -751,6 +754,30 @@ impl AppView {
         })
         .detach();
     }
+    /// A click outside the text field being edited ends the editing, as on a web page:
+    /// the window takes the focus, so the field's blur runs (and with it the playlist
+    /// autosave). This runs after the clicked element: a click in another field has
+    /// already focused it, and a click in the edited field itself keeps it.
+    fn blur_input_outside(
+        &mut self,
+        event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use gpui_kit::component::{WindowExt, input::AnyInputState};
+        let Some(input) = window.focused_input(cx) else {
+            return;
+        };
+        let bounds = match &input {
+            AnyInputState::Input(state) => Some(state.read(cx).input_bounds()),
+            AnyInputState::Textarea(state) => Some(state.read(cx).input_bounds()),
+            AnyInputState::Editor(state) => Some(state.read(cx).input_bounds()),
+            AnyInputState::Otp(_) => None,
+        };
+        if bounds.is_some_and(|bounds| !bounds.contains(&event.position)) {
+            window.focus(&self.focus_handle, cx);
+        }
+    }
     pub fn select_media(&mut self, id: MediaId, window: &mut Window, cx: &mut Context<Self>) {
         self.open_media(id, false, window, cx);
     }
@@ -1143,6 +1170,8 @@ impl Render for AppView {
         let nav = sidebar(self, cx);
         div()
             .size_full()
+            .track_focus(&self.focus_handle)
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::blur_input_outside))
             .on_drop(cx.listener(|view, files: &ExternalPaths, _, cx| {
                 view.import_dropped(files.paths(), cx);
             }))
@@ -1160,19 +1189,29 @@ impl Render for AppView {
             )
             .child(
                 div()
-                    .px(px(20.))
-                    .py(px(6.))
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .pl(px(20.))
+                    .pr(px(12.))
+                    .py(px(3.))
                     .border_t_2()
                     .border_color(theme::c(theme::DIVIDER))
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme::c(if self.error.is_some() {
-                        theme::ROSE.ink
-                    } else {
-                        theme::MUTED
-                    }))
-                    .truncate()
-                    .child(self.status.clone()),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme::c(if self.error.is_some() {
+                                theme::ROSE.ink
+                            } else {
+                                theme::MUTED
+                            }))
+                            .truncate()
+                            .child(self.status.clone()),
+                    )
+                    .child(updates_control(self, cx)),
             )
     }
 }
@@ -1419,22 +1458,44 @@ fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
         .child(brand)
         .children(items)
         .child(div().flex_1())
-        .child(theme::pill(
-            Button::new("updates-sidebar")
-                .label(view.updater.read(cx).sidebar_label())
-                .on_click(cx.listener(|view, _, window, cx| {
-                    let updater = view.updater.clone();
-                    // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
-                    window.defer(cx, move |window, cx| {
-                        update::UpdatePanel::open(updater, window, cx)
-                    });
-                })),
-            theme::Look::Ghost,
-            theme::Height::Small,
-            false,
-            cx,
-        ))
         .child(account_card)
+}
+
+/// Right end of the status bar: opens the update dialog, with a dot when a new
+/// version is waiting.
+fn updates_control(view: &AppView, cx: &mut Context<AppView>) -> Div {
+    let updater = view.updater.read(cx);
+    let (available, label) = (updater.update_available(), updater.status_label());
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap(px(6.))
+        .children(available.then(|| theme::dot(theme::PEACH.accent)))
+        .child(
+            theme::pill(
+                Button::new("updates-status")
+                    .label(label)
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        let updater = view.updater.clone();
+                        // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
+                        window.defer(cx, move |window, cx| {
+                            update::UpdatePanel::open(updater, window, cx)
+                        });
+                    })),
+                if available {
+                    theme::Look::Link(&theme::PEACH)
+                } else {
+                    theme::Look::Ghost
+                },
+                theme::Height::Tiny,
+                false,
+                cx,
+            )
+            .h(px(24.))
+            .px(px(8.))
+            .text_size(px(13.)),
+        )
 }
 
 /// « Annuler » beside a connect button while the browser sign-in runs: a sign-in that
@@ -1521,7 +1582,8 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::AppUpdate(_)
         | Command::YoutubeTool(_)
         | Command::CancelConnect
-        | Command::JobsPage { .. } => return None,
+        | Command::JobsPage { .. }
+        | Command::DismissJobs(_) => return None,
         Command::InspectYoutube(_)
         | Command::NewPlaylist(_)
         | Command::SavePlaylist { .. }

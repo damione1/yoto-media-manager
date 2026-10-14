@@ -2390,15 +2390,18 @@ impl PlaylistEditor {
             ));
         }
         tags = tags.child(theme::tag(state.playlist_label(), state.family()));
+        // On a narrow window the actions move under the title rather than squeezing it.
         div()
             .flex()
-            .gap(px(20.))
+            .flex_wrap()
+            .gap_x(px(20.))
+            .gap_y(px(12.))
             .items_end()
             .child(cover)
             .child(
                 div()
                     .flex_1()
-                    .min_w_0()
+                    .min_w(px(220.))
                     .flex()
                     .flex_col()
                     .gap(px(6.))

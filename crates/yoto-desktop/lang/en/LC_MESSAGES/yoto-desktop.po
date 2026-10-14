@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 00:47-0400\n"
+"POT-Creation-Date: 2026-10-14 01:31-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -33,6 +33,17 @@ msgstr ""
 "The update could not be installed.\n"
 "\n"
 "{detail}"
+
+#: src/main.rs
+msgid ""
+"L’application n’a pas pu démarrer : certains de ses composants sont "
+"manquants ou abîmés.\n"
+"\n"
+"Réinstallez l’application pour les remettre en place."
+msgstr ""
+"The app could not start: some of its components are missing or damaged.\n"
+"\n"
+"Reinstall the app to put them back."
 
 #: src/main.rs
 #, rust-format
@@ -1348,6 +1359,14 @@ msgid "Activités"
 msgstr "Activity"
 
 #: src/ui/imports.rs
+msgid "Tout effacer"
+msgstr "Clear all"
+
+#: src/ui/imports.rs
+msgid "Retirer de la liste les activités terminées"
+msgstr "Remove finished activities from the list"
+
+#: src/ui/imports.rs
 msgid "Vos imports apparaîtront ici, avec leur progression."
 msgstr "Your imports will appear here, with their progress."
 
@@ -1413,6 +1432,10 @@ msgstr "Saved on Yoto"
 #: src/ui/imports.rs src/ui/wording.rs
 msgid "Annulé"
 msgstr "Cancelled"
+
+#: src/ui/imports.rs
+msgid "Retirer de la liste"
+msgstr "Remove from list"
 
 #: src/ui/imports.rs
 msgid "Vidéo YouTube"
@@ -3186,6 +3209,10 @@ msgstr "This task cannot be restarted as it is. Open its details."
 #: src/ui/wording.rs
 msgid "Cette tâche est déjà terminée."
 msgstr "This task is already finished."
+
+#: src/ui/wording.rs
+msgid "Cette tâche est encore en cours. Annulez-la d’abord."
+msgstr "This task is still in progress. Cancel it first."
 
 #: src/ui/wording.rs
 msgid ""
