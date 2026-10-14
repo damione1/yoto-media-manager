@@ -102,12 +102,18 @@ pub async fn get_authorize(
     if !status.is_client_error() && !status.is_server_error() {
         Ok(())
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetAuthorizeError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -157,12 +163,18 @@ pub async fn post_oauth_device_code(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::PostOauthDeviceCode200Response`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<PostOauthDeviceCodeError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -253,12 +265,18 @@ pub async fn post_oauth_token(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::PostOauthToken200Response`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<PostOauthTokenError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }

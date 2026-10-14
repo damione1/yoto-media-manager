@@ -4,13 +4,13 @@ slug: /
 sidebar_position: 1
 ---
 
-# Yoto Atelier
+# YotoMediaManager
 
-Yoto Atelier helps you collect audio, prepare excerpts, and manage playlists for your Yoto players. Your audio library stays on your computer. Your playlists belong to your Yoto account, and changes are sent to Yoto directly.
+YotoMediaManager helps you collect audio, prepare excerpts, and manage playlists for your Yoto players. Your audio library stays on your computer. Your playlists belong to your Yoto account, and changes are sent to Yoto directly.
 
 Import an audio file or a publicly accessible YouTube video, remove an introduction or credits, rename the content, and choose a small illustration for each chapter.
 
-The current app interface uses French labels. This guide keeps those labels in `code` so you can find the right controls.
+The app is available in English and French. It follows your computer's language, and you can change it under `Compte` (`Account`) → `Langue / Language`. This guide shows the French labels in `code`; in English the same controls sit in the same places.
 
 ## A five-step workflow
 
@@ -28,11 +28,11 @@ The [getting started guide](getting-started.md) walks you through your first pla
 
 | App screen | What you can do |
 | --- | --- |
-| `Médiathèque` | Find, sort, and select media; listen to and prepare audio. |
+| `Médiathèque` | Find, sort, and select media; listen to and prepare audio; export or import the whole library. |
 | `Playlists` | Create, illustrate, and edit your playlists. |
 | `Imports` | Add a YouTube link and follow imports, processing, and uploads. |
 | `Lecteurs` | Refresh Yoto data, select a player, and manage groups. |
-| `Compte` | Connect or disconnect Yoto and back up your library. |
+| `Compte` | Connect or disconnect Yoto and turn on `Mode avancé`. |
 
 ## Current availability
 

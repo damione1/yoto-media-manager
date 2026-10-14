@@ -642,15 +642,19 @@ pub {{#supportAsync}}async {{/supportAsync}}fn {{{operationId}}}(configuration: 
         Ok(resp)
         {{/isResponseFile}}
         {{^isResponseFile}}
+        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok()).map(str::to_owned);
         let content = resp.text(){{#supportAsync}}.await{{/supportAsync}}?;
         let entity: Option<{{{operationIdCamelCase}}}Success> = serde_json::from_str(&content).ok();
-        Ok(ResponseContent { status, content, entity })
+        Ok(ResponseContent { status, content, entity, retry_after })
         {{/isResponseFile}}
         {{/supportMultipleResponses}}
     } else {
+        let retry_after = resp.headers().get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok()).map(str::to_owned);
         let content = resp.text(){{#supportAsync}}.await{{/supportAsync}}?;
         let entity: Option<{{{operationIdCamelCase}}}Error> = serde_json::from_str(&content).ok();
-        Err(Error::ResponseError(ResponseContent { status, content, entity }))
+        Err(Error::ResponseError(ResponseContent { status, content, entity, retry_after }))
     }
 }
 

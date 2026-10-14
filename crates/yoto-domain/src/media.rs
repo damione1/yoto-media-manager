@@ -73,7 +73,7 @@ impl TrimRange {
     pub fn new(start: MediaTime, end: MediaTime, duration: MediaTime) -> Result<Self> {
         if start >= end || end > duration {
             return Err(Failure::Validation(
-                "Choose 0 ≤ start < end ≤ source duration.".into(),
+                crate::messages::TRIM_RANGE_INVALID.into(),
             ));
         }
         Ok(Self { start, end })
@@ -109,7 +109,7 @@ impl Normalization {
     pub fn label(self) -> &'static str {
         match self {
             Self::Preserve => "Volume original",
-            Self::Loudness => "Normaliser (-16 LUFS)",
+            Self::Loudness => "Volume égalisé",
         }
     }
 }
@@ -123,6 +123,68 @@ pub struct MediaRecipe {
     pub result: Option<AssetId>,
     pub info: Option<AudioInfo>,
     pub tool_version: String,
+    /// Set when this recipe is one part of a longer version cut for Yoto's track limit.
+    /// Parts are not versions of the media: they are absent from `MediaItem::recipes`.
+    #[serde(default)]
+    pub part: Option<RecipePart>,
+}
+/// Where a part recipe belongs: part `index` (from 1) of `count` of version `of`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct RecipePart {
+    pub of: RecipeId,
+    pub index: u16,
+    pub count: u16,
+}
+/// Cut `range` into the fewest equal parts no longer than [`Rules::PART_MICROS_MAX`].
+/// A range that already fits is returned whole.
+pub fn plan_parts(range: TrimRange) -> Vec<TrimRange> {
+    let start = range.start().micros();
+    let length = range.duration().micros();
+    let count = length.div_ceil(Rules::PART_MICROS_MAX).max(1);
+    let bound = |k: u64| {
+        // Integer boundaries: the last part ends exactly where the range does.
+        let offset = (u128::from(length) * u128::from(k) / u128::from(count)) as u64;
+        MediaTime::try_from(start + offset).expect("within the validated range")
+    };
+    (0..count)
+        .map(|k| {
+            TrimRange::new(bound(k), bound(k + 1), range.end()).expect("non-empty ordered part")
+        })
+        .collect()
+}
+/// Title of each part of a long audio; `{title}`, `{part}` and `{parts}` are replaced.
+/// Clients may pass their own wording of it (see [`part_title_with`]).
+pub const PART_TITLE: &str = "{title} — partie {part}/{parts}";
+/// Title for part `part` of `parts` with [`PART_TITLE`].
+pub fn part_title(title: &str, part: usize, parts: usize) -> String {
+    part_title_with(PART_TITLE, title, part, parts)
+}
+/// Title for part `part` of `parts` from `template`, shortening `title` so the whole fits
+/// [`Rules::TITLE_MAX`]. A template missing one of its three placeholders falls back to
+/// [`PART_TITLE`], so a part is always numbered.
+pub fn part_title_with(template: &str, title: &str, part: usize, parts: usize) -> String {
+    let template = if ["{title}", "{part}", "{parts}"]
+        .iter()
+        .all(|placeholder| template.contains(placeholder))
+    {
+        template
+    } else {
+        PART_TITLE
+    };
+    let fill = |title: &str| {
+        template
+            .replace("{part}", &part.to_string())
+            .replace("{parts}", &parts.to_string())
+            .replace("{title}", title)
+    };
+    let room = Rules::TITLE_MAX.saturating_sub(fill("").chars().count());
+    let title = title.trim();
+    if title.chars().count() <= room {
+        fill(title)
+    } else {
+        let short: String = title.chars().take(room.saturating_sub(1)).collect();
+        fill(&format!("{}…", short.trim_end()))
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Waveform {

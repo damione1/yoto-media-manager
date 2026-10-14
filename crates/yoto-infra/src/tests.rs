@@ -462,12 +462,162 @@ async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
         )
         .mount(&server)
         .await;
-    assert!(
-        api.ingestion("API-TOKEN", &reservation.id)
-            .await
-            .unwrap()
-            .is_none()
+    assert!(matches!(
+        api.ingestion("API-TOKEN", &reservation.id).await.unwrap(),
+        crate::api::Ingestion::Working(_)
+    ));
+}
+#[tokio::test]
+async fn a_failed_transcode_is_reported_with_its_progress() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("GET"))
+        .and(path("/media/upload/upload2/transcoded"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "transcode":{"transcodedSha256":null,"progress":{"phase":"failed","percent":37}}
+        })))
+        .mount(&server)
+        .await;
+    let upload = UploadId::new("upload2").unwrap();
+    match api.ingestion("API-TOKEN", &upload).await.unwrap() {
+        crate::api::Ingestion::Failed(progress) => assert_eq!(progress.percent, Some(37)),
+        other @ (crate::api::Ingestion::Ready(_) | crate::api::Ingestion::Working(_)) => {
+            panic!("expected a failed transcode, got {other:?}")
+        }
+    }
+}
+#[tokio::test]
+async fn covers_are_converted_by_yoto_to_the_card_format() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("POST"))
+        .and(path("/media/coverImage/user/me/upload"))
+        .and(query_param("autoconvert", "true"))
+        .and(query_param("coverType", "default"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "coverImage":{"mediaId":"cover1","mediaUrl":"https://example.test/pub/cover1"}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), b"png").unwrap();
+    assert_eq!(
+        api.upload_cover("API-TOKEN", file.path()).await.unwrap(),
+        "https://example.test/pub/cover1"
     );
+}
+#[test]
+fn yoto_limit_refusals_become_plain_messages() {
+    use crate::api::limit_message as limit;
+    let cases = [
+        (
+            r#"{"error":{"code":"bad-request","message":"Card cannot have more than 100 tracks"}}"#,
+            Some(messages::PLAYLIST_TRACKS_MAX),
+        ),
+        (
+            "Too many tracks in content",
+            Some(messages::PLAYLIST_TRACKS_MAX),
+        ),
+        (
+            "Track duration exceeds the 60 minute limit",
+            Some(messages::YOTO_TRACK_TOO_LONG),
+        ),
+        (
+            "Audio file size exceeds maximum of 100MB",
+            Some(messages::YOTO_TRACK_TOO_LARGE),
+        ),
+        (
+            "Total duration of the card exceeds 5 hours",
+            Some(messages::YOTO_PLAYLIST_TOO_LONG),
+        ),
+        (
+            "Playlist total size is larger than 500 MB",
+            Some(messages::YOTO_PLAYLIST_TOO_LARGE),
+        ),
+        (
+            "Track exceeds the maximum duration and file size",
+            Some(messages::TRACK_EXCEEDS_LIMITS),
+        ),
+        ("Invalid cardId", None),
+        ("title is required", None),
+        ("", None),
+    ];
+    for (body, expected) in cases {
+        assert_eq!(limit(body), expected, "{body}");
+    }
+}
+#[tokio::test]
+async fn a_refused_card_names_the_limit_it_broke() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("POST"))
+        .and(path("/content"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error":{"code":"bad-request","message":"Total duration exceeds the 5 hour limit"}
+        })))
+        .mount(&server)
+        .await;
+    let failure = api
+        .write_card(
+            "API-TOKEN",
+            &serde_json::json!({"title":"T","content":{"chapters":[]}}),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(failure, Failure::Validation(m) if m == messages::YOTO_PLAYLIST_TOO_LONG));
+}
+#[test]
+fn retry_after_accepts_seconds_and_dates_within_bounds() {
+    use crate::api::retry_after_seconds as wait;
+    use std::time::Duration;
+    let now = httpdate::parse_http_date("Tue, 13 Oct 2026 10:00:00 GMT").unwrap();
+    assert_eq!(wait(Some("120"), now), 120);
+    assert_eq!(wait(Some(" 7 "), now), 7);
+    assert_eq!(wait(Some("0"), now), 1);
+    assert_eq!(wait(Some("86400"), now), 300);
+    assert_eq!(wait(Some("Tue, 13 Oct 2026 10:01:30 GMT"), now), 90);
+    assert_eq!(wait(Some("Tue, 13 Oct 2026 09:00:00 GMT"), now), 1);
+    assert_eq!(wait(Some("Wed, 14 Oct 2026 10:00:00 GMT"), now), 300);
+    assert_eq!(wait(Some("soon"), now), 30);
+    assert_eq!(wait(Some("-5"), now), 30);
+    assert_eq!(wait(None, now), 30);
+    let later = now + Duration::from_millis(400);
+    assert_eq!(wait(Some("Tue, 13 Oct 2026 10:00:10 GMT"), later), 10);
+}
+#[tokio::test]
+async fn a_rate_limited_request_waits_as_long_as_yoto_asks() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("GET"))
+        .and(path("/device-v2/devices/mine"))
+        .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "75"))
+        .mount(&server)
+        .await;
+    let failure = api.devices("API-TOKEN").await.unwrap_err();
+    assert!(matches!(
+        failure,
+        Failure::RateLimit {
+            retry_after_seconds: 75
+        }
+    ));
+}
+#[test]
+fn upload_time_grows_with_the_file_within_bounds() {
+    use crate::api::upload_timeout;
+    use std::time::Duration;
+    assert_eq!(upload_timeout(5), Duration::from_secs(5 * 60));
+    assert_eq!(upload_timeout(40_000_000), Duration::from_secs(800));
+    assert_eq!(upload_timeout(100_000_000), Duration::from_secs(2000));
+    assert_eq!(upload_timeout(u64::MAX), Duration::from_secs(45 * 60));
 }
 fn base64url_zero() -> String {
     use base64::Engine;
@@ -538,6 +688,7 @@ pub(crate) fn catalogue_fixture(
         result: None,
         info: None,
         tool_version: "fixture".into(),
+        part: None,
     };
     service.db.add_recipe(&recipe).unwrap();
     (media, recipe)
@@ -598,6 +749,45 @@ async fn deletion_reference_policy_shared_original_and_failed_import_orphans() {
         .await
         .unwrap();
     assert!(service.store.materialize(&asset).is_err());
+}
+#[tokio::test]
+async fn batch_deletion_keeps_referenced_media_and_deletes_the_rest() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [12; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"encrypted source fixture").unwrap();
+    let asset = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &asset.id.to_string(), &asset)
+        .unwrap();
+    let (used, recipe) = catalogue_fixture(&service, asset.id, "In a playlist");
+    let (free, _) = catalogue_fixture(&service, asset.id, "Unused");
+    let mut p = Playlist::new("Keeps one".into()).unwrap();
+    p.add_media(&used, recipe.id).unwrap();
+    service.db.save_playlist(&p).unwrap();
+    let reply = service
+        .execute(Command::DeleteMediaBatch {
+            media: vec![used.id, free.id],
+            policy: ReferencePolicy::RejectReferenced,
+        })
+        .await
+        .unwrap();
+    let Reply::Data(counts) = reply else {
+        panic!("batch deletion reports its counts");
+    };
+    assert_eq!(counts["deleted"], 1);
+    assert_eq!(counts["kept"], 1);
+    let exists = |id: MediaId| {
+        service
+            .db
+            .get::<MediaItem>(Table::Media, &id.to_string())
+            .unwrap()
+            .is_some()
+    };
+    assert!(exists(used.id));
+    assert!(!exists(free.id));
+    assert_eq!(service.playlist(p.id).unwrap().chapters.len(), 1);
 }
 #[tokio::test]
 async fn ten_thousand_catalogue_rows_page_across_bounded_ipc_and_aliases_share_owner() {
@@ -817,6 +1007,7 @@ fn migration_failure_keeps_v1_and_recoverable_encrypted_snapshot() {
         result: None,
         info: None,
         tool_version: "v1".into(),
+        part: None,
     };
     for (table, id, value) in [
         (
@@ -1042,4 +1233,89 @@ fn full_settings_patch_validates_once_preserves_open_values_and_unmanaged_fields
             .is_err()
         );
     }
+}
+#[tokio::test]
+async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [13; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"long source fixture").unwrap();
+    let asset = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &asset.id.to_string(), &asset)
+        .unwrap();
+    let (mut media, _) = catalogue_fixture(&service, asset.id, "Livre audio");
+    media.info.duration = MediaTime::from_seconds(7_200.).unwrap();
+    service
+        .db
+        .put(Table::Media, &media.id.to_string(), &media)
+        .unwrap();
+    let version = MediaRecipe {
+        id: RecipeId::new(),
+        media: media.id,
+        original: asset.id,
+        trim: TrimRange::new(MediaTime::ZERO, media.info.duration, media.info.duration).unwrap(),
+        normalization: Normalization::Loudness,
+        result: None,
+        info: None,
+        tool_version: "fixture".into(),
+        part: None,
+    };
+    service.db.add_recipe(&version).unwrap();
+    let playlist = Playlist::new("Soirée".into()).unwrap();
+    service.db.save_playlist(&playlist).unwrap();
+    for _ in 0..2 {
+        service
+            .execute(Command::AddMedia {
+                playlist: playlist.id,
+                media: vec![(media.id, version.id)],
+                part_title: None,
+            })
+            .await
+            .unwrap();
+    }
+    let saved = service.playlist(playlist.id).unwrap();
+    let parts = |chapter: &Chapter| -> Vec<RecipeId> {
+        chapter
+            .tracks
+            .iter()
+            .map(|t| match t.media {
+                TrackMedia::Local { recipe, .. } => recipe,
+                TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => panic!("local"),
+            })
+            .collect()
+    };
+    assert_eq!(saved.chapters.len(), 2);
+    assert_eq!(
+        saved.chapters[0].tracks[2].title,
+        "Livre audio — partie 3/3"
+    );
+    // Adding it again reuses the same parts, so nothing is prepared or uploaded twice.
+    assert_eq!(parts(&saved.chapters[0]), parts(&saved.chapters[1]));
+    let first = parts(&saved.chapters[0]);
+    for (index, id) in first.iter().enumerate() {
+        let part = service.recipe(*id).unwrap();
+        assert_eq!(part.normalization, Normalization::Loudness);
+        assert_eq!(part.trim.duration().seconds(), 2_400.);
+        assert_eq!(part.part.unwrap().index as usize, index + 1);
+    }
+    // Parts are not versions a person picks.
+    assert!(
+        service
+            .media(media.id)
+            .unwrap()
+            .recipes
+            .iter()
+            .all(|id| !first.contains(id))
+    );
+    service
+        .execute(Command::DeleteRecipe {
+            recipe: version.id,
+            policy: ReferencePolicy::RemovePlaylistTracks,
+        })
+        .await
+        .unwrap();
+    assert!(service.playlist(playlist.id).unwrap().chapters.is_empty());
+    assert!(first.iter().all(|id| service.recipe(*id).is_err()));
 }

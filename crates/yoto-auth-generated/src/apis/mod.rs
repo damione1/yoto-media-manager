@@ -6,6 +6,8 @@ pub struct ResponseContent<T> {
     pub status: reqwest::StatusCode,
     pub content: String,
     pub entity: Option<T>,
+    /// Raw `Retry-After` header, so callers can honour the server's back-off.
+    pub retry_after: Option<String>,
 }
 
 #[derive(Debug)]

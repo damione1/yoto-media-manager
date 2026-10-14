@@ -69,12 +69,18 @@ pub async fn get_public_icons(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::IconsResponse`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetPublicIconsError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -112,12 +118,18 @@ pub async fn get_user_icons(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::IconsResponse`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetUserIconsError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -178,12 +190,18 @@ pub async fn upload_custom_icon(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::IconUploadResponse`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<UploadCustomIconError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }

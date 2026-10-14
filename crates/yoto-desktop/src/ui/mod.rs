@@ -1,4 +1,5 @@
 mod account;
+mod autosave;
 mod device;
 mod editor;
 mod group;
@@ -7,8 +8,12 @@ mod library;
 mod pixelart;
 mod players;
 mod reconciliation;
+mod theme;
+mod transfer;
 mod trim;
 mod update;
+mod wording;
+use gpui_kit::assets::IconName;
 use gpui_kit::component::{
     ActiveTheme, Disableable, Selectable, Sizable,
     button::{Button, ButtonVariants},
@@ -16,6 +21,9 @@ use gpui_kit::component::{
 };
 use gpui_kit::*;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
+pub use theme::install as install_theme;
+pub use wording::{PRODUCT_NAME, failure_text, phase_text};
+use wording::{confirm_destructive, duration_text};
 use yoto_domain::*;
 use yoto_infra::{Command, Reply, Session as Service, Snapshot};
 pub struct AppView {
@@ -33,11 +41,9 @@ pub struct AppView {
     pub selected_media_set: std::collections::BTreeSet<MediaId>,
     pub sort: CatalogueSort,
     search_generation: u64,
-    pub recovery_key: Entity<InputState>,
-    recovery_visible: bool,
     pub account_sync_details_open: bool,
-    pub account_backup_open: bool,
-    pub restored_profile: Option<std::path::PathBuf>,
+    /// The last export or import dialog, kept while it runs so its result is not lost.
+    transfer: Option<Entity<transfer::LibraryTransfer>>,
     pub library_rows: Vec<usize>,
     playlist_media_choices: Arc<editor::MediaChoices>,
     playlist_icon_choices: Arc<pixelart::IconChoices>,
@@ -53,6 +59,9 @@ pub struct AppView {
     pub new_title: Entity<InputState>,
     pub youtube: Entity<InputState>,
     pub youtube_entries: Vec<SourceEntry>,
+    /// Titles learned while inspecting YouTube links, keyed by the imported URL, so a
+    /// running import shows the video title instead of a generic label.
+    pub youtube_titles: BTreeMap<String, String>,
     pub selected_entries: std::collections::BTreeSet<String>,
     pub youtube_import_pending: bool,
     pub youtube_inspection_generation: u64,
@@ -65,13 +74,25 @@ pub struct AppView {
     pub _subscriptions: Vec<Subscription>,
     pub group_editors: BTreeMap<(AccountId, Option<GroupId>), Entity<group::GroupEditor>>,
     pub selected_group: Option<Option<GroupId>>,
+    /// « Mode avancé » in Compte: shows the technical settings parents rarely need.
+    /// Saved in [`Self::settings`]; it starts off.
+    pub advanced: bool,
+    /// Interface settings saved in the profile: the language and the advanced mode.
+    settings: yoto_infra::settings::Settings,
+    /// The YouTube tool imports use, read when « Mode avancé » is turned on.
+    pub youtube_tool: Option<yoto_infra::youtube_tool::YoutubeToolStatus>,
+    /// Quitting waits for playlist edits to reach Yoto.
+    quitting: bool,
 }
 impl AppView {
     pub fn navigate(&mut self, route: Route, cx: &mut Context<Self>) {
+        if self.route == Route::Playlists && route != Route::Playlists {
+            self.flush_playlists(cx);
+        }
         let entering_playlists = self.route != Route::Playlists && route == Route::Playlists;
         self.route = route;
         self.error = None;
-        self.status = "Prêt.".into();
+        self.status = tr!("Prêt.").into();
         if entering_playlists {
             self.refresh_playlists(cx);
         }
@@ -94,10 +115,10 @@ impl AppView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let search =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Rechercher dans vos médias…"));
+        let search = cx
+            .new(|cx| InputState::new(window, cx).placeholder(tr!("Rechercher dans vos médias…")));
         let new_title =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Titre de la playlist"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(tr!("Titre de la playlist")));
         let youtube = cx
             .new(|cx| InputState::new(window, cx).placeholder("https://www.youtube.com/watch?v=…"));
         let mut subscriptions = vec![cx.observe(&search, |view, _, cx| {
@@ -106,10 +127,6 @@ impl AppView {
         })];
         subscriptions.push(cx.observe(&new_title, |_, _, cx| cx.notify()));
         subscriptions.push(cx.observe(&youtube, |_, _, cx| cx.notify()));
-        subscriptions.push(cx.observe_window_appearance(window, |_, window, cx| {
-            gpui_kit::component::Theme::sync_system_appearance(Some(window), cx);
-            cx.notify();
-        }));
         let PreparedSnapshot {
             snapshot,
             revisions,
@@ -161,6 +178,7 @@ impl AppView {
         });
         let library_rows = (0..snapshot.media.len()).collect();
         let updater = cx.new(|cx| update::UpdatePanel::new(runtime.clone(), service.clone(), cx));
+        let settings = yoto_infra::settings::Settings::load(service.profile());
         subscriptions.push(cx.observe(&updater, |_, _, cx| cx.notify()));
         let mut view = Self {
             updater,
@@ -171,24 +189,15 @@ impl AppView {
             search_index,
             job_page: None,
             job_offset: 0,
-            receipt_card: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .placeholder("ID de la carte Yoto à associer après déconnexion")
-            }),
+            receipt_card: cx
+                .new(|cx| InputState::new(window, cx).placeholder(tr!("Identifiant de la carte"))),
             route: Route::Library,
             selected_media: None,
             selected_media_set: Default::default(),
             sort: CatalogueSort::Title,
             search_generation: 0,
-            recovery_visible: false,
             account_sync_details_open: false,
-            account_backup_open: false,
-            restored_profile: None,
-            recovery_key: cx.new(|cx| {
-                InputState::new(window, cx)
-                    .masked(true)
-                    .placeholder("Clé de récupération : 64 caractères hexadécimaux")
-            }),
+            transfer: None,
             library_rows,
             playlist_media_choices,
             playlist_icon_choices,
@@ -204,11 +213,12 @@ impl AppView {
             new_title,
             youtube,
             youtube_entries: vec![],
+            youtube_titles: BTreeMap::new(),
             selected_entries: Default::default(),
             youtube_import_pending: false,
             youtube_inspection_generation: 0,
             youtube_selection_url: None,
-            status: "Votre collection personnelle, même hors ligne.".into(),
+            status: tr!("Votre collection personnelle, même hors ligne.").into(),
             connecting: false,
             creating_playlist: false,
             error: None,
@@ -216,8 +226,15 @@ impl AppView {
             _subscriptions: subscriptions,
             group_editors: BTreeMap::new(),
             selected_group: None,
+            advanced: settings.advanced_mode,
+            settings,
+            youtube_tool: None,
+            quitting: false,
         };
         view.refresh_playlists(cx);
+        if view.advanced {
+            view.youtube_tool(yoto_infra::youtube_tool::YoutubeToolAction::State, cx);
+        }
         view
     }
     fn adopt(&mut self, prepared: PreparedSnapshot, cx: &mut Context<Self>) {
@@ -244,6 +261,9 @@ impl AppView {
             .is_some_and(|id| !media_ids.contains(&id))
         {
             self.selected_media = None;
+            for panel in self.trims.values() {
+                panel.update(cx, |p, cx| p.set_active(false, cx));
+            }
         }
         self.selected_media_set.retain(|id| media_ids.contains(id));
         self.trims.retain(|id, _| media_ids.contains(id));
@@ -332,43 +352,54 @@ impl AppView {
         cx.spawn(async move |weak, cx| {
             let result = rt
                 .spawn(async move {
-                    match service
+                    let page = service
                         .execute(Command::JobsPage { offset, limit: 200 })
                         .await?
-                    {
-                        Reply::Data(value) => serde_json::from_value::<Vec<Job>>(value)
-                            .map_err(|e| Failure::Storage(e.to_string())),
-                        Reply::AppUpdate(_)
-                        | Reply::Updated
-                        | Reply::Saved(_)
-                        | Reply::OpenedPlaylist(_)
-                        | Reply::PlaylistOperation { .. }
-                        | Reply::Entries(_)
-                        | Reply::Waveform(_)
-                        | Reply::Prepared(_)
-                        | Reply::Asset(_)
-                        | Reply::PixelArt(_)
-                        | Reply::Image(_)
-                        | Reply::Images(_)
-                        | Reply::Player(_) => {
-                            Err(Failure::Compatibility("Unexpected job page reply".into()))
-                        }
-                    }
+                        .into_data()?;
+                    serde_json::from_value::<Vec<Job>>(page)
+                        .map_err(|e| Failure::Storage(e.to_string()))
                 })
                 .await;
             let _ = weak.update(cx, |view, cx| {
-                match result {
-                    Ok(Ok(jobs)) => {
+                match joined(result) {
+                    Ok(jobs) => {
                         view.job_page = Some(Arc::new(jobs));
                         view.job_offset = offset;
                     }
-                    Ok(Err(e)) => view.error = Some(e),
-                    Err(e) => view.error = Some(Failure::Storage(e.to_string())),
+                    Err(e) => view.report_error(e, cx),
                 };
                 cx.notify();
             });
         })
         .detach();
+    }
+    /// An error toast that stays until the parent dismisses it.
+    pub fn alert(&self, text: String, cx: &mut Context<Self>) {
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    use gpui_kit::component::{WindowExt, notification::Notification};
+                    window.push_notification(Notification::error(text).autohide(false), cx);
+                });
+            });
+        }
+    }
+    /// Show a failure where a parent will see it: the status line and a toast.
+    pub fn report_error(&mut self, failure: Failure, cx: &mut Context<Self>) {
+        let text = failure_text(&failure);
+        // A hint about what was typed fades by itself; real failures stay until dismissed.
+        let persistent = !matches!(failure, Failure::Validation(_));
+        self.status = text.clone();
+        self.error = Some(failure);
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    use gpui_kit::component::{WindowExt, notification::Notification};
+                    window.push_notification(Notification::error(text).autohide(!persistent), cx);
+                });
+            });
+        }
+        cx.notify();
     }
     pub fn send(&mut self, command: Command, cx: &mut Context<Self>) {
         let creating_playlist = matches!(
@@ -395,7 +426,7 @@ impl AppView {
         if connecting {
             self.connecting = true;
         }
-        let synchronizing = matches!(&command, Command::Sync(_) | Command::RefreshPlaylists(_));
+        let progress = command_status(&command);
         if matches!(
             &command,
             Command::NewPlaylist(_)
@@ -436,14 +467,9 @@ impl AppView {
         if let Some(request) = &opening_remote {
             self.opening_playlist = Some(request.clone());
         }
-        self.status = if connecting {
-            "Connexion Yoto en cours dans votre navigateur…"
-        } else if synchronizing {
-            "Chargement depuis Yoto…"
-        } else {
-            "Traitement en cours…"
+        if let Some((pending, _)) = progress {
+            self.status = pending.into();
         }
-        .into();
         let selection = self.selected_media;
         let base = self.snapshot.clone();
         let worker_base = base.clone();
@@ -492,25 +518,35 @@ impl AppView {
                         {
                             view.adopt(prepared, cx);
                         }
-                        view.status = if connecting {
-                            "Compte connecté. Chargement de vos playlists Yoto…"
-                        } else if synchronizing {
-                            "Données Yoto actualisées."
-                        } else {
-                            "Enregistré."
+                        if let Some((_, done)) = progress {
+                            view.status = done.into();
                         }
-                        .into();
                         let reply = match reply {
                             Ok(reply) => reply,
-                            Err(error) => {
-                                view.status = error.to_string();
-                                view.error = Some(error);
+                            Err(Failure::Cancelled) if connecting => {
+                                // The parent gave up on the browser sign-in: nothing failed.
+                                view.status = wording::connect::cancelled().into();
                                 cx.notify();
+                                return;
+                            }
+                            Err(Failure::Authentication) if connecting => {
+                                // The browser round trip timed out or was abandoned.
+                                view.report_error(
+                                    Failure::Validation(
+                                        tr!("La connexion Yoto n’a pas abouti. Cliquez de nouveau sur « Connecter mon compte Yoto », terminez la connexion dans votre navigateur, puis revenez ici.").into(),
+                                    ),
+                                    cx,
+                                );
+                                return;
+                            }
+                            Err(error) => {
+                                view.report_error(error, cx);
                                 return;
                             }
                         };
                         match reply {
                             Reply::AppUpdate(_)
+                            | Reply::YoutubeTool(_)
                             | Reply::Updated
                             | Reply::Saved(_)
                             | Reply::Prepared(_)
@@ -528,7 +564,7 @@ impl AppView {
                                     view.route = Route::Playlists;
                                     view.selected_playlist = Some(id);
                                 }
-                                view.status = "Playlist Yoto ouverte.".into();
+                                view.status = tr!("Playlist Yoto ouverte.").into();
                             }
                             Reply::PlaylistOperation { playlist, .. } => {
                                 if clear_new_title.as_ref().is_some_and(|title| {
@@ -556,7 +592,7 @@ impl AppView {
                                     view.route = Route::Playlists;
                                     view.selected_playlist = Some(playlist);
                                 }
-                                view.status = "Enregistrement sur Yoto en cours…".into();
+                                view.status = tr!("Enregistrement sur Yoto en cours…").into();
                             }
                             Reply::Entries(entries) => {
                                 view.youtube_entries = entries.entries;
@@ -576,40 +612,33 @@ impl AppView {
                             Reply::Player(result) => {
                                 view.status = match result {
                                     yoto_infra::players::CommandResult::Sent => {
-                                        "Commande envoyée ; effet non confirmé.".into()
+                                        tr!("Commande envoyée ; effet non confirmé.").into()
                                     }
                                     yoto_infra::players::CommandResult::Accepted => {
-                                        "Commande acceptée par le lecteur.".into()
+                                        tr!("Commande acceptée par le lecteur.").into()
                                     }
                                     yoto_infra::players::CommandResult::Observed { .. } => {
-                                        "État du lecteur reçu.".into()
+                                        tr!("État du lecteur reçu.").into()
                                     }
                                 };
                             }
                             Reply::Data(value) => {
-                                if let Some(profile) = value
-                                    .get("restored_profile")
-                                    .and_then(serde_json::Value::as_str)
-                                {
-                                    view.restored_profile = Some(profile.into());
-                                    view.status = format!("Profil restauré : {profile}");
-                                } else if let Some(backup) =
-                                    value.get("backup").and_then(serde_json::Value::as_str)
-                                {
-                                    view.status = format!("Sauvegarde créée : {backup}");
+                                if let (Some(deleted), Some(kept)) = (
+                                    value.get("deleted").and_then(serde_json::Value::as_u64),
+                                    value.get("kept").and_then(serde_json::Value::as_u64),
+                                ) {
+                                    view.status = wording::batch_deletion_text(deleted, kept);
+                                    if kept > 0 {
+                                        view.warn(view.status.clone(), cx);
+                                    }
                                 } else {
-                                    view.status = "Opération terminée.".into();
+                                    view.status = tr!("Opération terminée.").into();
                                 }
                             }
                         }
                     }
-                    Ok(Err(e)) => {
-                        view.status = e.to_string();
-                        view.error = Some(e);
-                    }
-                    Err(e) => {
-                        view.error = Some(Failure::Storage(e.to_string()));
-                    }
+                    Ok(Err(e)) => view.report_error(e, cx),
+                    Err(e) => view.report_error(Failure::Storage(e.to_string()), cx),
                 }
                 cx.notify();
             });
@@ -627,15 +656,24 @@ impl AppView {
     }
     pub fn open_profile(&mut self, path: std::path::PathBuf, cx: &mut Context<Self>) {
         let runtime = self.runtime.clone();
-        cx.spawn(async move|weak,cx|{
-            let result=runtime.spawn_blocking(move|| {let profile=yoto_infra::canonical_profile(&path)?;if !profile.join("catalogue.db").is_file(){return Err(Failure::Validation("Choisissez un profil Yoto existant contenant catalogue.db".into()));}let mut command=std::process::Command::new(std::env::current_exe().map_err(|e|Failure::Storage(e.to_string()))?);command.env("YOTO_PROFILE",profile);if cfg!(debug_assertions)&&std::env::args().any(|a|a=="--isolated"){command.arg("--isolated");}command.spawn().map_err(|e|Failure::Storage(e.to_string()))?;Ok(())}).await;
-            let _=weak.update(cx,|v,cx|{match result {Ok(Ok(()))=>v.status="Le profil choisi s’ouvre dans une autre fenêtre ; le profil courant reste disponible.".into(),Ok(Err(e))=>v.error=Some(e),Err(e)=>v.error=Some(Failure::Storage(e.to_string()))}cx.notify();});
-        }).detach();
+        cx.spawn(async move |weak, cx| {
+            let result = runtime.spawn_blocking(move || launch_profile(&path)).await;
+            let _ = weak.update(cx, |v, cx| {
+                match joined(result) {
+                    Ok(()) => {
+                        v.status = tr!("La médiathèque choisie s’ouvre dans une autre fenêtre ; celle-ci reste disponible.").into()
+                    }
+                    Err(e) => v.report_error(e, cx),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
     pub fn choose_profile(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |weak, cx| {
             if let Some(folder) = rfd::AsyncFileDialog::new()
-                .set_title("Ouvrir une autre médiathèque Yoto")
+                .set_title(wording::other_library::picker())
                 .pick_folder()
                 .await
             {
@@ -644,14 +682,58 @@ impl AppView {
         })
         .detach();
     }
+    /// Files dropped anywhere on the window: keep the audio, explain the rest, and show
+    /// the import queue so the parent sees something happen.
+    pub fn import_dropped(&mut self, paths: &[std::path::PathBuf], cx: &mut Context<Self>) {
+        let (audio, ignored) = partition_audio(paths);
+        if audio.is_empty() {
+            self.report_error(
+                Failure::Validation(
+                    tr!("Déposez des fichiers audio (MP3, M4A, WAV, FLAC, OGG…). Les autres fichiers sont ignorés.").into(),
+                ),
+                cx,
+            );
+            return;
+        }
+        self.navigate(Route::Imports, cx);
+        self.send(
+            Command::Import(
+                audio
+                    .into_iter()
+                    .map(|path| ImportSelection::LocalFile { path })
+                    .collect(),
+            ),
+            cx,
+        );
+        if !ignored.is_empty() {
+            // The import's own completion text replaces the status line, so the skipped
+            // files are reported in a toast that stays until dismissed.
+            self.warn(
+                trn!(
+                    "{count} fichier ignoré : seuls les fichiers audio (MP3, M4A, WAV, FLAC, OGG…) sont importés.",
+                    "{count} fichiers ignorés : seuls les fichiers audio (MP3, M4A, WAV, FLAC, OGG…) sont importés.",
+                    ignored.len()
+                ),
+                cx,
+            );
+        }
+    }
+    /// A warning toast that stays until the parent dismisses it.
+    pub fn warn(&self, text: String, cx: &mut Context<Self>) {
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    use gpui_kit::component::{WindowExt, notification::Notification};
+                    window.push_notification(Notification::warning(text).autohide(false), cx);
+                });
+            });
+        }
+    }
     pub fn add_files(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |weak, cx| {
             let files = rfd::AsyncFileDialog::new()
-                .set_title("Ajouter vos fichiers audio")
-                .add_filter(
-                    "Audio",
-                    &["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "aiff"],
-                )
+                .set_title(tr!("Ajouter vos fichiers audio"))
+                .add_filter(tr!("Audio"), AUDIO_EXTENSIONS)
                 .pick_files()
                 .await;
             if let Some(files) = files {
@@ -662,7 +744,7 @@ impl AppView {
                     })
                     .collect();
                 let _ = weak.update(cx, |view, cx| {
-                    view.route = Route::Imports;
+                    view.navigate(Route::Imports, cx);
                     view.send(Command::Import(selections), cx);
                 });
             }
@@ -670,10 +752,25 @@ impl AppView {
         .detach();
     }
     pub fn select_media(&mut self, id: MediaId, window: &mut Window, cx: &mut Context<Self>) {
-        if self.selected_media != Some(id) {
+        self.open_media(id, false, window, cx);
+    }
+    /// Open a media in the side panel; with `play`, start listening to it at once (a new
+    /// playback replaces the previous one, so nothing is stopped first).
+    pub fn open_media(
+        &mut self,
+        id: MediaId,
+        play: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected_media != Some(id) && !play {
             self.send(Command::StopPreview, cx);
         }
         self.selected_media = Some(id);
+        for (media, panel) in &self.trims {
+            let active = *media == id;
+            panel.update(cx, |p, cx| p.set_active(active, cx));
+        }
         if !self.trims.contains_key(&id)
             && let Some(media) = self.snapshot.media.iter().find(|m| m.id == id)
         {
@@ -689,9 +786,15 @@ impl AppView {
             panel.update(cx, |p, cx| p.apply_snapshot(&self.snapshot, cx));
             self.trims.insert(id, panel);
         }
+        if play && let Some(panel) = self.trims.get(&id).cloned() {
+            panel.update(cx, |p, cx| p.toggle_play(cx));
+        }
         self.send(Command::Waveform(id), cx);
     }
     pub fn select_playlist(&mut self, id: PlaylistId, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_playlist != Some(id) {
+            self.flush_playlists(cx);
+        }
         self.playlist_open_generation = self.playlist_open_generation.wrapping_add(1);
         self.opening_playlist = None;
         self.selected_playlist = Some(id);
@@ -709,11 +812,251 @@ impl AppView {
                     cx,
                 )
             });
+            let advanced = self.advanced;
+            editor.update(cx, |e, _| e.advanced = advanced);
             self.editors.insert(id, editor);
         }
         cx.notify();
     }
+    /// Write the playlists' pending changes now: the parent is leaving them. A write that
+    /// fails is reported in a toast naming the playlist.
+    pub fn flush_playlists(&mut self, cx: &mut Context<Self>) {
+        for editor in self.editors.values() {
+            editor.update(cx, |e, cx| e.flush_before_leaving(cx));
+        }
+    }
+    /// The parent asked to quit. Pending playlist edits are written first; the app then
+    /// quits, or asks what to do when some could not be written. Returns whether it may
+    /// quit at once.
+    pub fn request_quit(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.quitting {
+            return false;
+        }
+        self.flush_playlists(cx);
+        let (waiting, unsaved) = self.unwritten_playlists(cx);
+        if waiting.is_empty() && unsaved.is_empty() {
+            return true;
+        }
+        self.quitting = true;
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    use gpui_kit::component::{WindowExt, notification::Notification};
+                    window.push_notification(
+                        Notification::info(wording::autosave::quit_saving()),
+                        cx,
+                    );
+                });
+            });
+        }
+        cx.spawn(async move |weak, cx| {
+            let started = std::time::Instant::now();
+            loop {
+                cx.background_executor().timer(autosave::QUIT_POLL).await;
+                let Ok((waiting, mut unsaved)) = weak.update(cx, |v, cx| v.unwritten_playlists(cx))
+                else {
+                    return;
+                };
+                if !waiting.is_empty() && started.elapsed() < autosave::QUIT_WAIT {
+                    continue;
+                }
+                if waiting.is_empty() && unsaved.is_empty() {
+                    cx.update(|cx| cx.quit());
+                    return;
+                }
+                unsaved.extend(
+                    waiting
+                        .into_iter()
+                        .map(|title| (title, wording::autosave::quit_timed_out().to_owned())),
+                );
+                let _ = weak.update(cx, |v, cx| {
+                    v.quitting = false;
+                    v.confirm_quit(unsaved, cx);
+                });
+                return;
+            }
+        })
+        .detach();
+        false
+    }
+    /// Playlists still writing (by title), and those whose edits could not be written.
+    fn unwritten_playlists(&self, cx: &App) -> (Vec<String>, Vec<(String, String)>) {
+        let (mut waiting, mut unsaved) = (vec![], vec![]);
+        for editor in self.editors.values() {
+            let editor = editor.read(cx);
+            match editor.quit_state() {
+                editor::QuitState::Settled => {}
+                editor::QuitState::Waiting => waiting.push(editor.title().to_owned()),
+                editor::QuitState::Unsaved(reason) => {
+                    unsaved.push((editor.title().to_owned(), reason))
+                }
+            }
+        }
+        (waiting, unsaved)
+    }
+    /// Some edits could not be written: let the parent stay, or quit and lose them.
+    fn confirm_quit(&self, unsaved: Vec<(String, String)>, cx: &mut Context<Self>) {
+        let Some(window) = cx.windows().first().copied() else {
+            cx.quit();
+            return;
+        };
+        cx.defer(move |cx| {
+            let _ = cx.update_window(window, |_, window, cx| {
+                confirm_destructive(
+                    window,
+                    cx,
+                    wording::autosave::quit_title(),
+                    wording::autosave::quit_description(&unsaved),
+                    wording::autosave::quit_anyway(),
+                    |_, cx| cx.quit(),
+                );
+            });
+        });
+    }
+    /// Turn « Mode avancé » on or off everywhere it applies.
+    pub fn set_advanced(&mut self, advanced: bool, cx: &mut Context<Self>) {
+        self.advanced = advanced;
+        self.settings.advanced_mode = advanced;
+        self.save_settings();
+        if advanced {
+            self.youtube_tool(yoto_infra::youtube_tool::YoutubeToolAction::State, cx);
+        }
+        for editor in self.editors.values() {
+            editor.update(cx, |e, cx| {
+                e.advanced = advanced;
+                cx.notify();
+            });
+        }
+        cx.notify();
+    }
+    /// Switch the interface language now and remember it. Every view renders again in the
+    /// new language; texts kept in inputs (their placeholders) are set again too.
+    pub fn set_language(
+        &mut self,
+        language: crate::i18n::Language,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        crate::i18n::set_language(language);
+        // The status line keeps its text until the next action; start it afresh.
+        self.status = tr!("Prêt.").into();
+        self.settings.language = Some(language.code().into());
+        self.save_settings();
+        self.relabel(window, cx);
+        cx.refresh_windows();
+    }
+    /// Placeholders of the inputs, in the interface language.
+    fn relabel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let placeholders = [
+            (&self.search, tr!("Rechercher dans vos médias…")),
+            (&self.new_title, tr!("Titre de la playlist")),
+            (&self.receipt_card, tr!("Identifiant de la carte")),
+        ];
+        for (input, placeholder) in placeholders {
+            input.update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
+        }
+        for editor in self.group_editors.values() {
+            editor.update(cx, |e, cx| e.relabel(window, cx));
+        }
+        for panel in self.trims.values() {
+            panel.update(cx, |p, cx| p.relabel(window, cx));
+        }
+        for panel in self.device_panels.values() {
+            panel.update(cx, |p, cx| p.relabel(window, cx));
+        }
+        for editor in self.editors.values() {
+            editor.update(cx, |e, cx| e.relabel(window, cx));
+        }
+    }
+    /// Keep the interface settings for the next launch. Failing to write them only costs
+    /// the choice at the next launch, so it is reported without interrupting.
+    fn save_settings(&mut self) {
+        if let Err(e) = self.settings.save(self.service.profile()) {
+            self.status = failure_text(&e);
+        }
+    }
 }
+impl AppView {
+    /// Ask about the YouTube tool or start its update, then follow a running update
+    /// until it ends.
+    pub fn youtube_tool(
+        &mut self,
+        action: yoto_infra::youtube_tool::YoutubeToolAction,
+        cx: &mut Context<Self>,
+    ) {
+        use yoto_infra::youtube_tool::{ToolActivity, YoutubeToolAction};
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        cx.spawn(async move |weak, cx| {
+            let mut action = action;
+            loop {
+                let service = service.clone();
+                let reply = rt
+                    .spawn(async move {
+                        service
+                            .execute(Command::YoutubeTool(action))
+                            .await?
+                            .into_youtube_tool()
+                    })
+                    .await;
+                let Ok(status) = joined(reply) else { break };
+                let running = status.activity == ToolActivity::Checking;
+                let shown = weak.update(cx, |view, cx| {
+                    view.youtube_tool = Some(status);
+                    cx.notify();
+                });
+                if shown.is_err() || !running {
+                    break;
+                }
+                action = YoutubeToolAction::State;
+                cx.background_executor()
+                    .timer(Duration::from_millis(500))
+                    .await;
+            }
+        })
+        .detach();
+    }
+}
+/// Start another copy of the app on an existing library folder.
+fn launch_profile(path: &std::path::Path) -> yoto_domain::Result<()> {
+    let profile = yoto_infra::canonical_profile(path)?;
+    if !profile.join("catalogue.db").is_file() {
+        return Err(Failure::Validation(
+            tr!("Choisissez un profil Yoto existant contenant catalogue.db").into(),
+        ));
+    }
+    let executable = std::env::current_exe().map_err(|e| Failure::Storage(e.to_string()))?;
+    let mut command = std::process::Command::new(executable);
+    command.env("YOTO_PROFILE", profile);
+    if cfg!(debug_assertions) && std::env::args().any(|a| a == "--isolated") {
+        command.arg("--isolated");
+    }
+    command
+        .spawn()
+        .map_err(|e| Failure::Storage(e.to_string()))?;
+    Ok(())
+}
+/// A service call run on the Tokio runtime, with a failed runtime task reported like any
+/// other local failure.
+fn joined<T>(
+    result: std::result::Result<yoto_domain::Result<T>, tokio::task::JoinError>,
+) -> yoto_domain::Result<T> {
+    result.unwrap_or_else(|error| Err(Failure::Storage(error.to_string())))
+}
+/// Dropped files split into audio to import and the rest, by extension, ignoring case.
+fn partition_audio(
+    paths: &[std::path::PathBuf],
+) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
+    paths.iter().cloned().partition(|path| {
+        path.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| AUDIO_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+    })
+}
+/// Audio formats accepted by the file picker and by drag-and-drop.
+const AUDIO_EXTENSIONS: &[&str] = &[
+    "mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "aiff", "aif", "wma",
+];
 struct SearchRow {
     index: usize,
     title: String,
@@ -770,76 +1113,16 @@ impl Render for AppView {
             Route::Players => players::render(self, window, cx),
             Route::Account => account::render(self, cx),
         };
-        let nav = div()
-            .w(px(210.))
-            .h_full()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .p_4()
-            .border_r_1()
-            .border_color(cx.theme().border)
-            .child(
-                div()
-                    .text_xl()
-                    .font_weight(FontWeight::BOLD)
-                    .child("Yoto Atelier"),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("Votre audio. Vos histoires."),
-            )
-            .children(Route::ALL.iter().copied().map(|route| {
-                Button::new(route.label())
-                    .label(route.label())
-                    .ghost()
-                    .selected(self.route == route)
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.navigate(route, cx);
-                    }))
-            }))
-            .child(div().flex_1())
-            .child(div().text_sm().child(account_summary(&self.snapshot)))
-            .child(
-                Button::new("updates-sidebar")
-                    .label(self.updater.read(cx).sidebar_label())
-                    .ghost()
-                    .small()
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        let updater = view.updater.clone();
-                        // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
-                        window.defer(cx, move |window, cx| {
-                            update::UpdatePanel::open(updater, window, cx)
-                        });
-                    })),
-            )
-            .child(
-                Button::new("add-sidebar")
-                    .label("+ Ajouter un fichier")
-                    .primary()
-                    .on_click(cx.listener(|view, _, _, cx| view.add_files(cx))),
-            );
+        let nav = sidebar(self, cx);
         div()
             .size_full()
             .on_drop(cx.listener(|view, files: &ExternalPaths, _, cx| {
-                view.send(
-                    Command::Import(
-                        files
-                            .paths()
-                            .iter()
-                            .cloned()
-                            .map(|path| ImportSelection::LocalFile { path })
-                            .collect(),
-                    ),
-                    cx,
-                );
+                view.import_dropped(files.paths(), cx);
             }))
             .flex()
             .flex_col()
-            .bg(cx.theme().background)
-            .text_color(cx.theme().foreground)
+            .bg(theme::c(theme::CREAM))
+            .text_color(theme::c(theme::INK))
             .child(
                 div()
                     .flex()
@@ -850,78 +1133,398 @@ impl Render for AppView {
             )
             .child(
                 div()
-                    .px_5()
-                    .py_2()
-                    .border_t_1()
-                    .border_color(cx.theme().border)
-                    .text_sm()
-                    .text_color(if self.error.is_some() {
-                        cx.theme().danger
+                    .px(px(20.))
+                    .py(px(6.))
+                    .border_t_2()
+                    .border_color(theme::c(theme::DIVIDER))
+                    .text_size(px(13.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme::c(if self.error.is_some() {
+                        theme::ROSE.ink
                     } else {
-                        cx.theme().muted_foreground
-                    })
+                        theme::MUTED
+                    }))
+                    .truncate()
                     .child(self.status.clone()),
             )
     }
 }
-impl AppView {
-    fn recovery(&mut self, restore: bool, cx: &mut Context<Self>) {
-        let key = self.recovery_key.read(cx).value().to_string();
-        cx.spawn(async move |weak, cx| {
-            let source = if restore {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Dossier de sauvegarde chiffrée")
-                    .pick_folder()
-                    .await
-                    .map(|f| f.path().to_owned())
-            } else {
-                None
-            };
-            if restore && source.is_none() {
-                return;
-            }
-            let parent = rfd::AsyncFileDialog::new()
-                .set_title("Dossier parent (un nouveau dossier Yoto sera créé)")
-                .pick_folder()
-                .await;
-            if let Some(parent) = parent {
-                let destination = parent.path().join(format!(
-                    "Yoto-{}",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs()
-                ));
-                let command = match source {
-                    Some(source) => Command::Restore {
-                        source,
-                        destination,
-                        recovery_key: key,
-                    },
-                    None => Command::Backup {
-                        destination,
-                        recovery_key: key,
-                    },
-                };
-                let _ = weak.update(cx, |v, cx| v.send(command, cx));
-            }
-        })
-        .detach();
+
+/// Each section's pastel family and icon in the sidebar.
+fn route_style(route: Route) -> (&'static theme::Family, gpui_kit::assets::IconName) {
+    use gpui_kit::assets::IconName;
+    match route {
+        Route::Library => (&theme::PEACH, IconName::Music),
+        Route::Playlists => (&theme::LILAC, IconName::ListMusic),
+        Route::Imports => (&theme::BUTTER, IconName::Download),
+        Route::Players => (&theme::SKY, IconName::Speaker),
+        Route::Account => (&theme::MINT, IconName::User),
     }
 }
+/// Jobs a parent is still waiting on, shown as the Imports counter.
+fn active_jobs(snapshot: &Snapshot) -> usize {
+    snapshot
+        .jobs
+        .iter()
+        .filter(|job| match job.state {
+            JobState::Queued
+            | JobState::Running { .. }
+            | JobState::Retry { .. }
+            | JobState::WaitingForAuthentication
+            | JobState::Conflict { .. }
+            | JobState::Reconciling => true,
+            JobState::Completed { .. } | JobState::Failed { .. } | JobState::Cancelled => false,
+        })
+        .count()
+}
+fn sidebar(view: &AppView, cx: &mut Context<AppView>) -> Div {
+    use gpui_kit::component::{
+        Icon,
+        button::{ButtonCustomVariant, ButtonRounded},
+    };
+    let brand = div()
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .px(px(6.))
+        .pt(px(16.))
+        .pb(px(18.))
+        .child(theme::logo(40.))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .child(theme::heading(PRODUCT_NAME, 18.))
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme::c(theme::MUTED_WARM))
+                        .child(tr!("Votre audio. Vos histoires.")),
+                ),
+        );
+    let items = Route::ALL.iter().copied().map(|route| {
+        let (family, icon) = route_style(route);
+        let active = view.route == route;
+        let count = match route {
+            Route::Library => view.snapshot.media.len(),
+            Route::Playlists => view.playlist_rows.len(),
+            Route::Imports => active_jobs(&view.snapshot),
+            Route::Players | Route::Account => 0,
+        };
+        let surface = if active {
+            theme::c(theme::SURFACE)
+        } else {
+            theme::c(theme::SAND)
+        };
+        let variant = ButtonCustomVariant::new(cx)
+            .color(surface)
+            .foreground(theme::c(theme::INK))
+            .hover(if active {
+                surface
+            } else {
+                theme::c(theme::CREAM)
+            })
+            .active(theme::c(theme::SURFACE));
+        let item = Button::new(wording::labels::route(route))
+            .custom(variant)
+            .accessibility_label(if count > 0 {
+                format!("{} ({count})", wording::labels::route(route))
+            } else {
+                wording::labels::route(route).to_owned()
+            })
+            .toggled(active)
+            .bg(surface)
+            .rounded(ButtonRounded::Size(px(14.)))
+            .h(px(48.))
+            .px(px(10.))
+            .w_full()
+            .text_size(px(15.))
+            .font_weight(if active {
+                FontWeight::EXTRA_BOLD
+            } else {
+                FontWeight::BOLD
+            })
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .size(px(32.))
+                            .flex_shrink_0()
+                            .rounded(px(10.))
+                            .bg(theme::c(family.soft))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                Icon::new(icon)
+                                    .size(px(17.))
+                                    .text_color(theme::c(family.icon)),
+                            ),
+                    )
+                    .child(div().flex_1().child(wording::labels::route(route)))
+                    .children((count > 0).then(|| theme::badge(count, family))),
+            )
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.navigate(route, cx);
+            }));
+        if active {
+            item.shadow(theme::lift())
+        } else {
+            item
+        }
+    });
+    let account = view
+        .snapshot
+        .active_account
+        .as_ref()
+        .and_then(|id| view.snapshot.accounts.iter().find(|a| &a.id == id));
+    let (initial, name, state, connected) = match account {
+        Some(account) => (
+            account
+                .label
+                .chars()
+                .find(|c| c.is_alphanumeric())
+                .map(|c| c.to_uppercase().to_string())
+                .unwrap_or_else(|| "Y".into()),
+            account.label.clone(),
+            tr!("Connecté à Yoto"),
+            true,
+        ),
+        None => (
+            "?".into(),
+            tr!("Compte Yoto").into(),
+            tr!("Non connecté"),
+            false,
+        ),
+    };
+    let account_card = Button::new("sidebar-account")
+        .custom(
+            ButtonCustomVariant::new(cx)
+                .color(theme::c(theme::SURFACE))
+                .foreground(theme::c(theme::INK))
+                .hover(theme::c(theme::CREAM))
+                .active(theme::c(theme::SAND)),
+        )
+        .accessibility_label(format!("{name} · {state}"))
+        .bg(theme::c(theme::SURFACE))
+        .rounded(ButtonRounded::Size(px(16.)))
+        .h(px(58.))
+        .px(px(12.))
+        .w_full()
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .child(
+                    div()
+                        .size(px(34.))
+                        .flex_shrink_0()
+                        .rounded_full()
+                        .bg(theme::c(if connected {
+                            theme::MINT.soft
+                        } else {
+                            theme::SAND
+                        }))
+                        .text_color(theme::c(if connected {
+                            theme::MINT.ink
+                        } else {
+                            theme::MUTED_WARM
+                        }))
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(initial),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .font_weight(FontWeight::EXTRA_BOLD)
+                                .truncate()
+                                .child(name),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(theme::c(if connected {
+                                    theme::MINT.ink
+                                } else {
+                                    theme::MUTED_WARM
+                                }))
+                                .child(theme::dot(if connected {
+                                    theme::MINT.accent
+                                } else {
+                                    theme::OFFLINE
+                                }))
+                                .child(state),
+                        ),
+                ),
+        )
+        .on_click(cx.listener(|view, _, _, cx| view.navigate(Route::Account, cx)));
+    div()
+        .w(px(244.))
+        .flex_shrink_0()
+        .h_full()
+        .bg(theme::c(theme::SAND))
+        .px(px(16.))
+        .pt(px(8.))
+        .pb(px(18.))
+        .flex()
+        .flex_col()
+        .gap(px(6.))
+        .child(brand)
+        .children(items)
+        .child(div().flex_1())
+        .child(theme::pill(
+            Button::new("updates-sidebar")
+                .label(view.updater.read(cx).sidebar_label())
+                .on_click(cx.listener(|view, _, window, cx| {
+                    let updater = view.updater.clone();
+                    // Opening a Kit dialog mutates the window root; defer outside the AppView borrow.
+                    window.defer(cx, move |window, cx| {
+                        update::UpdatePanel::open(updater, window, cx)
+                    });
+                })),
+            theme::Look::Ghost,
+            theme::Height::Small,
+            false,
+            cx,
+        ))
+        .child(account_card)
+}
 
+/// « Annuler » beside a connect button while the browser sign-in runs: a sign-in that
+/// failed on Yoto's side never comes back, and the parent must be able to start over.
+fn cancel_connect(id: &'static str, height: theme::Height, cx: &mut Context<AppView>) -> Button {
+    theme::pill(
+        Button::new(id)
+            .label(wording::connect::cancel())
+            .tooltip(wording::connect::cancel_hint())
+            .on_click(cx.listener(|v, _, _, cx| v.send(Command::CancelConnect, cx))),
+        theme::Look::Ghost,
+        height,
+        false,
+        cx,
+    )
+}
 fn element_id(label: &str, id: impl std::fmt::Display) -> ElementId {
     SharedString::from(format!("{label}:{id}")).into()
 }
-fn account_summary(snapshot: &Snapshot) -> String {
-    match snapshot
-        .active_account
-        .as_ref()
-        .and_then(|id| snapshot.accounts.iter().find(|a| &a.id == id))
-    {
-        Some(account) => format!("Connecté à Yoto · {}", account.label),
-        None => "Aucun compte Yoto actif. Connectez ou sélectionnez un compte.".into(),
-    }
+/// Status line while a command runs and once it succeeds. `None` keeps the line as it is:
+/// background lookups (waveform, preview) must not claim anything was saved.
+fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
+    Some(match command {
+        Command::Connect => (
+            tr!("Connexion Yoto en cours dans votre navigateur…"),
+            tr!("Compte connecté. Chargement de vos playlists Yoto…"),
+        ),
+        Command::Disconnect(_) => (tr!("Déconnexion du compte…"), tr!("Compte déconnecté.")),
+        Command::SelectAccount(_) => (tr!("Changement de compte…"), tr!("Compte sélectionné.")),
+        Command::Sync(_) | Command::RefreshPlaylists(_) | Command::RefreshIcons(_) => (
+            tr!("Chargement depuis Yoto…"),
+            tr!("Données Yoto actualisées."),
+        ),
+        Command::Import(_) => (
+            tr!("Ajout à la file d’import…"),
+            tr!("Import lancé. Suivez sa progression dans « Imports »."),
+        ),
+        Command::CreateYotoPlaylist { .. } => (
+            tr!("Création de la playlist sur Yoto…"),
+            tr!("Playlist créée sur Yoto."),
+        ),
+        Command::DuplicateYotoPlaylist { .. } => (
+            tr!("Copie de la playlist sur Yoto…"),
+            tr!("Copie créée sur Yoto."),
+        ),
+        Command::LoadRemote { .. } => (
+            tr!("Ouverture de la playlist…"),
+            tr!("Playlist Yoto ouverte."),
+        ),
+        Command::DeleteRemote { .. } => (
+            tr!("Suppression sur Yoto…"),
+            tr!("Playlist supprimée de votre compte Yoto."),
+        ),
+        Command::DeleteGroup { .. } => (tr!("Suppression du groupe…"), tr!("Groupe supprimé.")),
+        Command::DeleteMedia { .. } | Command::DeleteMediaBatch { .. } => (
+            tr!("Suppression…"),
+            tr!("Média supprimé de votre médiathèque."),
+        ),
+        Command::CollectGarbage => (tr!("Nettoyage…"), tr!("Fichiers inutilisés supprimés.")),
+        Command::Retry(_) => (tr!("Relance de la tâche…"), tr!("Tâche relancée.")),
+        Command::Cancel(_) => (tr!("Annulation…"), tr!("Tâche annulée.")),
+        Command::Resolve { .. }
+        | Command::Reconcile(_)
+        | Command::AttachPublicationReceipt { .. } => (
+            tr!("Vérification auprès de Yoto…"),
+            tr!("Vérification lancée."),
+        ),
+        Command::Backup { .. } => (
+            tr!("Export de la médiathèque…"),
+            tr!("Médiathèque exportée."),
+        ),
+        Command::Restore { .. } => (
+            tr!("Import de la médiathèque…"),
+            tr!("Médiathèque importée."),
+        ),
+        Command::Waveform(_)
+        | Command::StopPreview
+        | Command::PreviewStatus
+        | Command::Preview(_)
+        | Command::PreviewTrim { .. }
+        | Command::ReleaseAsset(_)
+        | Command::ReadPixelArt(_)
+        | Command::Thumbnail(_)
+        | Command::AppUpdate(_)
+        | Command::YoutubeTool(_)
+        | Command::CancelConnect
+        | Command::JobsPage { .. } => return None,
+        Command::InspectYoutube(_)
+        | Command::NewPlaylist(_)
+        | Command::SavePlaylist { .. }
+        | Command::Duplicate(_)
+        | Command::SaveCopy(_)
+        | Command::DeletePlaylist(_)
+        | Command::AddMedia { .. }
+        | Command::DeleteRecipe { .. }
+        | Command::UpdateMedia { .. }
+        | Command::Prepare { .. }
+        | Command::Export { .. }
+        | Command::UpdateYotoPlaylist { .. }
+        | Command::AddYotoMedia { .. }
+        | Command::DeviceConfig { .. }
+        | Command::DeviceStatus { .. }
+        | Command::SaveDeviceConfig { .. }
+        | Command::SaveShortcuts { .. }
+        | Command::Publish { .. }
+        | Command::Player { .. }
+        | Command::RenameDevice { .. }
+        | Command::SaveGroup { .. }
+        | Command::LoadGroup { .. }
+        | Command::FamilyImages(_)
+        | Command::FamilyImage { .. }
+        | Command::UploadFamilyImage { .. }
+        | Command::SavePixelArt(_)
+        | Command::StoreImage { .. }
+        | Command::ImportIcon { .. }
+        | Command::SetCover { .. } => (tr!("Traitement en cours…"), tr!("Terminé.")),
+    })
 }
 fn remote_syncing(snapshot: &Snapshot) -> bool {
     snapshot
@@ -930,13 +1533,51 @@ fn remote_syncing(snapshot: &Snapshot) -> bool {
         .any(|state| matches!(state, RemoteSyncState::Syncing))
 }
 fn remote_sync_message(snapshot: &Snapshot, collection: RemoteCollection) -> String {
-    let label = collection.label();
+    let label = wording::labels::remote_collection(collection);
     match snapshot.remote_sync.get(&collection) {
-        None => format!("{label} · Synchroniser pour actualiser les données Yoto."),
-        Some(RemoteSyncState::Syncing) => format!("{label} · Synchronisation en cours…"),
-        Some(RemoteSyncState::Ready { .. }) => format!("{label} · À jour"),
+        None => tr!(
+            "{label} · Synchroniser pour actualiser les données Yoto.",
+            label = label
+        ),
+        Some(RemoteSyncState::Syncing) => tr!("{label} · Synchronisation en cours…", label = label),
+        Some(RemoteSyncState::Ready { .. }) => tr!("{label} · À jour", label = label),
         Some(RemoteSyncState::Failed { failure }) => {
-            format!("{label} · Actualisation impossible : {failure}")
+            tr!(
+                "{label} · Actualisation impossible : {reason}",
+                label = label,
+                reason = failure_text(failure)
+            )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[core::prelude::v1::test]
+    fn dropped_files_keep_audio_whatever_the_case() {
+        let paths: Vec<std::path::PathBuf> = [
+            "a/conte.MP3",
+            "b/chanson.m4a",
+            "c/photo.jpg",
+            "d/sans-extension",
+            "e/Berceuse.FlAc",
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+        let (audio, ignored) = partition_audio(&paths);
+        assert_eq!(
+            audio,
+            ["a/conte.MP3", "b/chanson.m4a", "e/Berceuse.FlAc"]
+                .map(std::path::PathBuf::from)
+                .to_vec()
+        );
+        assert_eq!(
+            ignored,
+            ["c/photo.jpg", "d/sans-extension"]
+                .map(std::path::PathBuf::from)
+                .to_vec()
+        );
     }
 }

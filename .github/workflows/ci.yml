@@ -15,3 +15,10 @@ jobs:
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: python3 scripts/generate_api.py
       - run: git diff --exit-code -- api crates/yoto-contracts crates/yoto-api-generated crates/yoto-auth-generated
+  translations:
+    # xgettext reads Rust from GNU gettext 0.24; Ubuntu 24.04 ships 0.21.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: brew install gettext
+      - run: ./scripts/check_translations.sh

@@ -1,5 +1,10 @@
 use super::*;
-use gpui_kit::component::{dialog::DialogClose, spinner::Spinner, tab::TabBar};
+use gpui_kit::component::{
+    button::{ButtonCustomVariant, ButtonRounded},
+    dialog::DialogClose,
+    spinner::Spinner,
+};
+use theme::{Height, Look};
 use yoto_infra::api::IconCollection;
 struct IconChoice {
     media: YotoMediaId,
@@ -112,11 +117,11 @@ impl IconPicker {
         let service = owner.read(cx).service.clone();
         let runtime = owner.read(cx).runtime.clone();
         self.uploading = true;
-        self.status = "Choisissez une image…".into();
+        self.status = tr!("Choisissez une image…").into();
         cx.notify();
         self.tasks.push(cx.spawn(async move |weak, cx| {
             let Some(file) = rfd::AsyncFileDialog::new()
-                .add_filter("Image", &["png", "jpg", "jpeg", "gif"])
+                .add_filter(tr!("Image"), &["png", "jpg", "jpeg", "gif"])
                 .pick_file()
                 .await
             else {
@@ -128,7 +133,7 @@ impl IconPicker {
                 return;
             };
             let _ = weak.update(cx, |v, cx| {
-                v.status = "Préparation de l’image…".into();
+                v.status = tr!("Préparation de l’image…").into();
                 cx.notify();
             });
             let cleanup_service = service.clone();
@@ -142,26 +147,9 @@ impl IconPicker {
                         .await
                 })
                 .await;
-            let staged = match result {
-                Ok(Ok(Reply::Asset(asset))) => Ok(asset),
-                Ok(Ok(
-                    Reply::AppUpdate(_)
-                    | Reply::Updated
-                    | Reply::Saved(_)
-                    | Reply::OpenedPlaylist(_)
-                    | Reply::PlaylistOperation { .. }
-                    | Reply::Entries(_)
-                    | Reply::Waveform(_)
-                    | Reply::Prepared(_)
-                    | Reply::PixelArt(_)
-                    | Reply::Image(_)
-                    | Reply::Images(_)
-                    | Reply::Player(_)
-                    | Reply::Data(_),
-                )) => Err("Résultat d’image inattendu.".into()),
-                Ok(Err(error)) => Err(error.to_string()),
-                Err(error) => Err(error.to_string()),
-            };
+            let staged = joined(result)
+                .and_then(Reply::into_asset)
+                .map_err(|error| failure_text(&error));
             let asset = staged.as_ref().ok().copied();
             let accepted = weak
                 .update(cx, |v, cx| {
@@ -212,7 +200,7 @@ impl Render for IconPicker {
             })
             .unwrap_or((false, true, String::new()));
         let disabled = blocked || self.uploading;
-        const COLUMNS: usize = 4;
+        const COLUMNS: usize = 6;
         let rows = gpui_kit::uniform_list(
             "icon-catalogue",
             self.choices.rows(self.collection).len().div_ceil(COLUMNS),
@@ -224,7 +212,7 @@ impl Render for IconPicker {
                                 || v.owner
                                     .upgrade()
                                     .is_none_or(|owner| owner.read(cx).blocked());
-                            let mut cells = div().h(px(112.)).flex().gap_2().items_center();
+                            let mut cells = div().h(px(64.)).flex().gap(px(8.)).items_center();
                             for icon in v
                                 .choices
                                 .rows(v.collection)
@@ -233,42 +221,48 @@ impl Render for IconPicker {
                                 .take(COLUMNS)
                             {
                                 let media = icon.media.clone();
-                                cells = cells.child(
+                                let selected = v.selected.as_ref() == Some(&media);
+                                let surface = theme::c(if selected {
+                                    theme::LILAC.soft
+                                } else {
+                                    theme::CREAM
+                                });
+                                let mut cell =
                                     Button::new(element_id("choose-icon", media.to_string()))
-                                        .w(px(128.))
-                                        .h(px(104.))
-                                        .selected(v.selected.as_ref() == Some(&media))
-                                        .disabled(disabled)
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .gap_2()
-                                                .items_center()
-                                                .children(icon.url.as_ref().map(|url| {
-                                                    img(url.clone())
-                                                        .w(px(48.))
-                                                        .h(px(48.))
-                                                        .object_fit(ObjectFit::Contain)
-                                                }))
-                                                .children(
-                                                    icon.url
-                                                        .is_none()
-                                                        .then(|| div().h(px(48.)).child("◇")),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .w(px(108.))
-                                                        .text_sm()
-                                                        .truncate()
-                                                        .child(icon.title.clone()),
-                                                ),
+                                        .custom(
+                                            ButtonCustomVariant::new(cx)
+                                                .color(surface)
+                                                .hover(theme::c(theme::LILAC.soft))
+                                                .active(theme::c(theme::LILAC.soft)),
                                         )
+                                        .bg(surface)
+                                        .rounded(ButtonRounded::Size(px(14.)))
+                                        .size(px(56.))
+                                        .toggled(selected)
+                                        .accessibility_label(icon.title.clone())
+                                        .tooltip(icon.title.clone())
+                                        .disabled(disabled)
+                                        .children(icon.url.as_ref().map(|url| {
+                                            img(url.clone())
+                                                .size(px(32.))
+                                                .object_fit(ObjectFit::Contain)
+                                        }))
+                                        .children(icon.url.is_none().then(|| {
+                                            theme::pixel_glyph(
+                                                theme::Glyph::for_seed(&icon.title),
+                                                theme::LILAC.accent,
+                                                3.,
+                                            )
+                                        }))
                                         .on_click(cx.listener(move |v, _, _, cx| {
                                             v.selected = Some(media.clone());
                                             cx.notify();
-                                        })),
-                                );
+                                        }));
+                                if selected {
+                                    cell =
+                                        cell.border_2().border_color(theme::c(theme::LILAC.accent));
+                                }
+                                cells = cells.child(cell);
                             }
                             cells
                         })
@@ -276,35 +270,35 @@ impl Render for IconPicker {
                 },
             ),
         )
-        .h(px(336.));
+        .h(px(272.));
         let loading = matches!(self.sync, Some(RemoteSyncState::Syncing));
         let failure = match &self.sync {
-            Some(RemoteSyncState::Failed { failure }) => Some(failure.to_string()),
+            Some(RemoteSyncState::Failed { failure }) => Some(failure_text(failure)),
             Some(RemoteSyncState::Syncing | RemoteSyncState::Ready { .. }) | None => None,
         };
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(
-                TabBar::new("icon-collections")
-                    .segmented()
-                    .child("Yoto")
-                    .child("Mes icônes")
-                    .selected_index(match self.collection {
-                        IconCollection::Public => 0,
-                        IconCollection::User => 1,
-                    })
-                    .on_click(cx.listener(|v, index, _, cx| {
-                        v.collection = match index {
-                            0 => IconCollection::Public,
-                            1 => IconCollection::User,
-                            _ => unreachable!("Kit emits a valid tab index"),
-                        };
+        let collections = [
+            (IconCollection::Public, "Yoto"),
+            (IconCollection::User, tr!("Mes icônes")),
+        ]
+        .map(|(collection, label)| {
+            theme::segment(
+                Button::new(element_id("icon-collection", label))
+                    .label(label)
+                    .on_click(cx.listener(move |v, _, _, cx| {
+                        v.collection = collection;
                         v.selected = None;
                         cx.notify();
                     })),
+                self.collection == collection,
+                Height::Tiny,
+                cx,
             )
+        });
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap(px(14.))
+            .child(div().child(theme::segmented().children(collections)))
             .child(rows);
         if loading {
             body = body.child(
@@ -312,7 +306,7 @@ impl Render for IconPicker {
                     .flex()
                     .gap_2()
                     .child(Spinner::new().small())
-                    .child("Chargement des icônes…"),
+                    .child(tr!("Chargement des icônes…")),
             );
         }
         if let Some(failure) = &failure {
@@ -321,11 +315,12 @@ impl Render for IconPicker {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(format!("Chargement impossible : {failure}"))
+                    .child(tr!("Chargement impossible : {failure}", failure = failure))
                     .child(
                         Button::new("retry-icons")
-                            .label("Réessayer")
+                            .label(tr!("Réessayer"))
                             .disabled(disabled)
+                            .outline()
                             .on_click(cx.listener(|v, _, _, cx| {
                                 let account = v.account.clone();
                                 let _ = v.owner.update(cx, |owner, cx| {
@@ -341,28 +336,63 @@ impl Render for IconPicker {
             );
         }
         if !loading && failure.is_none() && self.choices.rows(self.collection).is_empty() {
-            body = body.child(
-                div()
-                    .text_sm()
-                    .child("Aucune icône dans cette collection. Vous pouvez importer une image."),
-            );
+            body = body.child(div().text_sm().child(tr!(
+                "Aucune icône dans cette collection. Vous pouvez importer une image."
+            )));
         }
-        body = body.child(div().text_sm().text_color(cx.theme().muted_foreground)
-            .child("Choisissez une icône Yoto ou ajoutez votre image. Elle sera adaptée au lecteur."))
-            .child(div().flex().gap_2().items_center()
-                .child(Button::new("import-icon-image").label("Importer une image").disabled(disabled)
-                    .on_click(cx.listener(|v, _, _, cx| v.import_image(cx))))
-                .child(div().flex_1())
-                .child(DialogClose::new().child(Button::new("cancel-icon").label("Annuler").disabled(busy || self.uploading)))
-                .child(Button::new("apply-icon").label("Utiliser cette icône").primary()
-                    .disabled(disabled || self.selected.is_none())
-                    .on_click(cx.listener(|v, _, _, cx| {
-                        if let Some(media) = &v.selected {
-                            let icon = IconReference::Yoto { account: v.account.clone(), media: media.clone() };
-                            let account = v.account.clone(); let chapter = v.chapter; let track = v.track;
-                            let _ = v.owner.update(cx, |owner, cx| owner.choose_icon(&account, chapter, track, icon, cx));
-                        }
-                    }))));
+        body = body
+            .child(theme::note(
+                tr!("Choisissez une icône Yoto ou ajoutez votre image : elle sera adaptée en 16 × 16 pour l’écran du lecteur."),
+            ))
+            .child(
+                div()
+                    .flex()
+                    .gap(px(8.))
+                    .items_center()
+                    .child(
+                        theme::pill(
+                            Button::new("import-icon-image")
+                                .label(tr!("Importer une image"))
+                                .on_click(cx.listener(|v, _, _, cx| v.import_image(cx))),
+                            Look::Outline,
+                            Height::Medium,
+                            disabled,
+                            cx,
+                        )
+                        .border_dashed()
+                        .border_color(theme::c(theme::BOX_BORDER)),
+                    )
+                    .child(div().flex_1())
+                    .child(DialogClose::new().child(theme::pill(
+                        Button::new("cancel-icon").label(tr!("Annuler")),
+                        Look::Ghost,
+                        Height::Medium,
+                        busy || self.uploading,
+                        cx,
+                    )))
+                    .child(theme::pill(
+                        Button::new("apply-icon")
+                            .label(tr!("Utiliser cette icône"))
+                            .on_click(cx.listener(|v, _, _, cx| {
+                                if let Some(media) = &v.selected {
+                                    let icon = IconReference::Yoto {
+                                        account: v.account.clone(),
+                                        media: media.clone(),
+                                    };
+                                    let account = v.account.clone();
+                                    let chapter = v.chapter;
+                                    let track = v.track;
+                                    let _ = v.owner.update(cx, |owner, cx| {
+                                        owner.choose_icon(&account, chapter, track, icon, cx)
+                                    });
+                                }
+                            })),
+                        Look::Primary,
+                        Height::Medium,
+                        disabled || self.selected.is_none(),
+                        cx,
+                    )),
+            );
         if busy || self.uploading {
             body = body.child(div().flex().gap_2().child(Spinner::new().small()).child(
                 if self.uploading {

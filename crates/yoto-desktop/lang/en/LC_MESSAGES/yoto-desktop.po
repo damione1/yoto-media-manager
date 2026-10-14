@@ -1,0 +1,3494 @@
+# English translations of the YotoMediaManager desktop app.
+msgid ""
+msgstr ""
+"Project-Id-Version: yoto-desktop\n"
+"Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
+"POT-Creation-Date: 2026-10-14 00:14-0400\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/i18n.rs src/ui/imports.rs src/ui/pixelart.rs
+#: src/ui/playlist_media_picker.rs src/ui/playlist_move_picker.rs
+#: src/ui/trim.rs src/ui/wording.rs
+msgid "Annuler"
+msgstr "Cancel"
+
+#: src/i18n.rs src/ui/editor.rs
+#, rust-format
+msgid "{count} piste"
+msgid_plural "{count} pistes"
+msgstr[0] "{count} track"
+msgstr[1] "{count} tracks"
+
+#: src/main.rs
+#, rust-format
+msgid ""
+"La mise à jour n’a pas pu être installée.\n"
+"\n"
+"{detail}"
+msgstr ""
+"The update could not be installed.\n"
+"\n"
+"{detail}"
+
+#: src/main.rs
+#, rust-format
+msgid ""
+"L’application n’a pas pu démarrer.\n"
+"\n"
+"{detail}\n"
+"\n"
+"Si le problème persiste, réinstallez l’application depuis GitHub Releases."
+msgstr ""
+"The app could not start.\n"
+"\n"
+"{detail}\n"
+"\n"
+"If the problem continues, reinstall the app from GitHub Releases."
+
+#: src/ui/account.rs
+msgid "Compte et synchronisation"
+msgstr "Account and sync"
+
+#: src/ui/account.rs
+msgid "Votre collection personnelle, sur cet ordinateur et sur Yoto."
+msgstr "Your personal collection, on this computer and on Yoto."
+
+#: src/ui/account.rs
+msgid "actualisé à l’instant"
+msgstr "refreshed just now"
+
+#: src/ui/account.rs
+#, rust-format
+msgid "actualisé il y a {minutes} min"
+msgstr "refreshed {minutes} min ago"
+
+#: src/ui/account.rs
+#, rust-format
+msgid "actualisé il y a {hours} h"
+msgstr "refreshed {hours} h ago"
+
+#: src/ui/account.rs
+#, rust-format
+msgid "actualisé il y a {days} j"
+msgstr "refreshed {days} d ago"
+
+#: src/ui/account.rs
+msgid "Options du compte"
+msgstr "Account options"
+
+#: src/ui/account.rs
+msgid "Déconnecter ce compte"
+msgstr "Disconnect this account"
+
+#: src/ui/account.rs
+msgid "Déconnecter ce compte Yoto ?"
+msgstr "Disconnect this Yoto account?"
+
+#: src/ui/account.rs
+msgid ""
+"Les envois en cours vers Yoto seront interrompus. Vos playlists restent sur "
+"votre compte Yoto et votre médiathèque reste sur cet ordinateur. Vous "
+"pourrez vous reconnecter à tout moment."
+msgstr ""
+"Uploads to Yoto in progress will stop. Your playlists stay on your Yoto "
+"account and your library stays on this computer. You can reconnect at any "
+"time."
+
+#: src/ui/account.rs
+msgid "Déconnecter"
+msgstr "Disconnect"
+
+#: src/ui/account.rs src/ui/players.rs
+msgid "Connectez votre compte Yoto"
+msgstr "Connect your Yoto account"
+
+#: src/ui/account.rs
+msgid "Choisissez le compte à utiliser"
+msgstr "Choose the account to use"
+
+#: src/ui/account.rs
+msgid ""
+"Connectez Yoto pour retrouver vos playlists et les envoyer à vos lecteurs. "
+"Votre médiathèque reste disponible hors ligne."
+msgstr ""
+"Connect Yoto to find your playlists and send them to your players. Your "
+"library stays available offline."
+
+#: src/ui/account.rs
+msgid "Connecter mon compte Yoto"
+msgstr "Connect my Yoto account"
+
+#: src/ui/account.rs
+msgid "Connecté"
+msgstr "Connected"
+
+#: src/ui/account.rs
+msgid "Utiliser ce compte"
+msgstr "Use this account"
+
+#: src/ui/account.rs
+msgid "Un autre compte Yoto ?"
+msgstr "Another Yoto account?"
+
+#: src/ui/account.rs
+msgid "Par exemple celui des grands-parents."
+msgstr "For example, the grandparents’ one."
+
+#: src/ui/account.rs
+msgid "Ajouter un compte"
+msgstr "Add an account"
+
+#: src/ui/account.rs
+msgid "Actualisation en cours…"
+msgstr "Refreshing…"
+
+#: src/ui/account.rs
+#, rust-format
+msgid ""
+"{count} élément à actualiser. Les données déjà récupérées restent "
+"disponibles."
+msgid_plural ""
+"{count} éléments à actualiser. Les données déjà récupérées restent "
+"disponibles."
+msgstr[0] "{count} item to refresh. Data already retrieved is still available."
+msgstr[1] ""
+"{count} items to refresh. Data already retrieved is still available."
+
+#: src/ui/account.rs
+msgid "Vos playlists et lecteurs sont à jour."
+msgstr "Your playlists and players are up to date."
+
+#: src/ui/account.rs
+msgid ""
+"Vos playlists se chargent automatiquement. Actualisez pour retrouver aussi "
+"vos lecteurs."
+msgstr ""
+"Your playlists load automatically. Refresh to bring in your players too."
+
+#: src/ui/account.rs src/ui/players.rs
+#, rust-format
+msgid "{count} playlist"
+msgid_plural "{count} playlists"
+msgstr[0] "{count} playlist"
+msgstr[1] "{count} playlists"
+
+#: src/ui/account.rs
+#, rust-format
+msgid "{count} lecteur"
+msgid_plural "{count} lecteurs"
+msgstr[0] "{count} player"
+msgstr[1] "{count} players"
+
+#: src/ui/account.rs
+msgid "Connecté · utilisé pour la synchronisation"
+msgstr "Connected · used for syncing"
+
+#: src/ui/account.rs src/ui/players.rs
+msgid "Actualisation…"
+msgstr "Refreshing…"
+
+#: src/ui/account.rs
+msgid "Actualiser"
+msgstr "Refresh"
+
+#: src/ui/account.rs
+msgid "Masquer le détail"
+msgstr "Hide details"
+
+#: src/ui/account.rs
+msgid "Voir le détail"
+msgstr "Show details"
+
+#: src/ui/account.rs
+msgid "Le changement s’applique tout de suite à toute l’application."
+msgstr "The change applies right away to the whole app."
+
+#: src/ui/account.rs
+msgid "Mode avancé"
+msgstr "Advanced mode"
+
+#: src/ui/account.rs
+msgid ""
+"Affiche les réglages techniques : lecture interactive, événements des "
+"pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, "
+"raccourcis et commandes techniques des lecteurs ; ouverture d’une autre "
+"médiathèque. Inutile au quotidien."
+msgstr ""
+"Shows the technical settings: interactive playback, track events, shuffle "
+"ranges and audio streams in playlists; Yoto values, shortcuts and technical "
+"commands for players; opening another library. Not needed day to day."
+
+#: src/ui/device.rs
+msgid "Orange doux"
+msgstr "Soft orange"
+
+#: src/ui/device.rs
+msgid "Rose"
+msgstr "Pink"
+
+#: src/ui/device.rs
+msgid "Violet"
+msgstr "Purple"
+
+#: src/ui/device.rs
+msgid "Bleu"
+msgstr "Blue"
+
+#: src/ui/device.rs
+msgid "Vert"
+msgstr "Green"
+
+#: src/ui/device.rs
+msgid "Éteinte"
+msgstr "Off"
+
+#: src/ui/device.rs
+msgid "Non"
+msgstr "Off"
+
+#: src/ui/device.rs
+msgid "Niveau de volume (valeur Yoto)"
+msgstr "Volume level (Yoto value)"
+
+#: src/ui/device.rs
+msgid "Bluetooth configuré (valeur Yoto)"
+msgstr "Bluetooth set up (Yoto value)"
+
+#: src/ui/device.rs
+msgid "Cadran (valeur Yoto)"
+msgstr "Clock face (Yoto value)"
+
+#: src/ui/device.rs
+msgid "Langue / locale"
+msgstr "Language / locale"
+
+#: src/ui/device.rs
+msgid "Format horaire (valeur Yoto)"
+msgstr "Time format (Yoto value)"
+
+#: src/ui/device.rs
+msgid "Luminosité jour (valeur Yoto)"
+msgstr "Day brightness (Yoto value)"
+
+#: src/ui/device.rs
+msgid "Luminosité nuit (valeur Yoto)"
+msgstr "Night brightness (Yoto value)"
+
+#: src/ui/device.rs
+msgid "Luminosité atténuée (valeur Yoto)"
+msgstr "Dimmed brightness (Yoto value)"
+
+#: src/ui/device.rs
+msgid "Yoto Daily jour"
+msgstr "Yoto Daily, day"
+
+#: src/ui/device.rs
+msgid "Yoto Daily nuit"
+msgstr "Yoto Daily, night"
+
+#: src/ui/device.rs
+msgid "Yoto Radio jour"
+msgstr "Yoto Radio, day"
+
+#: src/ui/device.rs
+msgid "Yoto Radio nuit"
+msgstr "Yoto Radio, night"
+
+#: src/ui/device.rs
+msgid "Nom du lecteur"
+msgstr "Player name"
+
+#: src/ui/device.rs
+msgid "Lumière #RRGGBB"
+msgstr "Light #RRGGBB"
+
+#: src/ui/device.rs
+msgid "Début du jour HH:MM"
+msgstr "Day starts HH:MM"
+
+#: src/ui/device.rs
+msgid "Début de la nuit HH:MM"
+msgstr "Night starts HH:MM"
+
+#: src/ui/device.rs
+msgid "Volume maximal jour"
+msgstr "Maximum volume, day"
+
+#: src/ui/device.rs
+msgid "Volume maximal nuit"
+msgstr "Maximum volume, night"
+
+#: src/ui/device.rs
+msgid "Lumière de nuit #RRGGBB"
+msgstr "Night light #RRGGBB"
+
+#: src/ui/device.rs
+msgid "Délai avant atténuation"
+msgstr "Time before dimming"
+
+#: src/ui/device.rs
+msgid "Délai avant arrêt"
+msgstr "Time before turning off"
+
+#: src/ui/device.rs
+msgid "Raccourcis jour : carte/chapitre/piste, séparés par des virgules"
+msgstr "Day shortcuts: card/chapter/track, separated by commas"
+
+#: src/ui/device.rs
+msgid "Raccourcis nuit : carte/chapitre/piste, séparés par des virgules"
+msgstr "Night shortcuts: card/chapter/track, separated by commas"
+
+#: src/ui/device.rs
+msgid "Connexion au lecteur…"
+msgstr "Connecting to the player…"
+
+#: src/ui/device.rs
+msgid "Réglages du lecteur à jour."
+msgstr "Player settings up to date."
+
+#: src/ui/device.rs src/ui/mod.rs
+msgid "État du lecteur reçu."
+msgstr "Player status received."
+
+#: src/ui/device.rs src/ui/mod.rs
+msgid "Commande envoyée ; effet non confirmé."
+msgstr "Command sent; effect not confirmed."
+
+#: src/ui/device.rs
+msgid "Commande acceptée."
+msgstr "Command accepted."
+
+#: src/ui/device.rs
+msgid "Commande reçue par le lecteur."
+msgstr "Command received by the player."
+
+#: src/ui/device.rs
+msgid "Réglages envoyés."
+msgstr "Settings sent."
+
+#: src/ui/device.rs
+msgid "Lecture des réglages du lecteur…"
+msgstr "Reading the player settings…"
+
+#: src/ui/device.rs
+msgid "Chargez les réglages avant de modifier les raccourcis."
+msgstr "Load the settings before changing the shortcuts."
+
+#: src/ui/device.rs
+msgid "Raccourci attendu carte/chapitre/piste"
+msgstr "Expected shortcut: card/chapter/track"
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Couleur de la lumière : {name}"
+msgstr "Light colour: {name}"
+
+#: src/ui/device.rs
+msgid ""
+"Aucune playlist sur votre compte Yoto pour l’instant. Envoyez-en une depuis "
+"« Playlists », puis actualisez."
+msgstr ""
+"No playlists on your Yoto account yet. Send one from “Playlists”, then "
+"refresh."
+
+#: src/ui/device.rs
+msgid "Playlist de votre compte Yoto"
+msgstr "Playlist from your Yoto account"
+
+#: src/ui/device.rs
+msgid "Choisir une playlist"
+msgstr "Choose a playlist"
+
+#: src/ui/device.rs
+msgid "Elle sera lancée sur ce lecteur."
+msgstr "It will start on this player."
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Playlist à lancer : {title}"
+msgstr "Playlist to start: {title}"
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Lecture sur « {name} »"
+msgstr "Playing on “{name}”"
+
+#: src/ui/device.rs
+msgid "Lire sur ce lecteur"
+msgstr "Play on this player"
+
+#: src/ui/device.rs
+msgid "Reprendre la lecture"
+msgstr "Resume playback"
+
+#: src/ui/device.rs
+msgid "Mettre en pause"
+msgstr "Pause"
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Reprendre"
+msgstr "Resume"
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Pause"
+msgstr "Pause"
+
+#: src/ui/device.rs src/ui/editor.rs
+msgid "Arrêter la lecture"
+msgstr "Stop playback"
+
+#: src/ui/device.rs src/ui/editor.rs src/ui/wording.rs
+msgid "Arrêter"
+msgstr "Stop"
+
+#: src/ui/device.rs
+msgid "Volume"
+msgstr "Volume"
+
+#: src/ui/device.rs
+#, rust-format
+msgid "{level} %"
+msgstr "{level}%"
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Veilleuse : {name}"
+msgstr "Night light: {name}"
+
+#: src/ui/device.rs
+msgid "Veilleuse"
+msgstr "Night light"
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Minuterie"
+msgstr "Sleep timer"
+
+#: src/ui/device.rs
+msgid ""
+"Ce lecteur semble hors ligne : allumez-le et vérifiez qu’il est connecté au "
+"Wi-Fi."
+msgstr ""
+"This player seems to be offline: turn it on and check that it is connected "
+"to Wi-Fi."
+
+#: src/ui/device.rs
+msgid "Jour et nuit"
+msgstr "Day and night"
+
+#: src/ui/device.rs
+msgid "Jour"
+msgstr "Day"
+
+#: src/ui/device.rs
+msgid "Nuit"
+msgstr "Night"
+
+#: src/ui/device.rs
+msgid "Commence à (HH:MM)"
+msgstr "Starts at (HH:MM)"
+
+#: src/ui/device.rs
+msgid "Volume maximal"
+msgstr "Maximum volume"
+
+#: src/ui/device.rs
+msgid "Luminosité de l’écran"
+msgstr "Screen brightness"
+
+#: src/ui/device.rs
+msgid "Couleur de la lumière"
+msgstr "Light colour"
+
+#: src/ui/device.rs
+msgid "Enregistrer ces réglages"
+msgstr "Save these settings"
+
+#: src/ui/device.rs
+msgid ""
+"Les réglages de ce lecteur n’ont pas pu être lus. Vérifiez qu’il est allumé, "
+"puis réessayez."
+msgstr ""
+"This player’s settings could not be read. Check that it is on, then try "
+"again."
+
+#: src/ui/device.rs
+msgid "Lire les réglages"
+msgstr "Read the settings"
+
+#: src/ui/device.rs
+msgid "Plus de réglages"
+msgstr "More settings"
+
+#: src/ui/device.rs
+msgid "Casque, arrêt auto, raccourcis, commandes techniques"
+msgstr "Headphones, auto-off, shortcuts, technical commands"
+
+#: src/ui/device.rs
+msgid "Nom, casque, arrêt automatique"
+msgstr "Name, headphones, auto-off"
+
+#: src/ui/device.rs
+msgid "Lecteur"
+msgstr "Player"
+
+#: src/ui/device.rs
+msgid "Délai avant atténuation de l’écran"
+msgstr "Time before the screen dims"
+
+#: src/ui/device.rs
+msgid "Délai avant arrêt auto"
+msgstr "Time before auto-off"
+
+#: src/ui/device.rs
+msgid "Répéter les pistes"
+msgstr "Repeat tracks"
+
+#: src/ui/device.rs
+msgid "Casque Bluetooth"
+msgstr "Bluetooth headphones"
+
+#: src/ui/device.rs
+msgid "Limiter le volume du casque"
+msgstr "Limit the headphones volume"
+
+#: src/ui/device.rs
+msgid "Valeurs Yoto avancées"
+msgstr "Advanced Yoto values"
+
+#: src/ui/device.rs
+msgid ""
+"Valeurs transmises telles quelles à Yoto. Ne les modifiez que si vous savez "
+"ce qu’elles font."
+msgstr ""
+"Values sent to Yoto as they are. Only change them if you know what they do."
+
+#: src/ui/device.rs
+msgid ""
+"Les raccourcis et les commandes techniques du lecteur s’affichent avec le "
+"« Mode avancé », dans « Compte »."
+msgstr ""
+"The player’s shortcuts and technical commands appear with “Advanced mode”, "
+"in “Account”."
+
+#: src/ui/device.rs
+msgid "Raccourcis"
+msgstr "Shortcuts"
+
+#: src/ui/device.rs
+msgid "bêta"
+msgstr "beta"
+
+#: src/ui/device.rs
+msgid "Enregistrer les raccourcis"
+msgstr "Save the shortcuts"
+
+#: src/ui/device.rs
+msgid "Commandes techniques"
+msgstr "Technical commands"
+
+#: src/ui/device.rs
+msgid "Actualiser l’état du lecteur"
+msgstr "Refresh the player status"
+
+#: src/ui/device.rs
+#, rust-format
+msgid "Redémarrer « {name} » ?"
+msgstr "Restart “{name}”?"
+
+#: src/ui/device.rs
+msgid ""
+"La lecture en cours s’arrête et le lecteur reste indisponible le temps de "
+"redémarrer."
+msgstr "Playback stops and the player is unavailable while it restarts."
+
+#: src/ui/device.rs src/ui/wording.rs
+msgid "Redémarrer"
+msgstr "Restart"
+
+#: src/ui/editor.rs
+msgid ""
+"La playlist a changé sur Yoto. Choisissez « Recharger la version Yoto » "
+"avant de continuer."
+msgstr ""
+"The playlist changed on Yoto. Choose “Reload the Yoto version” before "
+"continuing."
+
+#: src/ui/editor.rs
+msgid ""
+"Cette playlist a été supprimée sur Yoto. Choisissez une autre playlist dans "
+"la liste."
+msgstr ""
+"This playlist was deleted on Yoto. Choose another playlist from the list."
+
+#: src/ui/editor.rs
+msgid "Envoi sur Yoto en attente…"
+msgstr "Waiting to send to Yoto…"
+
+#: src/ui/editor.rs
+#, rust-format
+msgid "Nouvel essai automatique : {reason}"
+msgstr "Trying again automatically: {reason}"
+
+#: src/ui/editor.rs
+msgid "Reconnectez le compte Yoto pour terminer l’envoi."
+msgstr "Reconnect the Yoto account to finish the upload."
+
+#: src/ui/editor.rs
+msgid ""
+"La playlist a changé sur Yoto. Vérifiez la version distante avant de "
+"continuer."
+msgstr ""
+"The playlist changed on Yoto. Check the Yoto version before continuing."
+
+#: src/ui/editor.rs
+msgid ""
+"Yoto a peut-être reçu la modification. Vérification requise avant un nouvel "
+"envoi."
+msgstr ""
+"Yoto may have received the change. It needs checking before sending again."
+
+#: src/ui/editor.rs
+msgid "Description"
+msgstr "Description"
+
+#: src/ui/editor.rs src/ui/library.rs src/ui/trim.rs
+msgid "Auteur"
+msgstr "Author"
+
+#: src/ui/editor.rs
+msgid "Narrateur"
+msgstr "Narrator"
+
+#: src/ui/editor.rs
+msgid "Langues : fr, en…"
+msgstr "Languages: fr, en…"
+
+#: src/ui/editor.rs
+msgid "Âge minimum"
+msgstr "Minimum age"
+
+#: src/ui/editor.rs
+msgid "Âge maximum"
+msgstr "Maximum age"
+
+#: src/ui/editor.rs
+msgid "Aléatoire : début-fin-limite (chapitres dès 1)"
+msgstr "Shuffle: start-end-limit (chapters from 1)"
+
+#: src/ui/editor.rs
+msgid "URL audio HTTPS de streaming"
+msgstr "HTTPS streaming audio URL"
+
+#: src/ui/editor.rs
+msgid "Paramètres de l’événement"
+msgstr "Event parameters"
+
+#: src/ui/editor.rs
+msgid "Playlist actualisée depuis Yoto."
+msgstr "Playlist refreshed from Yoto."
+
+#: src/ui/editor.rs
+msgid "La durée de reprise doit être un nombre entier de secondes."
+msgstr "The resume time must be a whole number of seconds."
+
+#: src/ui/editor.rs
+msgid "Âge entier attendu"
+msgstr "Expected a whole-number age"
+
+#: src/ui/editor.rs
+msgid "Âge minimum supérieur au maximum"
+msgstr "Minimum age is above the maximum"
+
+#: src/ui/editor.rs
+msgid "Les paramètres doivent être un objet JSON"
+msgstr "The parameters must be a JSON object"
+
+#: src/ui/editor.rs src/ui/mod.rs
+msgid "Opération terminée."
+msgstr "Done."
+
+#: src/ui/editor.rs
+msgid ""
+"Images non enregistrées abandonnées. Les autres saisies sont conservées."
+msgstr "Unsaved images discarded. Your other entries are kept."
+
+#: src/ui/editor.rs
+msgid "Ouvrez une playlist de votre compte Yoto."
+msgstr "Open a playlist from your Yoto account."
+
+#: src/ui/editor.rs
+msgid "Résultat de playlist inattendu."
+msgstr "Unexpected playlist result."
+
+#: src/ui/editor.rs
+msgid "Connectez le compte propriétaire de cette playlist."
+msgstr "Connect the account that owns this playlist."
+
+#: src/ui/editor.rs
+msgid "Ajouter des médias"
+msgstr "Add media"
+
+#: src/ui/editor.rs
+msgid "Changer l’icône de la piste"
+msgstr "Change the track icon"
+
+#: src/ui/editor.rs
+msgid "Changer l’icône du chapitre"
+msgstr "Change the chapter icon"
+
+#: src/ui/editor.rs
+msgid "Changer l’icône"
+msgstr "Change the icon"
+
+#: src/ui/editor.rs
+msgid "Options du chapitre"
+msgstr "Chapter options"
+
+#: src/ui/editor.rs
+msgid "Remonter le chapitre"
+msgstr "Move the chapter up"
+
+#: src/ui/editor.rs
+msgid "Descendre le chapitre"
+msgstr "Move the chapter down"
+
+#: src/ui/editor.rs
+msgid "Séparer les pistes en chapitres"
+msgstr "Split the tracks into chapters"
+
+#: src/ui/editor.rs
+msgid "Audio de la médiathèque"
+msgstr "Audio from the library"
+
+#: src/ui/editor.rs
+msgid "Streaming"
+msgstr "Streaming"
+
+#: src/ui/editor.rs
+msgid "Options de la piste"
+msgstr "Track options"
+
+#: src/ui/editor.rs
+msgid "Retirer l’icône du chapitre"
+msgstr "Remove the chapter icon"
+
+#: src/ui/editor.rs
+msgid "Retirer l’icône"
+msgstr "Remove the icon"
+
+#: src/ui/editor.rs
+msgid "Remplacer l’audio…"
+msgstr "Replace the audio…"
+
+#: src/ui/editor.rs
+msgid "Déplacer / regrouper…"
+msgstr "Move / group…"
+
+#: src/ui/editor.rs
+msgid "Remonter"
+msgstr "Move up"
+
+#: src/ui/editor.rs src/ui/group.rs
+msgid "Descendre"
+msgstr "Move down"
+
+#: src/ui/editor.rs
+msgid "Réglages avancés"
+msgstr "Advanced settings"
+
+#: src/ui/editor.rs
+msgid "Retirer de la playlist"
+msgstr "Remove from the playlist"
+
+#: src/ui/editor.rs
+#, rust-format
+msgid "Arrêter l’écoute de {title}"
+msgstr "Stop listening to {title}"
+
+#: src/ui/editor.rs src/ui/library.rs
+#, rust-format
+msgid "Écouter {title}"
+msgstr "Listen to {title}"
+
+#: src/ui/editor.rs src/ui/trim.rs
+msgid "Arrêter l’écoute"
+msgstr "Stop listening"
+
+#: src/ui/editor.rs
+msgid "Écouter sur cet ordinateur"
+msgstr "Listen on this computer"
+
+#: src/ui/editor.rs
+msgid "Titre du chapitre (facultatif, distinct du titre de la piste)"
+msgstr "Chapter title (optional, separate from the track title)"
+
+#: src/ui/editor.rs
+msgid "Icône du chapitre"
+msgstr "Chapter icon"
+
+#: src/ui/editor.rs
+msgid "Aucun"
+msgstr "None"
+
+#: src/ui/editor.rs
+msgid ""
+"Les événements de piste s’activent avec la lecture interactive, dans les "
+"réglages avancés de la playlist."
+msgstr ""
+"Track events are turned on with interactive playback, in the playlist’s "
+"advanced settings."
+
+#: src/ui/editor.rs
+msgid "Choisir une icône"
+msgstr "Choose an icon"
+
+#: src/ui/editor.rs
+msgid "Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes."
+msgstr "The account or the playlist changed. Open the icon picker again."
+
+#: src/ui/editor.rs
+msgid "Déplacer dans un chapitre"
+msgstr "Move into a chapter"
+
+#: src/ui/editor.rs
+msgid "Sélectionnez un seul média pour remplacer cette piste."
+msgstr "Select a single media item to replace this track."
+
+#: src/ui/editor.rs
+msgid ""
+"Cette piste n’existe plus dans la playlist ; l’audio n’a pas été remplacé."
+msgstr "This track is no longer in the playlist; the audio was not replaced."
+
+#: src/ui/editor.rs src/ui/mod.rs
+msgid "Suppression sur Yoto…"
+msgstr "Deleting on Yoto…"
+
+#: src/ui/editor.rs
+msgid "Playlist supprimée sur Yoto."
+msgstr "Playlist deleted on Yoto."
+
+#: src/ui/editor.rs src/ui/group.rs src/ui/pixelart.rs
+msgid "Image"
+msgstr "Image"
+
+#: src/ui/editor.rs
+msgid "Vide"
+msgstr "Empty"
+
+#: src/ui/editor.rs
+#, rust-format
+msgid "{count} piste · {duration}"
+msgid_plural "{count} pistes · {duration}"
+msgstr[0] "{count} track · {duration}"
+msgstr[1] "{count} tracks · {duration}"
+
+#: src/ui/editor.rs
+msgid "Choisir une couverture"
+msgstr "Choose a cover"
+
+#: src/ui/editor.rs
+msgid "Changer la couverture"
+msgstr "Change the cover"
+
+#: src/ui/editor.rs
+msgid "Plus d’actions"
+msgstr "More actions"
+
+#: src/ui/editor.rs
+msgid "Dupliquer la playlist"
+msgstr "Duplicate the playlist"
+
+#: src/ui/editor.rs
+msgid "Supprimer la playlist de mon compte Yoto"
+msgstr "Delete the playlist from my Yoto account"
+
+#: src/ui/editor.rs
+#, rust-format
+msgid "Supprimer « {title} » de votre compte Yoto ?"
+msgstr "Delete “{title}” from your Yoto account?"
+
+#: src/ui/editor.rs
+msgid ""
+"La playlist disparaîtra de votre compte Yoto et de vos lecteurs. Vos "
+"fichiers audio restent dans la médiathèque. Cette action est irréversible."
+msgstr ""
+"The playlist will disappear from your Yoto account and your players. Your "
+"audio files stay in the library. This cannot be undone."
+
+#: src/ui/editor.rs src/ui/library.rs src/ui/players.rs src/ui/trim.rs
+msgid "Supprimer"
+msgstr "Delete"
+
+#: src/ui/editor.rs
+msgid "Langues"
+msgstr "Languages"
+
+#: src/ui/editor.rs
+msgid "Catégorie"
+msgstr "Category"
+
+#: src/ui/editor.rs
+msgid "Après une piste"
+msgstr "After a track"
+
+#: src/ui/editor.rs
+msgid "Lecture"
+msgstr "Playback"
+
+#: src/ui/editor.rs
+msgid "Connexion requise sur le lecteur"
+msgstr "Player must be online"
+
+#: src/ui/editor.rs
+msgid "Lecture aléatoire : début-fin-limite (chapitres dès 1)"
+msgstr "Shuffle: start-end-limit (chapters from 1)"
+
+#: src/ui/editor.rs
+msgid "Durée de reprise (secondes)"
+msgstr "Resume time (seconds)"
+
+#: src/ui/editor.rs
+msgid "Ajouter un stream"
+msgstr "Add a stream"
+
+#: src/ui/editor.rs
+msgid "Abandonner les images non enregistrées"
+msgstr "Discard unsaved images"
+
+#: src/ui/editor.rs
+msgid ""
+"Les événements de chaque piste se règlent depuis son menu, « Réglages "
+"avancés »."
+msgstr "Each track’s events are set from its menu, “Advanced settings”."
+
+#: src/ui/editor.rs
+msgid "Recharger la version Yoto"
+msgstr "Reload the Yoto version"
+
+#: src/ui/editor.rs
+msgid "Voir le suivi"
+msgstr "See progress"
+
+#: src/ui/editor.rs
+msgid "Cette playlist est vide"
+msgstr "This playlist is empty"
+
+#: src/ui/editor.rs
+msgid ""
+"Cliquez sur « Ajouter des médias » pour y mettre des audios de votre "
+"médiathèque."
+msgstr "Click “Add media” to put audio from your library in it."
+
+#: src/ui/editor.rs
+msgid "Options de la playlist"
+msgstr "Playlist options"
+
+#: src/ui/editor.rs
+msgid "Description, auteur, catégorie, langue, lecture"
+msgstr "Description, author, category, language, playback"
+
+#: src/ui/editor.rs
+msgid "Lecture interactive, événements"
+msgstr "Interactive playback, events"
+
+#: src/ui/editor.rs src/ui/wording.rs
+msgid "Playlists"
+msgstr "Playlists"
+
+#: src/ui/editor.rs src/ui/players.rs
+msgid "Actualiser depuis Yoto"
+msgstr "Refresh from Yoto"
+
+#: src/ui/editor.rs
+msgid "Créer une playlist"
+msgstr "Create a playlist"
+
+#: src/ui/editor.rs
+msgid "Créer une playlist avec ce titre"
+msgstr "Create a playlist with this title"
+
+#: src/ui/editor.rs
+msgid "Connectez votre compte Yoto pour retrouver et modifier vos playlists."
+msgstr "Connect your Yoto account to find and edit your playlists."
+
+#: src/ui/editor.rs src/ui/players.rs
+msgid "Connecter Yoto"
+msgstr "Connect Yoto"
+
+#: src/ui/editor.rs
+msgid ""
+"Aucune playlist Yoto. Créez votre première playlist ou actualisez la liste."
+msgstr "No Yoto playlists. Create your first playlist or refresh the list."
+
+#: src/ui/editor.rs
+msgid "Ouverture depuis Yoto…"
+msgstr "Opening from Yoto…"
+
+#: src/ui/editor.rs
+msgid "Création et vérification sur Yoto…"
+msgstr "Creating and checking on Yoto…"
+
+#: src/ui/editor.rs
+msgid "Vos playlists Yoto"
+msgstr "Your Yoto playlists"
+
+#: src/ui/editor.rs
+msgid ""
+"Choisissez une playlist à gauche pour la modifier et y ajouter des audios de "
+"votre médiathèque."
+msgstr ""
+"Choose a playlist on the left to edit it and add audio from your library."
+
+#: src/ui/editor.rs
+msgid "Les modifications sont enregistrées directement sur votre compte Yoto."
+msgstr "Changes are saved directly to your Yoto account."
+
+#: src/ui/editor.rs
+msgid "Aléatoire attendu début-fin-limite"
+msgstr "Expected shuffle as start-end-limit"
+
+#: src/ui/editor.rs
+msgid "Début de chapitre attendu"
+msgstr "Expected a start chapter"
+
+#: src/ui/editor.rs
+msgid "Les chapitres commencent à 1"
+msgstr "Chapters start at 1"
+
+#: src/ui/editor.rs
+msgid "Fin de chapitre attendue"
+msgstr "Expected an end chapter"
+
+#: src/ui/editor.rs
+msgid "Limite entière attendue"
+msgstr "Expected a whole-number limit"
+
+#: src/ui/editor.rs
+msgid "Aucune"
+msgstr "None"
+
+#: src/ui/editor.rs
+msgid "Histoires"
+msgstr "Stories"
+
+#: src/ui/editor.rs
+msgid "Musique"
+msgstr "Music"
+
+#: src/ui/editor.rs
+msgid "Radio"
+msgstr "Radio"
+
+#: src/ui/editor.rs
+msgid "Podcasts"
+msgstr "Podcasts"
+
+#: src/ui/editor.rs
+msgid "Sons"
+msgstr "Sounds"
+
+#: src/ui/editor.rs
+msgctxt "catégorie"
+msgid "Activités"
+msgstr "Activities"
+
+#: src/ui/editor.rs
+msgid "Alarmes"
+msgstr "Alarms"
+
+#: src/ui/editor.rs
+msgid "Lire la piste suivante"
+msgstr "Play the next track"
+
+#: src/ui/editor.rs
+msgid "Répéter la piste"
+msgstr "Repeat the track"
+
+#: src/ui/editor.rs
+msgid "Lecture continue"
+msgstr "Continuous playback"
+
+#: src/ui/editor.rs
+msgid "Lecture interactive"
+msgstr "Interactive playback"
+
+#: src/ui/editor.rs
+msgid "Répéter"
+msgstr "Repeat"
+
+#: src/ui/editor.rs
+msgid "Aller à une piste"
+msgstr "Go to a track"
+
+#: src/ui/editor.rs
+msgid "À la fin de la piste"
+msgstr "At the end of the track"
+
+#: src/ui/editor.rs
+msgid "Bouton gauche"
+msgstr "Left button"
+
+#: src/ui/editor.rs
+msgid "Bouton droit"
+msgstr "Right button"
+
+#: src/ui/group.rs
+msgid "Nom du groupe"
+msgstr "Group name"
+
+#: src/ui/group.rs
+msgid "Aucune image pour l’instant : ajoutez-en une depuis votre ordinateur."
+msgstr "No images yet: add one from your computer."
+
+#: src/ui/group.rs
+msgid "Choisissez l’image du groupe."
+msgstr "Choose the group’s image."
+
+#: src/ui/group.rs
+msgid "Image ajoutée à votre famille."
+msgstr "Image added to your family."
+
+#: src/ui/group.rs
+msgid "Groupe enregistré sur Yoto."
+msgstr "Group saved on Yoto."
+
+#: src/ui/group.rs
+msgid "Réponse inattendue."
+msgstr "Unexpected answer."
+
+#: src/ui/group.rs
+#, rust-format
+msgid "Groupe enregistré. Actualisation impossible : {reason}"
+msgstr "Group saved. Could not refresh: {reason}"
+
+#: src/ui/group.rs
+msgid "Modifier le groupe"
+msgstr "Edit group"
+
+#: src/ui/group.rs
+msgid "Nouveau groupe"
+msgstr "New group"
+
+#: src/ui/group.rs
+msgid "Fermer l’éditeur de groupe"
+msgstr "Close the group editor"
+
+#: src/ui/group.rs src/ui/imports.rs src/ui/trim.rs src/ui/update.rs
+#: src/ui/wording.rs
+msgid "Fermer"
+msgstr "Close"
+
+#: src/ui/group.rs
+#, rust-format
+msgid "Monter « {title} »"
+msgstr "Move “{title}” up"
+
+#: src/ui/group.rs
+msgid "Monter"
+msgstr "Move up"
+
+#: src/ui/group.rs
+#, rust-format
+msgid "Descendre « {title} »"
+msgstr "Move “{title}” down"
+
+#: src/ui/group.rs
+msgid ""
+"Cochez les playlists à mettre dans le groupe ; vous pourrez ensuite les "
+"ordonner ici."
+msgstr ""
+"Tick the playlists to put in the group; you can then put them in order here."
+
+#: src/ui/group.rs
+#, rust-format
+msgid "Image {number}"
+msgstr "Image {number}"
+
+#: src/ui/group.rs
+msgid "Ajouter une image"
+msgstr "Add an image"
+
+#: src/ui/group.rs
+msgid "Choisir parmi vos images"
+msgstr "Choose from your images"
+
+#: src/ui/group.rs
+msgid "Retirer l’image"
+msgstr "Remove the image"
+
+#: src/ui/group.rs
+msgid "Playlists du groupe"
+msgstr "Playlists in the group"
+
+#: src/ui/group.rs
+msgid "Ordre dans le groupe"
+msgstr "Order in the group"
+
+#: src/ui/group.rs
+msgid "Image du groupe"
+msgstr "Group image"
+
+#: src/ui/group.rs src/ui/wording.rs
+msgid "Enregistrement…"
+msgstr "Saving…"
+
+#: src/ui/group.rs
+msgid "Enregistrer le groupe"
+msgstr "Save the group"
+
+#: src/ui/imports.rs
+msgid "Collez un lien YouTube pour importer son audio."
+msgstr "Paste a YouTube link to import its audio."
+
+#: src/ui/imports.rs
+msgid "Recherche du titre et des informations YouTube…"
+msgstr "Looking up the title and YouTube details…"
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Import de « {title} » lancé. Suivez sa progression dans « Imports »."
+msgstr "Import of “{title}” started. Follow its progress in “Imports”."
+
+#: src/ui/imports.rs
+msgid "Cette vidéo n’est pas disponible. Vérifiez le lien et réessayez."
+msgstr "This video is not available. Check the link and try again."
+
+#: src/ui/imports.rs
+msgid "Cette playlist ne contient aucune vidéo disponible."
+msgstr "This playlist has no available videos."
+
+#: src/ui/imports.rs
+msgid "Cochez les vidéos de cette playlist à importer."
+msgstr "Tick the videos from this playlist to import."
+
+#: src/ui/imports.rs src/ui/library.rs
+msgid "Lien YouTube"
+msgstr "YouTube link"
+
+#: src/ui/imports.rs
+msgid "Recherche…"
+msgstr "Looking up…"
+
+#: src/ui/imports.rs src/ui/wording.rs
+msgid "Importer"
+msgstr "Import"
+
+#: src/ui/imports.rs
+msgid ""
+"Une vidéo ou une playlist publique. On récupère seulement l’audio ; pour une "
+"playlist, vous choisirez les vidéos à garder."
+msgstr ""
+"A public video or playlist. Only the audio is kept; for a playlist, you will "
+"choose the videos to keep."
+
+#: src/ui/imports.rs
+msgid "Ajouter un fichier audio depuis mon ordinateur"
+msgstr "Add an audio file from my computer"
+
+#: src/ui/imports.rs src/ui/library.rs
+msgid "Ajouter un fichier audio"
+msgstr "Add an audio file"
+
+#: src/ui/imports.rs
+msgid "ou glissez-le ici · MP3, M4A, WAV…"
+msgstr "or drag it here · MP3, M4A, WAV…"
+
+#: src/ui/imports.rs src/ui/playlist_media_picker.rs
+msgid "Importer de l’audio"
+msgstr "Import audio"
+
+#: src/ui/imports.rs
+msgid "Depuis YouTube ou depuis un fichier de votre ordinateur."
+msgstr "From YouTube or from a file on your computer."
+
+#: src/ui/imports.rs
+msgid "Vidéos de la playlist"
+msgstr "Videos in the playlist"
+
+#: src/ui/imports.rs
+msgid "Choisissez les vidéos à importer."
+msgstr "Choose the videos to import."
+
+#: src/ui/imports.rs
+msgid "Tout désélectionner"
+msgstr "Deselect all"
+
+#: src/ui/imports.rs src/ui/library.rs
+msgid "Tout sélectionner"
+msgstr "Select all"
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Importer la sélection ({count})"
+msgstr "Import the selection ({count})"
+
+#: src/ui/imports.rs
+#, rust-format
+msgid ""
+"{count} vidéo en cours d’import. Suivez sa progression dans « Imports »."
+msgid_plural ""
+"{count} vidéos en cours d’import. Suivez leur progression dans « Imports »."
+msgstr[0] "{count} video being imported. Follow its progress in “Imports”."
+msgstr[1] "{count} videos being imported. Follow their progress in “Imports”."
+
+#: src/ui/imports.rs
+msgid "Activités"
+msgstr "Activity"
+
+#: src/ui/imports.rs
+msgid "Vos imports apparaîtront ici, avec leur progression."
+msgstr "Your imports will appear here, with their progress."
+
+#: src/ui/imports.rs
+msgid "Plus récentes"
+msgstr "Newer"
+
+#: src/ui/imports.rs
+msgid "Plus anciennes"
+msgstr "Older"
+
+#: src/ui/imports.rs
+msgid "Détails"
+msgstr "Details"
+
+#: src/ui/imports.rs
+msgid "En attente…"
+msgstr "Waiting…"
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "{phase} · « {title} »"
+msgstr "{phase} · “{title}”"
+
+#: src/ui/imports.rs src/ui/pixelart.rs src/ui/update.rs
+msgid "Réessayer"
+msgstr "Try again"
+
+#: src/ui/imports.rs
+msgid "Se connecter"
+msgstr "Sign in"
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Conflit sur « {playlist} »"
+msgstr "Conflict on “{playlist}”"
+
+#: src/ui/imports.rs
+msgid ""
+"La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver."
+msgstr "The playlist was also changed on Yoto. Choose the version to keep."
+
+#: src/ui/imports.rs
+msgid "Vérifier la publication"
+msgstr "Check the upload"
+
+#: src/ui/imports.rs
+msgid "Prêt dans la médiathèque"
+msgstr "Ready in the library"
+
+#: src/ui/imports.rs
+msgid "Média retiré de votre médiathèque"
+msgstr "Media removed from your library"
+
+#: src/ui/imports.rs src/ui/library.rs src/ui/trim.rs
+msgid "Écouter"
+msgstr "Listen"
+
+#: src/ui/imports.rs
+msgid "Version préparée"
+msgstr "Prepared version"
+
+#: src/ui/imports.rs src/ui/wording.rs
+msgid "Enregistré sur Yoto"
+msgstr "Saved on Yoto"
+
+#: src/ui/imports.rs src/ui/wording.rs
+msgid "Annulé"
+msgstr "Cancelled"
+
+#: src/ui/imports.rs
+msgid "Vidéo YouTube"
+msgstr "YouTube video"
+
+#: src/ui/imports.rs
+msgid "Préparation audio locale"
+msgstr "Preparing audio on this computer"
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Préparation · {title}"
+msgstr "Preparing · {title}"
+
+#: src/ui/imports.rs
+#, rust-format
+msgid "Publication · {title}"
+msgstr "Upload · {title}"
+
+#: src/ui/imports.rs
+msgid "Cette médiathèque a été fermée."
+msgstr "This library was closed."
+
+#: src/ui/imports.rs
+msgid "Publier ma version"
+msgstr "Upload my version"
+
+#: src/ui/imports.rs
+msgid "Garder la version Yoto"
+msgstr "Keep the Yoto version"
+
+#: src/ui/imports.rs
+msgid "Créer une copie"
+msgstr "Make a copy"
+
+#: src/ui/imports.rs
+msgid "Vidéo YouTube d’origine"
+msgstr "Original YouTube video"
+
+#: src/ui/imports.rs
+msgid "Copier le lien"
+msgstr "Copy the link"
+
+#: src/ui/imports.rs
+msgid ""
+"Yoto n’a pas confirmé cet envoi. Vérifiez-le avant de le renvoyer, pour ne "
+"pas créer la playlist deux fois."
+msgstr ""
+"Yoto has not confirmed this upload. Check it before sending it again, so the "
+"playlist is not created twice."
+
+#: src/ui/imports.rs
+msgid "Vérifier auprès de Yoto"
+msgstr "Check with Yoto"
+
+#: src/ui/imports.rs
+msgid "La carte existe déjà ?"
+msgstr "Does the card already exist?"
+
+#: src/ui/imports.rs
+msgid ""
+"Si l’envoi a créé une carte avant une déconnexion, collez son identifiant "
+"(affiché dans l’application Yoto) pour la relier à cet envoi."
+msgstr ""
+"If the upload created a card before a disconnection, paste its ID (shown in "
+"the Yoto app) to link it to this upload."
+
+#: src/ui/imports.rs
+msgid "Relier cette carte"
+msgstr "Link this card"
+
+#: src/ui/imports.rs
+msgid ""
+"Collez l’identifiant de la carte, tel qu’il apparaît dans l’application Yoto."
+msgstr "Paste the card ID as it appears in the Yoto app."
+
+#: src/ui/imports.rs
+msgid ""
+"Enregistré sur votre compte Yoto. Pour l’écouter sur une carte, associez "
+"cette playlist à une carte « Make Your Own » dans l’application Yoto."
+msgstr ""
+"Saved on your Yoto account. To listen to it from a card, link this playlist "
+"to a “Make Your Own” card in the Yoto app."
+
+#: src/ui/library.rs
+msgid "Fichier audio"
+msgstr "Audio file"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Sélectionner {title}"
+msgstr "Select {title}"
+
+#: src/ui/library.rs
+msgid "Découpé"
+msgstr "Trimmed"
+
+#: src/ui/library.rs src/ui/trim.rs
+msgid "Original"
+msgstr "Original"
+
+#: src/ui/library.rs
+msgid "Ouvrir et écouter"
+msgstr "Open and listen"
+
+#: src/ui/library.rs
+msgid "Commencez votre médiathèque"
+msgstr "Start your library"
+
+#: src/ui/library.rs
+msgid ""
+"Ajoutez un fichier audio ou un lien YouTube. Vous pourrez ensuite écouter, "
+"découper, puis ajouter l’audio à une playlist Yoto."
+msgstr ""
+"Add an audio file or a YouTube link. You can then listen, trim, and add the "
+"audio to a Yoto playlist."
+
+#: src/ui/library.rs
+msgid "Importer depuis un lien YouTube"
+msgstr "Import from a YouTube link"
+
+#: src/ui/library.rs
+msgid "Aucun audio ne correspond à votre recherche. Essayez un autre mot."
+msgstr "No audio matches your search. Try another word."
+
+#: src/ui/library.rs src/ui/wording.rs
+msgid "Médiathèque"
+msgstr "Library"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "{count} audio · sur cet ordinateur"
+msgid_plural "{count} audios · sur cet ordinateur"
+msgstr[0] "{count} audio · on this computer"
+msgstr[1] "{count} audios · on this computer"
+
+#: src/ui/library.rs src/ui/trim.rs
+msgid "Titre"
+msgstr "Title"
+
+#: src/ui/library.rs
+msgid "Durée"
+msgstr "Duration"
+
+#: src/ui/library.rs
+msgid "Plus récents"
+msgstr "Newest"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Trier par : {order}"
+msgstr "Sort by: {order}"
+
+#: src/ui/library.rs src/ui/trim.rs
+msgid "Plus d’options"
+msgstr "More options"
+
+#: src/ui/library.rs
+msgid "Libérer l’espace inutilisé"
+msgstr "Free up unused space"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "« {title} »"
+msgstr "“{title}”"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "{count} audio sélectionné"
+msgid_plural "{count} audios sélectionnés"
+msgstr[0] "{count} audio selected"
+msgstr[1] "{count} audios selected"
+
+#: src/ui/library.rs
+msgid "Désélectionner"
+msgstr "Deselect"
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Supprimer {count} média de la médiathèque ?"
+msgid_plural "Supprimer {count} médias de la médiathèque ?"
+msgstr[0] "Delete {count} media item from the library?"
+msgstr[1] "Delete {count} media items from the library?"
+
+#: src/ui/library.rs
+msgid ""
+"Les fichiers audio et leurs versions préparées seront effacés de cet "
+"ordinateur. Les médias encore utilisés dans une playlist ou par une tâche en "
+"cours seront conservés. Cette action est irréversible."
+msgstr ""
+"The audio files and their prepared versions will be erased from this "
+"computer. Media still used in a playlist or by a task in progress will be "
+"kept. This cannot be undone."
+
+#: src/ui/library.rs
+#, rust-format
+msgid "Ajouter à « {title} »"
+msgstr "Add to “{title}”"
+
+#: src/ui/mod.rs
+msgid "Prêt."
+msgstr "Ready."
+
+#: src/ui/mod.rs
+msgid "Rechercher dans vos médias…"
+msgstr "Search your media…"
+
+#: src/ui/mod.rs
+msgid "Titre de la playlist"
+msgstr "Playlist title"
+
+#: src/ui/mod.rs
+msgid "Identifiant de la carte"
+msgstr "Card ID"
+
+#: src/ui/mod.rs
+msgid "Votre collection personnelle, même hors ligne."
+msgstr "Your personal collection, even offline."
+
+#: src/ui/mod.rs
+msgid ""
+"La connexion Yoto n’a pas abouti. Cliquez de nouveau sur « Connecter mon "
+"compte Yoto », terminez la connexion dans votre navigateur, puis revenez ici."
+msgstr ""
+"The Yoto sign-in did not finish. Click “Connect my Yoto account” again, "
+"finish signing in in your browser, then come back here."
+
+#: src/ui/mod.rs
+msgid "Playlist Yoto ouverte."
+msgstr "Yoto playlist opened."
+
+#: src/ui/mod.rs
+msgid "Enregistrement sur Yoto en cours…"
+msgstr "Saving on Yoto…"
+
+#: src/ui/mod.rs
+msgid "Commande acceptée par le lecteur."
+msgstr "Command accepted by the player."
+
+#: src/ui/mod.rs
+msgid ""
+"La médiathèque choisie s’ouvre dans une autre fenêtre ; celle-ci reste "
+"disponible."
+msgstr "The chosen library opens in another window; this one stays available."
+
+#: src/ui/mod.rs
+msgid ""
+"Déposez des fichiers audio (MP3, M4A, WAV, FLAC, OGG…). Les autres fichiers "
+"sont ignorés."
+msgstr "Drop audio files (MP3, M4A, WAV, FLAC, OGG…). Other files are ignored."
+
+#: src/ui/mod.rs
+#, rust-format
+msgid ""
+"{count} fichier ignoré : seuls les fichiers audio (MP3, M4A, WAV, FLAC, "
+"OGG…) sont importés."
+msgid_plural ""
+"{count} fichiers ignorés : seuls les fichiers audio (MP3, M4A, WAV, FLAC, "
+"OGG…) sont importés."
+msgstr[0] ""
+"{count} file ignored: only audio files (MP3, M4A, WAV, FLAC, OGG…) are "
+"imported."
+msgstr[1] ""
+"{count} files ignored: only audio files (MP3, M4A, WAV, FLAC, OGG…) are "
+"imported."
+
+#: src/ui/mod.rs
+msgid "Ajouter vos fichiers audio"
+msgstr "Add your audio files"
+
+#: src/ui/mod.rs
+msgid "Audio"
+msgstr "Audio"
+
+#: src/ui/mod.rs
+msgid "Choisissez un profil Yoto existant contenant catalogue.db"
+msgstr "Choose an existing Yoto profile that contains catalogue.db"
+
+#: src/ui/mod.rs
+msgid "Votre audio. Vos histoires."
+msgstr "Your audio. Your stories."
+
+#: src/ui/mod.rs
+msgid "Connecté à Yoto"
+msgstr "Connected to Yoto"
+
+#: src/ui/mod.rs
+msgid "Compte Yoto"
+msgstr "Yoto account"
+
+#: src/ui/mod.rs
+msgid "Non connecté"
+msgstr "Not connected"
+
+#: src/ui/mod.rs
+msgid "Connexion Yoto en cours dans votre navigateur…"
+msgstr "Signing in to Yoto in your browser…"
+
+#: src/ui/mod.rs
+msgid "Compte connecté. Chargement de vos playlists Yoto…"
+msgstr "Account connected. Loading your Yoto playlists…"
+
+#: src/ui/mod.rs
+msgid "Déconnexion du compte…"
+msgstr "Disconnecting the account…"
+
+#: src/ui/mod.rs
+msgid "Compte déconnecté."
+msgstr "Account disconnected."
+
+#: src/ui/mod.rs
+msgid "Changement de compte…"
+msgstr "Switching account…"
+
+#: src/ui/mod.rs
+msgid "Compte sélectionné."
+msgstr "Account selected."
+
+#: src/ui/mod.rs
+msgid "Chargement depuis Yoto…"
+msgstr "Loading from Yoto…"
+
+#: src/ui/mod.rs
+msgid "Données Yoto actualisées."
+msgstr "Yoto data refreshed."
+
+#: src/ui/mod.rs
+msgid "Ajout à la file d’import…"
+msgstr "Adding to the import queue…"
+
+#: src/ui/mod.rs
+msgid "Import lancé. Suivez sa progression dans « Imports »."
+msgstr "Import started. Follow its progress in “Imports”."
+
+#: src/ui/mod.rs
+msgid "Création de la playlist sur Yoto…"
+msgstr "Creating the playlist on Yoto…"
+
+#: src/ui/mod.rs
+msgid "Playlist créée sur Yoto."
+msgstr "Playlist created on Yoto."
+
+#: src/ui/mod.rs
+msgid "Copie de la playlist sur Yoto…"
+msgstr "Copying the playlist on Yoto…"
+
+#: src/ui/mod.rs
+msgid "Copie créée sur Yoto."
+msgstr "Copy created on Yoto."
+
+#: src/ui/mod.rs
+msgid "Ouverture de la playlist…"
+msgstr "Opening the playlist…"
+
+#: src/ui/mod.rs
+msgid "Playlist supprimée de votre compte Yoto."
+msgstr "Playlist deleted from your Yoto account."
+
+#: src/ui/mod.rs
+msgid "Suppression du groupe…"
+msgstr "Deleting the group…"
+
+#: src/ui/mod.rs
+msgid "Groupe supprimé."
+msgstr "Group deleted."
+
+#: src/ui/mod.rs
+msgid "Suppression…"
+msgstr "Deleting…"
+
+#: src/ui/mod.rs
+msgid "Média supprimé de votre médiathèque."
+msgstr "Media deleted from your library."
+
+#: src/ui/mod.rs
+msgid "Nettoyage…"
+msgstr "Cleaning up…"
+
+#: src/ui/mod.rs
+msgid "Fichiers inutilisés supprimés."
+msgstr "Unused files deleted."
+
+#: src/ui/mod.rs
+msgid "Relance de la tâche…"
+msgstr "Restarting the task…"
+
+#: src/ui/mod.rs
+msgid "Tâche relancée."
+msgstr "Task restarted."
+
+#: src/ui/mod.rs
+msgid "Annulation…"
+msgstr "Cancelling…"
+
+#: src/ui/mod.rs
+msgid "Tâche annulée."
+msgstr "Task cancelled."
+
+#: src/ui/mod.rs
+msgid "Vérification auprès de Yoto…"
+msgstr "Checking with Yoto…"
+
+#: src/ui/mod.rs
+msgid "Vérification lancée."
+msgstr "Check started."
+
+#: src/ui/mod.rs
+msgid "Export de la médiathèque…"
+msgstr "Exporting the library…"
+
+#: src/ui/mod.rs
+msgid "Médiathèque exportée."
+msgstr "Library exported."
+
+#: src/ui/mod.rs
+msgid "Import de la médiathèque…"
+msgstr "Importing the library…"
+
+#: src/ui/mod.rs
+msgid "Médiathèque importée."
+msgstr "Library imported."
+
+#: src/ui/mod.rs
+msgid "Traitement en cours…"
+msgstr "Working…"
+
+#: src/ui/mod.rs
+msgid "Terminé."
+msgstr "Done."
+
+#: src/ui/mod.rs
+#, rust-format
+msgid "{label} · Synchroniser pour actualiser les données Yoto."
+msgstr "{label} · Sync to refresh the Yoto data."
+
+#: src/ui/mod.rs
+#, rust-format
+msgid "{label} · Synchronisation en cours…"
+msgstr "{label} · Syncing…"
+
+#: src/ui/mod.rs
+#, rust-format
+msgid "{label} · À jour"
+msgstr "{label} · Up to date"
+
+#: src/ui/mod.rs
+#, rust-format
+msgid "{label} · Actualisation impossible : {reason}"
+msgstr "{label} · Could not refresh: {reason}"
+
+#: src/ui/pixelart.rs
+msgid "Choisissez une image…"
+msgstr "Choose an image…"
+
+#: src/ui/pixelart.rs
+msgid "Préparation de l’image…"
+msgstr "Preparing the image…"
+
+#: src/ui/pixelart.rs
+msgid "Mes icônes"
+msgstr "My icons"
+
+#: src/ui/pixelart.rs
+msgid "Chargement des icônes…"
+msgstr "Loading icons…"
+
+#: src/ui/pixelart.rs
+#, rust-format
+msgid "Chargement impossible : {failure}"
+msgstr "Could not load: {failure}"
+
+#: src/ui/pixelart.rs
+msgid "Aucune icône dans cette collection. Vous pouvez importer une image."
+msgstr "No icons in this collection. You can import an image."
+
+#: src/ui/pixelart.rs
+msgid ""
+"Choisissez une icône Yoto ou ajoutez votre image : elle sera adaptée en 16 × "
+"16 pour l’écran du lecteur."
+msgstr ""
+"Choose a Yoto icon or add your own image: it will be fitted to 16 × 16 for "
+"the player’s screen."
+
+#: src/ui/pixelart.rs
+msgid "Importer une image"
+msgstr "Import an image"
+
+#: src/ui/pixelart.rs
+msgid "Utiliser cette icône"
+msgstr "Use this icon"
+
+#: src/ui/players.rs src/ui/wording.rs
+msgid "Lecteurs"
+msgstr "Players"
+
+#: src/ui/players.rs
+msgid ""
+"Choisissez un lecteur, lancez une playlist, réglez le volume et la lumière."
+msgstr "Choose a player, start a playlist, set the volume and the light."
+
+#: src/ui/players.rs
+msgid "Vous verrez alors vos lecteurs et pourrez lancer une playlist dessus."
+msgstr "You will then see your players and can start a playlist on them."
+
+#: src/ui/players.rs
+msgid "En ligne"
+msgstr "Online"
+
+#: src/ui/players.rs
+msgid "Hors ligne"
+msgstr "Offline"
+
+#: src/ui/players.rs
+msgid ""
+"Aucun lecteur trouvé. Actualisez depuis Yoto, puis vérifiez que votre "
+"lecteur est allumé et connecté au Wi-Fi."
+msgstr ""
+"No players found. Refresh from Yoto, then check that your player is on and "
+"connected to Wi-Fi."
+
+#: src/ui/players.rs
+msgid ""
+"Choisissez un lecteur ci-dessus pour lancer une playlist, régler le volume, "
+"la veilleuse ou la minuterie."
+msgstr ""
+"Choose a player above to start a playlist, set the volume, the night light "
+"or the sleep timer."
+
+#: src/ui/players.rs
+msgid "Groupes familiaux"
+msgstr "Family groups"
+
+#: src/ui/players.rs
+msgid "Créer un groupe"
+msgstr "Create a group"
+
+#: src/ui/players.rs
+msgid ""
+"Un groupe rassemble des playlists à partager avec la famille, dans "
+"l’application Yoto."
+msgstr "A group gathers playlists to share with the family, in the Yoto app."
+
+#: src/ui/players.rs
+msgid "Aucune playlist"
+msgstr "No playlists"
+
+#: src/ui/players.rs
+msgid "Modifier"
+msgstr "Edit"
+
+#: src/ui/players.rs
+#, rust-format
+msgid "Supprimer le groupe « {name} » ?"
+msgstr "Delete the group “{name}”?"
+
+#: src/ui/players.rs
+msgid ""
+"Le groupe disparaîtra de votre compte Yoto. Les playlists qu’il contient ne "
+"sont pas supprimées."
+msgstr ""
+"The group will disappear from your Yoto account. The playlists in it are not "
+"deleted."
+
+#: src/ui/playlist_media_picker.rs
+#, rust-format
+msgid "Original · {duration}"
+msgstr "Original · {duration}"
+
+#: src/ui/playlist_media_picker.rs
+#, rust-format
+msgid "Découpe {start} → {end} ({duration})"
+msgstr "Trim {start} → {end} ({duration})"
+
+#: src/ui/playlist_media_picker.rs
+#, rust-format
+msgid "Découpe {start} → {end} ({duration}) · volume égalisé"
+msgstr "Trim {start} → {end} ({duration}) · levelled volume"
+
+#: src/ui/playlist_media_picker.rs
+msgid "Cette playlist n’est plus ouverte."
+msgstr "This playlist is no longer open."
+
+#: src/ui/playlist_media_picker.rs
+msgid "Choisir une version"
+msgstr "Choose a version"
+
+#: src/ui/playlist_media_picker.rs
+msgid ""
+"Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer."
+msgstr "Your library is empty. Import a file or a video to get started."
+
+#: src/ui/playlist_media_picker.rs
+msgid "Envoi en cours…"
+msgstr "Sending…"
+
+#: src/ui/playlist_media_picker.rs
+#, rust-format
+msgid "Ajouter ({selected})"
+msgstr "Add ({selected})"
+
+#: src/ui/playlist_media_picker.rs
+msgid "Choisissez le média qui remplacera cette piste."
+msgstr "Choose the media that will replace this track."
+
+#: src/ui/playlist_media_picker.rs
+msgid "Sélectionnez vos médias et la version à envoyer."
+msgstr "Select your media and the version to send."
+
+#: src/ui/playlist_media_picker.rs
+msgid "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
+msgstr "The audio is sent to Yoto before it appears in your playlist."
+
+#: src/ui/playlist_move_picker.rs
+msgid "Déplacer"
+msgstr "Move"
+
+#: src/ui/playlist_move_picker.rs
+msgid ""
+"Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses "
+"références sont conservés."
+msgstr ""
+"Choose the chapter to put this track in. Its title and references are kept."
+
+#: src/ui/trim.rs
+msgid "Étiquettes séparées par des virgules"
+msgstr "Tags separated by commas"
+
+#: src/ui/trim.rs
+msgid "La fin doit se trouver après le début."
+msgstr "The end must come after the start."
+
+#: src/ui/trim.rs
+msgid ""
+"Choisissez un début et une fin valides, en minutes et secondes (par exemple "
+"1:05)."
+msgstr ""
+"Choose a valid start and end, in minutes and seconds (for example 1:05)."
+
+#: src/ui/trim.rs
+msgid "Début invalide"
+msgstr "Invalid start"
+
+#: src/ui/trim.rs
+msgid "Fin invalide"
+msgstr "Invalid end"
+
+#: src/ui/trim.rs
+msgid "Découpe enregistrée. Vous pouvez l’ajouter à une playlist."
+msgstr "Trim saved. You can add it to a playlist."
+
+#: src/ui/trim.rs
+msgid "Préparation annulée."
+msgstr "Preparation cancelled."
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Préparation : {state}…"
+msgstr "Preparing: {state}…"
+
+#: src/ui/trim.rs
+msgid "Préparation de votre découpe…"
+msgstr "Preparing your trim…"
+
+#: src/ui/trim.rs
+msgid "Informations enregistrées."
+msgstr "Details saved."
+
+#: src/ui/trim.rs
+msgid "Choisissez un début et une fin valides avant d’appliquer."
+msgstr "Choose a valid start and end before applying."
+
+#: src/ui/trim.rs
+msgid "Modifier les informations"
+msgstr "Edit details"
+
+#: src/ui/trim.rs
+msgid "Étiquettes"
+msgstr "Tags"
+
+#: src/ui/trim.rs
+msgid "Enregistrer"
+msgstr "Save"
+
+#: src/ui/trim.rs
+msgid "Analyse de la forme d’onde…"
+msgstr "Analysing the waveform…"
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Découper « {title} »"
+msgstr "Trim “{title}”"
+
+#: src/ui/trim.rs
+msgid "Déplacez les poignées pour garder la partie qui vous plaît."
+msgstr "Move the handles to keep the part you like."
+
+#: src/ui/trim.rs
+msgid "Début"
+msgstr "Start"
+
+#: src/ui/trim.rs
+msgid "Fin"
+msgstr "End"
+
+#: src/ui/trim.rs
+msgid "Durée gardée"
+msgstr "Kept length"
+
+#: src/ui/trim.rs
+msgid "Préparation de l’écoute…"
+msgstr "Getting ready to play…"
+
+#: src/ui/trim.rs
+msgid "Écouter la sélection"
+msgstr "Listen to the selection"
+
+#: src/ui/trim.rs
+msgid "Égaliser le volume"
+msgstr "Level the volume"
+
+#: src/ui/trim.rs
+msgid "Utile quand une chanson est beaucoup plus forte que les autres."
+msgstr "Useful when one song is much louder than the others."
+
+#: src/ui/trim.rs
+msgid ""
+"Votre original est conservé. Appliquer crée une version pour vos playlists."
+msgstr "Your original is kept. Applying creates a version for your playlists."
+
+#: src/ui/trim.rs
+msgid "Préparation…"
+msgstr "Preparing…"
+
+#: src/ui/trim.rs
+msgid "Appliquer"
+msgstr "Apply"
+
+#: src/ui/trim.rs
+msgid "Ce média n’est plus disponible."
+msgstr "This media is no longer available."
+
+#: src/ui/trim.rs
+#, rust-format
+msgid "Supprimer « {title} » ?"
+msgstr "Delete “{title}”?"
+
+#: src/ui/trim.rs
+msgid ""
+"L’audio et ses versions préparées seront effacés de cet ordinateur. Cette "
+"action est irréversible. Un média utilisé dans une playlist ne peut pas être "
+"supprimé."
+msgstr ""
+"The audio and its prepared versions will be erased from this computer. This "
+"cannot be undone. A media item used in a playlist cannot be deleted."
+
+#: src/ui/trim.rs
+msgid "Version découpée"
+msgstr "Trimmed version"
+
+#: src/ui/trim.rs
+msgid "Original conservé"
+msgstr "Original kept"
+
+#: src/ui/trim.rs
+msgid "Exporter l’original"
+msgstr "Export the original"
+
+#: src/ui/trim.rs
+msgid "Supprimer ce média local"
+msgstr "Delete this local media"
+
+#: src/ui/trim.rs
+msgid "Découper l’audio"
+msgstr "Trim the audio"
+
+#. TRANSLATORS: a time with tenths of a second, such as 1:05,4; keep the
+#. language's decimal separator.
+#: src/ui/trim.rs
+#, rust-format
+msgid "{clock},{tenth}"
+msgstr "{clock}.{tenth}"
+
+#: src/ui/update.rs
+msgid "Mises à jour"
+msgstr "Updates"
+
+#: src/ui/update.rs
+msgid "Mise à jour disponible"
+msgstr "Update available"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "Version installée : {version}"
+msgstr "Installed version: {version}"
+
+#: src/ui/update.rs
+#, rust-format
+msgid ""
+"Recevez les nouvelles versions de {product} directement dans l’application."
+msgstr "Get new versions of {product} right in the app."
+
+#: src/ui/update.rs
+msgid "Rechercher une mise à jour"
+msgstr "Check for updates"
+
+#: src/ui/update.rs
+msgid "Recherche de mises à jour…"
+msgstr "Checking for updates…"
+
+#: src/ui/update.rs
+msgid "Vous utilisez la dernière version disponible."
+msgstr "You are using the latest version."
+
+#: src/ui/update.rs
+msgid "Vérifier à nouveau"
+msgstr "Check again"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "La version {version} est disponible."
+msgstr "Version {version} is available."
+
+#: src/ui/update.rs
+msgid "Télécharger la mise à jour"
+msgstr "Download the update"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "Téléchargement : {percent} % ({received} / {total} Mo)"
+msgstr "Downloading: {percent}% ({received} / {total} MB)"
+
+#: src/ui/update.rs
+msgid "Annuler le téléchargement"
+msgstr "Cancel the download"
+
+#: src/ui/update.rs
+msgid "Vérification et préparation de la mise à jour…"
+msgstr "Checking and preparing the update…"
+
+#: src/ui/update.rs
+#, rust-format
+msgid "La version {version} est prête à être installée."
+msgstr "Version {version} is ready to install."
+
+#: src/ui/update.rs
+msgid ""
+"Votre médiathèque est conservée. Terminez vos imports et envois avant de "
+"redémarrer."
+msgstr ""
+"Your library is kept. Finish your imports and uploads before restarting."
+
+#: src/ui/update.rs
+msgid "Installer et redémarrer"
+msgstr "Install and restart"
+
+#: src/ui/update.rs
+msgid "Redémarrage de l’application…"
+msgstr "Restarting the app…"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "L’audio n’a pas pu être traité. Détail : {message}"
+msgstr "The audio could not be processed. Details: {message}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Un problème est survenu sur cet ordinateur. Détail : {message}"
+msgstr "Something went wrong on this computer. Details: {message}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Un composant de l’application est manquant ou endommagé. Réinstallez "
+"l’application. Détail : {message}"
+msgstr ""
+"Part of the app is missing or damaged. Reinstall the app. Details: {message}"
+
+#: src/ui/wording.rs
+msgid "Pas de connexion Internet. Vérifiez votre réseau puis réessayez."
+msgstr "No internet connection. Check your network, then try again."
+
+#: src/ui/wording.rs
+msgid "Connectez votre compte Yoto dans « Compte » pour continuer."
+msgstr "Connect your Yoto account in “Account” to continue."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Yoto a reçu trop de demandes. Réessayez dans {retry_after_seconds} secondes."
+msgstr ""
+"Yoto received too many requests. Try again in {retry_after_seconds} seconds."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Yoto a répondu d’une manière inattendue. Réessayez plus tard. Détail : "
+"{message}"
+msgstr ""
+"Yoto answered in an unexpected way. Try again later. Details: {message}"
+
+#: src/ui/wording.rs
+msgid "Cette playlist a changé sur Yoto. Rechargez-la avant de continuer."
+msgstr "This playlist changed on Yoto. Reload it before continuing."
+
+#: src/ui/wording.rs
+msgid "Opération annulée."
+msgstr "Cancelled."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Yoto n’a pas pu convertir la piste « {track} ». Préparez de nouveau l’audio, "
+"puis réessayez."
+msgstr ""
+"Yoto could not convert the track “{track}”. Prepare the audio again, then "
+"try again."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"La conversion de la piste « {track} » par Yoto est restée bloquée à "
+"{percent} %, même après un nouvel envoi. Réessayez plus tard."
+msgstr ""
+"Yoto’s conversion of the track “{track}” got stuck at {percent}%, even after "
+"sending it again. Try again later."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"La conversion de la piste « {track} » par Yoto est restée bloquée, même "
+"après un nouvel envoi. Réessayez plus tard."
+msgstr ""
+"Yoto’s conversion of the track “{track}” got stuck, even after sending it "
+"again. Try again later."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Yoto n’a pas fini de convertir la piste « {track} » dans le temps prévu "
+"(arrêt à {percent} %). Réessayez plus tard."
+msgstr ""
+"Yoto did not finish converting the track “{track}” in time (stopped at "
+"{percent}%). Try again later."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Yoto n’a pas fini de convertir la piste « {track} » dans le temps prévu. "
+"Réessayez plus tard."
+msgstr ""
+"Yoto did not finish converting the track “{track}” in time. Try again later."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Traitement par Yoto ({percent} %)"
+msgstr "Processing by Yoto ({percent}%)"
+
+#: src/ui/wording.rs
+msgid "Téléchargement"
+msgstr "Downloading"
+
+#: src/ui/wording.rs
+msgid "Analyse de l’audio"
+msgstr "Analysing the audio"
+
+#: src/ui/wording.rs
+msgid "Préparation de l’audio"
+msgstr "Preparing the audio"
+
+#: src/ui/wording.rs
+msgid "Envoi de l’audio à Yoto"
+msgstr "Sending the audio to Yoto"
+
+#: src/ui/wording.rs
+msgid "Traitement par Yoto"
+msgstr "Processing by Yoto"
+
+#: src/ui/wording.rs
+msgid "Enregistrement de la playlist"
+msgstr "Saving the playlist"
+
+#: src/ui/wording.rs
+msgid "Vérification finale"
+msgstr "Final check"
+
+#: src/ui/wording.rs
+msgid "En attente"
+msgstr "Waiting"
+
+#: src/ui/wording.rs
+msgid "Nouvel essai automatique prévu"
+msgstr "Will try again automatically"
+
+#: src/ui/wording.rs
+msgid "Connexion au compte Yoto requise"
+msgstr "Yoto account sign-in needed"
+
+#: src/ui/wording.rs
+msgid "Modifiée aussi sur Yoto · à vérifier"
+msgstr "Also changed on Yoto · to check"
+
+#: src/ui/wording.rs
+msgid "Résultat à vérifier auprès de Yoto"
+msgstr "Result to check with Yoto"
+
+#: src/ui/wording.rs
+msgid "Terminé"
+msgstr "Done"
+
+#: src/ui/wording.rs
+msgid "Échec"
+msgstr "Failed"
+
+#: src/ui/wording.rs
+msgid "Imports"
+msgstr "Imports"
+
+#: src/ui/wording.rs
+msgid "Compte"
+msgstr "Account"
+
+#: src/ui/wording.rs
+msgid "Playlists Yoto"
+msgstr "Yoto playlists"
+
+#: src/ui/wording.rs
+msgid "Groupes"
+msgstr "Groups"
+
+#: src/ui/wording.rs
+msgid "Icônes"
+msgstr "Icons"
+
+#: src/ui/wording.rs
+msgid "Sur cet ordinateur"
+msgstr "On this computer"
+
+#: src/ui/wording.rs
+msgid "Sur Yoto"
+msgstr "On Yoto"
+
+#: src/ui/wording.rs
+msgid "Modification à confirmer sur Yoto"
+msgstr "Change to confirm on Yoto"
+
+#: src/ui/wording.rs
+msgid "Envoi vers Yoto…"
+msgstr "Sending to Yoto…"
+
+#: src/ui/wording.rs
+msgid "Reconnectez votre compte Yoto"
+msgstr "Reconnect your Yoto account"
+
+#: src/ui/wording.rs
+msgid "Modifiée sur Yoto · à vérifier"
+msgstr "Changed on Yoto · to check"
+
+#: src/ui/wording.rs
+msgid "Publication à vérifier"
+msgstr "Upload to check"
+
+#: src/ui/wording.rs
+msgid "Envoi échoué · voir les détails"
+msgstr "Upload failed · see details"
+
+#: src/ui/wording.rs
+msgid "Régler le volume"
+msgstr "Set volume"
+
+#: src/ui/wording.rs
+msgid "Lumière"
+msgstr "Light"
+
+#: src/ui/wording.rs
+msgid "Lire sur le lecteur"
+msgstr "Play on the player"
+
+#: src/ui/wording.rs
+msgid "Activer Bluetooth"
+msgstr "Turn Bluetooth on"
+
+#: src/ui/wording.rs
+msgid "Désactiver Bluetooth"
+msgstr "Turn Bluetooth off"
+
+#: src/ui/wording.rs
+msgid "Oublier Bluetooth"
+msgstr "Forget Bluetooth device"
+
+#: src/ui/wording.rs
+msgid "Connecter Bluetooth"
+msgstr "Connect Bluetooth"
+
+#: src/ui/wording.rs
+msgid "Déconnecter Bluetooth"
+msgstr "Disconnect Bluetooth"
+
+#: src/ui/wording.rs
+msgid "État Bluetooth"
+msgstr "Bluetooth status"
+
+#: src/ui/wording.rs
+msgid "Aperçu de l’icône"
+msgstr "Icon preview"
+
+#: src/ui/wording.rs
+msgid "Actualiser la lecture"
+msgstr "Refresh playback"
+
+#: src/ui/wording.rs
+msgid "Actualiser l’état"
+msgstr "Refresh status"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "{title} — partie {part}/{parts}"
+msgstr "{title} — part {part} of {parts}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Trop long pour une seule piste Yoto (1 h au plus) : ajouté à une playlist, "
+"il sera découpé en {parts} parties."
+msgstr ""
+"Too long for a single Yoto track (1 h at most): added to a playlist, it will "
+"be split into {parts} parts."
+
+#: src/ui/wording.rs
+msgid "Non enregistré"
+msgstr "Not saved"
+
+#: src/ui/wording.rs
+msgid "À vérifier"
+msgstr "To check"
+
+#: src/ui/wording.rs
+msgid "Envoi sur Yoto…"
+msgstr "Sending to Yoto…"
+
+#: src/ui/wording.rs
+msgid "Enregistrement sur Yoto…"
+msgstr "Saving on Yoto…"
+
+#: src/ui/wording.rs
+msgid "Envoi et vérification sur Yoto…"
+msgstr "Sending and checking on Yoto…"
+
+#: src/ui/wording.rs
+msgid ""
+"Les modifications sont enregistrées automatiquement sur Yoto, dès que vous "
+"faites une pause ou quittez un champ."
+msgstr ""
+"Changes are saved to Yoto automatically as soon as you pause or leave a "
+"field."
+
+#: src/ui/wording.rs
+msgid ""
+"Cette playlist doit d’abord être vérifiée : ouvrez-la ou consultez "
+"« Imports »."
+msgstr "This playlist needs checking first: open it or look in “Imports”."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Les modifications de « {title} » n’ont pas pu être enregistrées sur Yoto. "
+"{reason}"
+msgstr "The changes to “{title}” could not be saved on Yoto. {reason}"
+
+#: src/ui/wording.rs
+msgid "Enregistrement des dernières modifications sur Yoto avant de quitter…"
+msgstr "Saving the latest changes on Yoto before quitting…"
+
+#: src/ui/wording.rs
+msgid "Des modifications ne sont pas enregistrées sur Yoto"
+msgstr "Some changes are not saved on Yoto"
+
+#: src/ui/wording.rs
+msgid "Quitter quand même"
+msgstr "Quit anyway"
+
+#: src/ui/wording.rs
+msgid "Yoto n’a pas encore confirmé l’enregistrement."
+msgstr "Yoto has not confirmed the save yet."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "« {title} » : {reason}"
+msgstr "“{title}”: {reason}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"{lines}\n"
+"\n"
+"Si vous quittez maintenant, ces modifications seront perdues."
+msgstr ""
+"{lines}\n"
+"\n"
+"If you quit now, these changes will be lost."
+
+#: src/ui/wording.rs
+msgid "Connexion dans votre navigateur…"
+msgstr "Signing in in your browser…"
+
+#: src/ui/wording.rs
+msgid "Arrêter d’attendre la connexion dans le navigateur"
+msgstr "Stop waiting for the sign-in in the browser"
+
+#: src/ui/wording.rs
+msgid "Connexion annulée."
+msgstr "Sign-in cancelled."
+
+#: src/ui/wording.rs
+msgid "Outil YouTube"
+msgstr "YouTube tool"
+
+#: src/ui/wording.rs
+msgid ""
+"Il sert à importer les vidéos YouTube. L’application le met à jour toute "
+"seule une fois par jour, et aussitôt qu’un import échoue parce que YouTube a "
+"changé."
+msgstr ""
+"It is used to import YouTube videos. The app updates it by itself once a "
+"day, and as soon as an import fails because YouTube changed."
+
+#: src/ui/wording.rs
+msgid "Mettre à jour l’outil YouTube"
+msgstr "Update the YouTube tool"
+
+#: src/ui/wording.rs
+msgid "fournie avec l’application"
+msgstr "included with the app"
+
+#: src/ui/wording.rs
+msgid "mise à jour par l’application"
+msgstr "updated by the app"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Version {version} ({origin})"
+msgstr "Version {version} ({origin})"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Version inconnue ({origin})"
+msgstr "Unknown version ({origin})"
+
+#: src/ui/wording.rs
+msgid "Recherche d’une nouvelle version…"
+msgstr "Looking for a new version…"
+
+#: src/ui/wording.rs
+msgid "L’outil YouTube est à jour."
+msgstr "The YouTube tool is up to date."
+
+#: src/ui/wording.rs
+msgid "L’outil YouTube a été mis à jour."
+msgstr "The YouTube tool was updated."
+
+#: src/ui/wording.rs
+msgid ""
+"Impossible de vérifier les mises à jour. Vérifiez votre connexion Internet "
+"puis réessayez."
+msgstr ""
+"Could not check for updates. Check your internet connection, then try again."
+
+#: src/ui/wording.rs
+msgid ""
+"La nouvelle version n’a pas passé la vérification de sécurité : elle n’a pas "
+"été installée. L’outil actuel reste utilisé."
+msgstr ""
+"The new version did not pass the security check, so it was not installed. "
+"The current tool is still used."
+
+#: src/ui/wording.rs
+msgid ""
+"La nouvelle version ne démarre pas sur cet ordinateur. L’outil actuel reste "
+"utilisé."
+msgstr ""
+"The new version does not start on this computer. The current tool is still "
+"used."
+
+#: src/ui/wording.rs
+msgid ""
+"La nouvelle version n’a pas pu être enregistrée sur cet ordinateur. L’outil "
+"actuel reste utilisé."
+msgstr ""
+"The new version could not be saved on this computer. The current tool is "
+"still used."
+
+#: src/ui/wording.rs
+msgid ""
+"Cet ordinateur ne permet pas de mettre à jour l’outil YouTube. Il le sera "
+"avec la prochaine version de l’application."
+msgstr ""
+"The YouTube tool cannot be updated on this computer. It will be with the "
+"next version of the app."
+
+#: src/ui/wording.rs
+msgid "Autre médiathèque"
+msgstr "Other library"
+
+#: src/ui/wording.rs
+msgid ""
+"Ouvrez une autre médiathèque de cet ordinateur, par exemple une médiathèque "
+"importée. Elle s’ouvre dans une nouvelle fenêtre."
+msgstr ""
+"Open another library on this computer, for example an imported one. It opens "
+"in a new window."
+
+#: src/ui/wording.rs
+msgid "Ouvrir une autre médiathèque"
+msgstr "Open another library"
+
+#: src/ui/wording.rs
+msgid "Ouvrir une autre médiathèque Yoto"
+msgstr "Open another Yoto library"
+
+#: src/ui/wording.rs
+msgid "Exporter la médiathèque…"
+msgstr "Export the library…"
+
+#: src/ui/wording.rs
+msgid "Importer une médiathèque…"
+msgstr "Import a library…"
+
+#: src/ui/wording.rs
+msgid "Exporter la médiathèque"
+msgstr "Export the library"
+
+#: src/ui/wording.rs
+msgid "Importer une médiathèque"
+msgstr "Import a library"
+
+#: src/ui/wording.rs
+msgid ""
+"Enregistrez une copie protégée de toute votre médiathèque (audios, versions "
+"préparées et playlists), par exemple sur une clé USB, pour changer "
+"d’ordinateur ou en cas de pépin."
+msgstr ""
+"Save a protected copy of your whole library (audio, prepared versions and "
+"playlists), for example on a USB stick, to move to another computer or in "
+"case something goes wrong."
+
+#: src/ui/wording.rs
+msgid ""
+"Retrouvez une médiathèque exportée depuis cette application. Elle s’ouvre à "
+"côté de celle-ci, dans une nouvelle fenêtre : rien n’est remplacé."
+msgstr ""
+"Bring back a library exported from this app. It opens next to this one, in a "
+"new window: nothing is replaced."
+
+#: src/ui/wording.rs
+msgid "1. Choisissez où enregistrer l’export"
+msgstr "1. Choose where to save the export"
+
+#: src/ui/wording.rs
+msgid "2. Notez la clé de récupération"
+msgstr "2. Write down the recovery key"
+
+#: src/ui/wording.rs
+msgid "1. Collez la clé de récupération"
+msgstr "1. Paste the recovery key"
+
+#: src/ui/wording.rs
+msgid "2. Choisissez l’export"
+msgstr "2. Choose the export"
+
+#: src/ui/wording.rs
+msgid "Choisir un dossier…"
+msgstr "Choose a folder…"
+
+#: src/ui/wording.rs
+msgid "Choisir un autre dossier…"
+msgstr "Choose another folder…"
+
+#: src/ui/wording.rs
+msgid "Choisir l’export…"
+msgstr "Choose the export…"
+
+#: src/ui/wording.rs
+msgid "Choisir un autre export…"
+msgstr "Choose another export…"
+
+#: src/ui/wording.rs
+msgid "Aucun dossier choisi."
+msgstr "No folder chosen."
+
+#: src/ui/wording.rs
+msgid "Où enregistrer l’export de la médiathèque ?"
+msgstr "Where should the library export be saved?"
+
+#: src/ui/wording.rs
+msgid "Choisissez le dossier de l’export à importer"
+msgstr "Choose the folder of the export to import"
+
+#: src/ui/wording.rs
+msgid ""
+"Cette clé protège l’export : sans elle, personne ne pourra l’ouvrir, pas "
+"même vous. Notez-la sur papier ou dans votre gestionnaire de mots de passe, "
+"et gardez-la à part de l’export."
+msgstr ""
+"This key protects the export: without it, nobody can open it, not even you. "
+"Write it down on paper or in your password manager, and keep it apart from "
+"the export."
+
+#: src/ui/wording.rs
+msgid "Clé notée lors de l’export"
+msgstr "Key written down during the export"
+
+#: src/ui/wording.rs
+msgid "Copier"
+msgstr "Copy"
+
+#: src/ui/wording.rs
+msgid "Copiée"
+msgstr "Copied"
+
+#: src/ui/wording.rs
+msgid "Exporter"
+msgstr "Export"
+
+#: src/ui/wording.rs
+msgid ""
+"Export en cours… Cela peut prendre quelques minutes pour une grande "
+"médiathèque."
+msgstr "Exporting… This can take a few minutes for a large library."
+
+#: src/ui/wording.rs
+msgid "Import en cours : chaque fichier est vérifié…"
+msgstr "Importing: each file is being checked…"
+
+#: src/ui/wording.rs
+msgid "Ouvrir la médiathèque importée"
+msgstr "Open the imported library"
+
+#: src/ui/wording.rs
+msgid "Collez d’abord la clé de récupération notée lors de l’export."
+msgstr "First paste the recovery key written down during the export."
+
+#: src/ui/wording.rs
+msgid ""
+"Cette clé de récupération est incomplète ou contient une faute de frappe. "
+"Recopiez-la exactement comme elle a été notée lors de l’export (8 groupes de "
+"8 lettres et chiffres)."
+msgstr ""
+"This recovery key is incomplete or has a typo. Copy it exactly as it was "
+"written down during the export (8 groups of 8 letters and digits)."
+
+#: src/ui/wording.rs
+msgid "Choisissez d’abord un dossier."
+msgstr "Choose a folder first."
+
+#: src/ui/wording.rs
+msgid "Choisissez d’abord le dossier de l’export."
+msgstr "Choose the export folder first."
+
+#: src/ui/wording.rs
+msgid ""
+"Ce dossier ne contient pas d’export de médiathèque. Choisissez le dossier "
+"créé par « Exporter la médiathèque… »."
+msgstr ""
+"This folder does not contain a library export. Choose the folder created by "
+"“Export the library…”."
+
+#: src/ui/wording.rs
+msgid ""
+"L’application ne trouve pas le dossier de ses médiathèques sur cet "
+"ordinateur."
+msgstr "The app cannot find the folder of its libraries on this computer."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "Médiathèque Yoto {date}"
+msgstr "Yoto library {date}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "{library} importée {date}"
+msgstr "{library} imported {date}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Médiathèque exportée dans « {path} ». Gardez bien la clé de récupération."
+msgstr "Library exported to “{path}”. Keep the recovery key safe."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Médiathèque importée dans « {path} ». Ouvrez-la pour la retrouver ; "
+"reconnectez ensuite votre compte Yoto dans « Compte »."
+msgstr ""
+"Library imported to “{path}”. Open it to find it again, then reconnect your "
+"Yoto account in “Account”."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "L’export n’a pas abouti. {reason}"
+msgstr "The export did not finish. {reason}"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "L’import n’a pas abouti. {reason}"
+msgstr "The import did not finish. {reason}"
+
+#: src/ui/wording.rs
+msgid ""
+"Yoto n’autorise pas cette action pour ce compte. Reconnectez votre compte "
+"pour accorder l’accès."
+msgstr ""
+"Yoto does not allow this action for this account. Reconnect your account to "
+"grant access."
+
+#: src/ui/wording.rs
+msgid ""
+"Yoto a peut-être reçu la modification. Vérifiez le résultat dans « Imports » "
+"avant de réessayer."
+msgstr ""
+"Yoto may have received the change. Check the result in “Imports” before "
+"trying again."
+
+#: src/ui/wording.rs
+msgid ""
+"Ce lien n’est pas une adresse valide. Collez un lien YouTube complet "
+"(https://…)."
+msgstr ""
+"This link is not a valid address. Paste a full YouTube link (https://…)."
+
+#: src/ui/wording.rs
+msgid "Seuls les liens YouTube (youtube.com ou youtu.be) sont acceptés."
+msgstr "Only YouTube links (youtube.com or youtu.be) are accepted."
+
+#: src/ui/wording.rs
+msgid "Cette vidéo dure plus de 2 heures ; l’import est limité à 2 heures."
+msgstr "This video is longer than 2 hours; imports are limited to 2 hours."
+
+#: src/ui/wording.rs
+msgid ""
+"Le téléchargement YouTube a échoué. La vidéo est peut-être privée, supprimée "
+"ou indisponible dans votre pays."
+msgstr ""
+"The YouTube download failed. The video may be private, removed or "
+"unavailable in your country."
+
+#: src/ui/wording.rs
+msgid ""
+"Cette vidéo YouTube est privée ou réservée aux membres d’une chaîne : elle "
+"ne peut pas être importée."
+msgstr ""
+"This YouTube video is private or for channel members only: it cannot be "
+"imported."
+
+#: src/ui/wording.rs
+msgid ""
+"Cette vidéo YouTube est réservée aux adultes : YouTube demande une connexion "
+"pour la lire, elle ne peut donc pas être importée."
+msgstr ""
+"This YouTube video is for adults only: YouTube asks for a sign-in to play "
+"it, so it cannot be imported."
+
+#: src/ui/wording.rs
+msgid "Cette vidéo YouTube n’est pas disponible dans votre pays."
+msgstr "This YouTube video is not available in your country."
+
+#: src/ui/wording.rs
+msgid "Cette vidéo YouTube n’existe plus ou a été retirée. Vérifiez le lien."
+msgstr "This YouTube video no longer exists or was removed. Check the link."
+
+#: src/ui/wording.rs
+msgid ""
+"YouTube a changé et l’application ne sait plus lire cette vidéo, même après "
+"avoir cherché une version plus récente de son outil YouTube. Réessayez plus "
+"tard."
+msgstr ""
+"YouTube changed and the app can no longer read this video, even after "
+"looking for a newer version of its YouTube tool. Try again later."
+
+#: src/ui/wording.rs
+msgid ""
+"YouTube bloque pour un moment les téléchargements depuis votre connexion. "
+"Réessayez dans quelques minutes."
+msgstr ""
+"YouTube is blocking downloads from your connection for a while. Try again in "
+"a few minutes."
+
+#: src/ui/wording.rs
+msgid ""
+"YouTube ne répond pas. Vérifiez votre connexion Internet puis réessayez."
+msgstr ""
+"YouTube is not responding. Check your internet connection, then try again."
+
+#: src/ui/wording.rs
+msgid "Ce lien est une playlist YouTube : choisissez les vidéos à importer."
+msgstr "This link is a YouTube playlist: choose the videos to import."
+
+#: src/ui/wording.rs
+msgid "Cette vidéo n’est pas reconnue. Vérifiez le lien."
+msgstr "This video is not recognised. Check the link."
+
+#: src/ui/wording.rs
+msgid "Ce fichier est introuvable. Il a peut-être été déplacé ou supprimé."
+msgstr "This file cannot be found. It may have been moved or deleted."
+
+#: src/ui/wording.rs
+msgid "Ce fichier n’est pas un fichier audio lisible."
+msgstr "This file is not a playable audio file."
+
+#: src/ui/wording.rs
+msgid "Ce fichier audio est vide."
+msgstr "This audio file is empty."
+
+#: src/ui/wording.rs
+msgid ""
+"La préparation de l’audio a échoué. Réessayez ; si le problème persiste, "
+"réimportez le fichier."
+msgstr ""
+"Preparing the audio failed. Try again; if the problem continues, import the "
+"file again."
+
+#: src/ui/wording.rs
+msgid ""
+"Cet extrait dépasse ce que Yoto accepte (1 h ou 100 Mo par piste). "
+"Raccourcissez-le."
+msgstr ""
+"This excerpt is more than Yoto accepts (1 h or 100 MB per track). Make it "
+"shorter."
+
+#: src/ui/wording.rs
+msgid ""
+"Une piste de cette playlist dure plus d’une heure, la limite de Yoto. "
+"Retirez-la puis ajoutez de nouveau ce média : il sera découpé en plusieurs "
+"parties."
+msgstr ""
+"A track in this playlist is longer than one hour, Yoto’s limit. Remove it, "
+"then add this media again: it will be split into several parts."
+
+#: src/ui/wording.rs
+msgid ""
+"Cet audio est trop long pour être écouté ici. Découpez-le en parties plus "
+"courtes."
+msgstr "This audio is too long to listen to here. Split it into shorter parts."
+
+#: src/ui/wording.rs
+msgid "Cette playlist dépasse ce que Yoto accepte (100 pistes, 5 h ou 500 Mo)."
+msgstr "This playlist is more than Yoto accepts (100 tracks, 5 h or 500 MB)."
+
+#: src/ui/wording.rs
+msgid ""
+"Yoto refuse les pistes de plus de 60 minutes. Raccourcissez cette piste ou "
+"découpez-la en plusieurs pistes."
+msgstr ""
+"Yoto does not accept tracks longer than 60 minutes. Shorten this track or "
+"split it into several tracks."
+
+#: src/ui/wording.rs
+msgid ""
+"Yoto refuse les pistes de plus de 100 Mo. Raccourcissez cette piste ou "
+"découpez-la en plusieurs pistes."
+msgstr ""
+"Yoto does not accept tracks larger than 100 MB. Shorten this track or split "
+"it into several tracks."
+
+#: src/ui/wording.rs
+msgid ""
+"Yoto refuse les playlists de plus de 5 heures au total. Retirez des pistes "
+"ou répartissez-les sur deux playlists."
+msgstr ""
+"Yoto does not accept playlists longer than 5 hours in total. Remove some "
+"tracks or spread them over two playlists."
+
+#: src/ui/wording.rs
+msgid ""
+"Yoto refuse les playlists de plus de 500 Mo au total. Retirez des pistes ou "
+"répartissez-les sur deux playlists."
+msgstr ""
+"Yoto does not accept playlists larger than 500 MB in total. Remove some "
+"tracks or spread them over two playlists."
+
+#: src/ui/wording.rs
+msgid ""
+"Ce lien de flux n’est pas une adresse valide. Collez une adresse complète "
+"qui commence par https://."
+msgstr ""
+"This stream link is not a valid address. Paste a full address starting with "
+"https://."
+
+#: src/ui/wording.rs
+msgid "Seuls les liens de flux qui commencent par https:// sont acceptés."
+msgstr "Only stream links starting with https:// are accepted."
+
+#: src/ui/wording.rs
+msgid ""
+"Ce média est utilisé dans une playlist. Retirez-le de la playlist avant de "
+"le supprimer."
+msgstr ""
+"This media is used in a playlist. Remove it from the playlist before "
+"deleting it."
+
+#: src/ui/wording.rs
+msgid ""
+"Une tâche utilise encore ce média. Attendez qu’elle se termine ou annulez-la "
+"dans « Imports »."
+msgstr ""
+"A task is still using this media. Wait for it to finish or cancel it in "
+"“Imports”."
+
+#: src/ui/wording.rs
+msgid ""
+"Un envoi vers Yoto doit d’abord être vérifié dans « Imports » avant de "
+"supprimer ce média."
+msgstr ""
+"An upload to Yoto must first be checked in “Imports” before this media can "
+"be deleted."
+
+#: src/ui/wording.rs
+msgid "Ce média n’existe plus dans votre médiathèque."
+msgstr "This media is no longer in your library."
+
+#: src/ui/wording.rs
+msgid "Choisissez au moins un média."
+msgstr "Choose at least one media item."
+
+#: src/ui/wording.rs
+msgid "Cette version n’appartient pas au média choisi."
+msgstr "This version does not belong to the chosen media."
+
+#: src/ui/wording.rs
+msgid "Cette playlist n’existe plus."
+msgstr "This playlist no longer exists."
+
+#: src/ui/wording.rs
+msgid "Cette tâche n’existe plus."
+msgstr "This task no longer exists."
+
+#: src/ui/wording.rs
+msgid ""
+"Un envoi précédent de cette playlist vers Yoto attend encore une "
+"vérification. Ouvrez « Imports » pour le vérifier, puis enregistrez de "
+"nouveau."
+msgstr ""
+"A previous upload of this playlist to Yoto is still waiting to be checked. "
+"Open “Imports” to check it, then save again."
+
+#: src/ui/wording.rs
+msgid ""
+"Cet envoi a peut-être déjà abouti sur Yoto. Choisissez « Vérifier la "
+"publication » plutôt que « Réessayer »."
+msgstr ""
+"This upload may already have reached Yoto. Choose “Check the upload” rather "
+"than “Try again”."
+
+#: src/ui/wording.rs
+msgid "Cette tâche ne peut pas être relancée telle quelle. Ouvrez ses détails."
+msgstr "This task cannot be restarted as it is. Open its details."
+
+#: src/ui/wording.rs
+msgid "Cette tâche est déjà terminée."
+msgstr "This task is already finished."
+
+#: src/ui/wording.rs
+msgid ""
+"Terminez les imports, préparations et envois en cours avant d’installer la "
+"mise à jour."
+msgstr ""
+"Finish the imports, preparations and uploads in progress before installing "
+"the update."
+
+#: src/ui/wording.rs
+msgid "L’application redémarre pour installer une mise à jour."
+msgstr "The app is restarting to install an update."
+
+#: src/ui/wording.rs
+msgid ""
+"Fermez l’autre fenêtre de l’application avant d’installer la mise à jour."
+msgstr "Close the app’s other window before installing the update."
+
+#: src/ui/wording.rs
+msgid ""
+"La mise à jour n’a pas pu démarrer. Téléchargez la nouvelle version depuis "
+"GitHub Releases."
+msgstr ""
+"The update could not start. Download the new version from GitHub Releases."
+
+#: src/ui/wording.rs
+msgid ""
+"Une autre tentative de connexion est encore ouverte. Fermez-la puis "
+"réessayez."
+msgstr "Another sign-in attempt is still open. Close it, then try again."
+
+#: src/ui/wording.rs
+msgid "Le navigateur n’a pas pu s’ouvrir. Ouvrez-le vous-même puis réessayez."
+msgstr "The browser could not open. Open it yourself, then try again."
+
+#: src/ui/wording.rs
+msgid ""
+"Vous avez refusé l’accès dans le navigateur. Réessayez et acceptez les "
+"autorisations demandées."
+msgstr ""
+"You declined access in the browser. Try again and accept the requested "
+"permissions."
+
+#: src/ui/wording.rs
+msgid "Yoto refuse cette action pour ce compte."
+msgstr "Yoto refuses this action for this account."
+
+#: src/ui/wording.rs
+msgid "Yoto ne trouve plus cet élément. Actualisez depuis Yoto puis réessayez."
+msgstr "Yoto can no longer find this item. Refresh from Yoto, then try again."
+
+#: src/ui/wording.rs
+msgid "Choisissez un lecteur."
+msgstr "Choose a player."
+
+#: src/ui/wording.rs
+msgid "Entrez un nom pour le lecteur."
+msgstr "Enter a name for the player."
+
+#: src/ui/wording.rs
+msgid "Le nom du groupe doit contenir entre 1 et 100 caractères."
+msgstr "The group name must have between 1 and 100 characters."
+
+#: src/ui/wording.rs
+msgid "L’image dépasse 8 Mo."
+msgstr "The image is larger than 8 MB."
+
+#: src/ui/wording.rs
+msgid "L’image est trop grande (8192 pixels maximum)."
+msgstr "The image is too big (8192 pixels at most)."
+
+#: src/ui/wording.rs
+msgid "Cette image ne peut pas servir d’icône."
+msgstr "This image cannot be used as an icon."
+
+#: src/ui/wording.rs
+msgid "Cette icône n’a pas encore été envoyée à Yoto."
+msgstr "This icon has not been sent to Yoto yet."
+
+#: src/ui/wording.rs
+msgid "La sortie audio ne répond pas. Vérifiez le son de votre ordinateur."
+msgstr "The audio output is not responding. Check your computer’s sound."
+
+#: src/ui/wording.rs
+msgid ""
+"L’application a reçu une réponse inattendue. Réessayez ; si le problème "
+"continue, redémarrez l’application."
+msgstr ""
+"The app received an unexpected answer. Try again; if the problem continues, "
+"restart the app."
+
+#: src/ui/wording.rs
+msgid ""
+"Un fichier de ce nom existe déjà à cet endroit. Choisissez un autre nom."
+msgstr "A file with this name already exists there. Choose another name."
+
+#: src/ui/wording.rs
+msgid ""
+"Cette clé de récupération ne correspond pas à cet export, ou l’export a été "
+"modifié depuis. Vérifiez la clé notée lors de l’export."
+msgstr ""
+"This recovery key does not match this export, or the export was changed "
+"since. Check the key written down during the export."
+
+#: src/ui/wording.rs
+msgid ""
+"Ce dossier n’est pas un export de médiathèque. Choisissez le dossier créé "
+"par « Exporter la médiathèque… »."
+msgstr ""
+"This folder is not a library export. Choose the folder created by “Export "
+"the library…”."
+
+#: src/ui/wording.rs
+msgid ""
+"Cet export vient d’une version plus récente de l’application. Mettez "
+"l’application à jour puis réessayez."
+msgstr ""
+"This export comes from a newer version of the app. Update the app, then try "
+"again."
+
+#: src/ui/wording.rs
+msgid "Cet export est incomplet ou endommagé : il ne peut pas être importé."
+msgstr "This export is incomplete or damaged: it cannot be imported."
+
+#: src/ui/wording.rs
+msgid ""
+"Un dossier du même nom existe déjà à cet endroit. Réessayez dans un instant "
+"ou choisissez un autre dossier."
+msgstr ""
+"A folder with the same name already exists there. Try again in a moment or "
+"choose another folder."
+
+#: src/ui/wording.rs
+msgid "Choisissez un dossier sur cet ordinateur, pas la racine d’un disque."
+msgstr "Choose a folder on this computer, not the top level of a disk."
+
+#: src/ui/wording.rs
+msgid "Le titre doit contenir entre 1 et 140 caractères."
+msgstr "The title must have between 1 and 140 characters."
+
+#: src/ui/wording.rs
+msgid "Ajoutez au moins un média à la playlist."
+msgstr "Add at least one media item to the playlist."
+
+#: src/ui/wording.rs
+msgid "Une playlist Yoto accepte au plus 100 pistes."
+msgstr "A Yoto playlist holds at most 100 tracks."
+
+#: src/ui/wording.rs
+msgid "Un chapitre doit contenir au moins une piste."
+msgstr "A chapter must hold at least one track."
+
+#: src/ui/wording.rs
+msgid "La plage de lecture aléatoire est invalide."
+msgstr "The shuffle range is not valid."
+
+#: src/ui/wording.rs
+msgid "Deux chapitres portent la même clé Yoto."
+msgstr "Two chapters have the same Yoto key."
+
+#: src/ui/wording.rs
+msgid "Deux pistes portent la même clé Yoto."
+msgstr "Two tracks have the same Yoto key."
+
+#: src/ui/wording.rs
+msgid ""
+"Ces deux pistes portent la même clé Yoto. Déplacez-les dans des chapitres "
+"distincts pour conserver leurs références."
+msgstr ""
+"These two tracks have the same Yoto key. Move them to separate chapters to "
+"keep their references."
+
+#: src/ui/wording.rs
+msgid ""
+"Cette playlist contient des événements interactifs non reconnus. Vérifiez-"
+"les avant de réorganiser les pistes."
+msgstr ""
+"This playlist contains interactive events that are not recognised. Check "
+"them before reordering the tracks."
+
+#: src/ui/wording.rs
+msgid ""
+"Retirez d’abord les événements interactifs qui renvoient à une piste (mode "
+"avancé) avant de réorganiser la playlist."
+msgstr ""
+"First remove the interactive events that point to a track (advanced mode) "
+"before reordering the playlist."
+
+#: src/ui/wording.rs
+msgid ""
+"Ce changement touche une plage de lecture aléatoire. Retirez d’abord cette "
+"plage dans les options de la playlist."
+msgstr ""
+"This change affects a shuffle range. First remove that range in the playlist "
+"options."
+
+#: src/ui/wording.rs
+msgid ""
+"Les chapitres d’une plage de lecture aléatoire doivent rester côte à côte."
+msgstr "The chapters of a shuffle range must stay next to each other."
+
+#: src/ui/wording.rs
+msgid "Ce chapitre n’existe plus."
+msgstr "This chapter no longer exists."
+
+#: src/ui/wording.rs
+msgid "Ce chapitre est déjà en bout de liste."
+msgstr "This chapter is already at the end of the list."
+
+#: src/ui/wording.rs
+msgid "Cette piste n’existe plus."
+msgstr "This track no longer exists."
+
+#: src/ui/wording.rs
+msgid "Le chapitre de destination n’existe plus."
+msgstr "The destination chapter no longer exists."
+
+#: src/ui/wording.rs
+msgid "Cette piste est déjà en bout de chapitre."
+msgstr "This track is already at the end of its chapter."
+
+#: src/ui/wording.rs
+msgid ""
+"Le début doit précéder la fin, et les deux doivent rester dans la durée de "
+"l’audio."
+msgstr ""
+"The start must come before the end, and both must stay within the length of "
+"the audio."
+
+#: src/ui/wording.rs
+msgid "Indiquez une heure au format HH:MM, par exemple 07:30."
+msgstr "Enter a time as HH:MM, for example 07:30."
+
+#: src/ui/wording.rs
+msgid "Indiquez une couleur au format #RRGGBB, par exemple #FF8800."
+msgstr "Enter a colour as #RRGGBB, for example #FF8800."
+
+#: src/ui/wording.rs
+msgid "Les limites et les durées doivent être des nombres entiers positifs."
+msgstr "Limits and durations must be positive whole numbers."
+
+#: src/ui/wording.rs
+msgid "Le volume doit être compris entre 0 et 100."
+msgstr "The volume must be between 0 and 100."
+
+#: src/ui/wording.rs
+msgid ""
+"Le serveur des mises à jour ne répond pas. Vérifiez votre connexion Internet "
+"puis réessayez."
+msgstr ""
+"The update server is not responding. Check your internet connection, then "
+"try again."
+
+#: src/ui/wording.rs
+msgid ""
+"La mise à jour reçue n’est pas valide et n’a pas été installée. Réessayez "
+"plus tard."
+msgstr ""
+"The update received is not valid and was not installed. Try again later."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"La mise à jour n’a pas pu être installée. Téléchargez la nouvelle version "
+"depuis GitHub Releases. Détail : {detail}"
+msgstr ""
+"The update could not be installed. Download the new version from GitHub "
+"Releases. Details: {detail}"
+
+#: src/ui/wording.rs
+msgid ""
+"Les mises à jour automatiques ne sont pas disponibles sur cet ordinateur. "
+"Téléchargez la nouvelle version depuis GitHub Releases."
+msgstr ""
+"Automatic updates are not available on this computer. Download the new "
+"version from GitHub Releases."
+
+#: src/ui/wording.rs
+msgid "Téléchargement annulé."
+msgstr "Download cancelled."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "{count} média supprimé de votre médiathèque."
+msgid_plural "{count} médias supprimés de votre médiathèque."
+msgstr[0] "{count} media item deleted from your library."
+msgstr[1] "{count} media items deleted from your library."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "{count} média supprimé."
+msgid_plural "{count} médias supprimés."
+msgstr[0] "{count} media item deleted."
+msgstr[1] "{count} media items deleted."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"{count} média conservé, car encore utilisé dans une playlist ou par une "
+"tâche en cours."
+msgid_plural ""
+"{count} médias conservés, car encore utilisés dans une playlist ou par une "
+"tâche en cours."
+msgstr[0] ""
+"{count} media item kept, because it is still used in a playlist or by a task "
+"in progress."
+msgstr[1] ""
+"{count} media items kept, because they are still used in a playlist or by a "
+"task in progress."
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "{hours} h {minutes} min"
+msgstr "{hours} h {minutes} min"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "{minutes} min {seconds} s"
+msgstr "{minutes} min {seconds} s"
+
+#: src/ui/wording.rs
+#, rust-format
+msgid "{seconds} s"
+msgstr "{seconds} s"

@@ -2,6 +2,7 @@ pub mod device;
 pub mod ids;
 pub mod jobs;
 pub mod media;
+pub mod messages;
 pub mod playlist;
 pub use device::*;
 pub use ids::*;
@@ -38,6 +39,23 @@ pub enum Failure {
     Cancelled,
     #[error("Tool unavailable: {0}")]
     Tool(String),
+    #[error("Yoto could not transcode « {track} » ({problem:?}).")]
+    Transcode {
+        track: String,
+        problem: TranscodeProblem,
+        /// Last progress Yoto reported for this track, when it reported any.
+        percent: Option<u8>,
+    },
+}
+/// Why Yoto's conversion of an uploaded track did not finish.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum TranscodeProblem {
+    /// Yoto reported that the conversion failed or was cancelled.
+    Failed,
+    /// Progress stopped moving, even after sending the file again.
+    Stalled,
+    /// The conversion did not finish within the time allowed for this track.
+    TimedOut,
 }
 impl Failure {
     /// A write may have reached the server when transport or receipt decoding fails.
@@ -52,7 +70,8 @@ impl Failure {
             | Self::Conflict
             | Self::Ambiguous
             | Self::Cancelled
-            | Self::Tool(_)) => other,
+            | Self::Tool(_)
+            | Self::Transcode { .. }) => other,
         }
     }
     pub fn retry_seconds(&self) -> Option<u64> {
@@ -61,6 +80,10 @@ impl Failure {
             Self::RateLimit {
                 retry_after_seconds,
             } => Some(*retry_after_seconds),
+            Self::Transcode { problem, .. } => match problem {
+                TranscodeProblem::Stalled | TranscodeProblem::TimedOut => Some(60),
+                TranscodeProblem::Failed => None,
+            },
             Self::Validation(_)
             | Self::Storage(_)
             | Self::Media(_)
@@ -83,6 +106,9 @@ impl Rules {
     pub const TRACK_BYTES_MAX: u64 = 100_000_000;
     pub const CARD_BYTES_MAX: u64 = 500_000_000;
     pub const TRACK_MICROS_MAX: u64 = 3_600_000_000;
+    /// Longest part a long audio is cut into when added to a playlist: 55 minutes, a
+    /// margin under Yoto's one-hour track limit.
+    pub const PART_MICROS_MAX: u64 = 3_300_000_000;
     pub const CARD_MICROS_MAX: u64 = 18_000_000_000;
     pub const MP3_BITRATE: u32 = 192;
     pub const SAMPLE_RATE: u32 = 44_100;
@@ -90,10 +116,7 @@ impl Rules {
     pub const WAVEFORM_BUCKETS: usize = 2048;
     pub fn title(value: &str) -> Result<()> {
         if value.trim().is_empty() || value.chars().count() > Self::TITLE_MAX {
-            return Err(Failure::Validation(format!(
-                "Title must contain 1–{} characters.",
-                Self::TITLE_MAX
-            )));
+            return Err(Failure::Validation(messages::TITLE_LENGTH.into()));
         }
         Ok(())
     }

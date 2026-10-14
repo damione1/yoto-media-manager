@@ -7,7 +7,35 @@ use gpui_kit::component::{
 use std::collections::{BTreeMap, BTreeSet};
 struct VersionChoice {
     id: RecipeId,
-    label: String,
+    /// The whole audio, or a trimmed part of it.
+    original: bool,
+    trim: TrimRange,
+    normalization: Normalization,
+}
+impl VersionChoice {
+    /// Worded when shown, so it follows the interface language.
+    fn label(&self) -> String {
+        let duration = duration_text(self.trim.duration().seconds());
+        if self.original {
+            return tr!("Original · {duration}", duration = duration);
+        }
+        let start = wording::position_text(self.trim.start().seconds());
+        let end = wording::position_text(self.trim.end().seconds());
+        match self.normalization {
+            Normalization::Preserve => tr!(
+                "Découpe {start} → {end} ({duration})",
+                start = start,
+                end = end,
+                duration = duration
+            ),
+            Normalization::Loudness => tr!(
+                "Découpe {start} → {end} ({duration}) · volume égalisé",
+                start = start,
+                end = end,
+                duration = duration
+            ),
+        }
+    }
 }
 struct MediaChoice {
     id: MediaId,
@@ -19,7 +47,6 @@ struct MediaChoice {
 pub(crate) struct MediaChoices {
     rows: Vec<MediaChoice>,
     positions: BTreeMap<MediaId, usize>,
-    pub(super) chapters: BTreeMap<PlaylistId, Arc<Vec<ChapterChoice>>>,
 }
 pub(super) struct ChapterChoice {
     pub(super) id: ChapterId,
@@ -33,31 +60,7 @@ pub(in crate::ui) fn prepare_media_choices(snapshot: &Snapshot) -> Arc<MediaChoi
         .enumerate()
         .map(|(index, row)| (row.id, index))
         .collect();
-    let chapters = snapshot
-        .playlists
-        .iter()
-        .map(|playlist| {
-            (
-                playlist.id,
-                Arc::new(
-                    playlist
-                        .chapters
-                        .iter()
-                        .map(|chapter| ChapterChoice {
-                            id: chapter.id,
-                            title: chapter.title.clone(),
-                            tracks: chapter.tracks.len(),
-                        })
-                        .collect(),
-                ),
-            )
-        })
-        .collect();
-    Arc::new(MediaChoices {
-        rows,
-        positions,
-        chapters,
-    })
+    Arc::new(MediaChoices { rows, positions })
 }
 fn choices(snapshot: &Snapshot) -> Vec<MediaChoice> {
     let recipes: BTreeMap<_, _> = snapshot.recipes.iter().map(|r| (r.id, r)).collect();
@@ -82,19 +85,9 @@ fn choices(snapshot: &Snapshot) -> Vec<MediaChoice> {
                 .into_iter()
                 .map(|recipe| VersionChoice {
                     id: recipe.id,
-                    label: if recipe.id == original {
-                        format!(
-                            "Original · {:.1} min",
-                            recipe.trim.duration().seconds() / 60.
-                        )
-                    } else {
-                        format!(
-                            "Découpe · {:.1}–{:.1} s · {}",
-                            recipe.trim.start().seconds(),
-                            recipe.trim.end().seconds(),
-                            recipe.normalization.label()
-                        )
-                    },
+                    original: recipe.id == original,
+                    trim: recipe.trim,
+                    normalization: recipe.normalization,
                 })
                 .collect::<Vec<_>>();
             if versions.is_empty() {
@@ -150,7 +143,7 @@ impl Render for MediaPicker {
                 false,
                 true,
                 false,
-                "Cette playlist n’est plus ouverte.".into(),
+                tr!("Cette playlist n’est plus ouverte.").into(),
             ));
         let picker = cx.entity().downgrade();
         let rows = gpui_kit::uniform_list(
@@ -172,13 +165,13 @@ impl Render for MediaPicker {
                                 .versions
                                 .iter()
                                 .find(|version| version.id == chosen)
-                                .map(|v| v.label.clone())
-                                .unwrap_or_else(|| "Choisir une version".into());
+                                .map(VersionChoice::label)
+                                .unwrap_or_else(|| tr!("Choisir une version").into());
                             let weak = picker.clone();
                             let versions = row
                                 .versions
                                 .iter()
-                                .map(|v| (v.id, v.label.clone()))
+                                .map(|v| (v.id, v.label()))
                                 .collect::<Vec<_>>();
                             div()
                                 .h(px(96.))
@@ -186,10 +179,12 @@ impl Render for MediaPicker {
                                 .flex()
                                 .gap_3()
                                 .items_center()
-                                .border_b_1()
-                                .border_color(cx.theme().border)
+                                .border_b_2()
+                                .border_color(theme::c(theme::DIVIDER))
                                 .child(
                                     Checkbox::new(element_id("choose-media", media))
+                                        .large()
+                                        .accessibility_label(row.title.clone())
                                         .checked(selected)
                                         .disabled(blocked)
                                         .on_click(cx.listener(move |v, checked, _, cx| {
@@ -205,23 +200,23 @@ impl Render for MediaPicker {
                                             cx.notify();
                                         })),
                                 )
+                                .child(theme::thumbnail(&media.to_string(), 48., 14.))
                                 .child(
                                     div()
                                         .flex_1()
                                         .min_w_0()
                                         .flex()
                                         .flex_col()
+                                        .items_start()
                                         .gap_2()
-                                        .child(
-                                            div()
-                                                .truncate()
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .child(row.title.clone()),
-                                        )
+                                        .child(theme::heading(row.title.clone(), 17.).truncate())
                                         .child(
                                             Button::new(element_id("choose-version", media))
                                                 .label(label)
                                                 .small()
+                                                .outline()
+                                                .rounded(px(999.))
+                                                .dropdown_caret(true)
                                                 .disabled(blocked)
                                                 .dropdown_menu(move |mut menu, _, _| {
                                                     for (id, label) in &versions {
@@ -252,25 +247,94 @@ impl Render for MediaPicker {
         .h(px(320.))
         .min_h(px(120.));
         let selected = self.selected.len();
-        div().flex().flex_col().gap_4()
-            .child(if replacing { "Choisissez le média qui remplacera cette piste." } else { "Sélectionnez vos médias et la version à envoyer." })
-            .child(if self.rows.rows.is_empty() { div().p_6().child("Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer.").into_any_element() } else { rows.into_any_element() })
-            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."))
-            .child(div().flex().gap_2().items_center()
-                .child(Button::new("picker-import-media").label("Importer").disabled(busy).on_click(cx.listener(|v, _, window, cx| {
-                    let editor = v.editor.clone();
-                    window.close_dialog(cx);
-                    let _ = editor.update(cx, |e, cx| { e.picker_window = None; let _ = e.parent.update(cx, |p, cx| p.navigate(Route::Imports, cx)); });
-                })))
-                .child(div().flex_1())
-                .child(DialogClose::new().child(Button::new("picker-cancel").label("Annuler").disabled(busy)))
-                .child(Button::new("picker-add-selected").label(if busy { "Envoi en cours…".into() } else { format!("Ajouter ({selected})") }).primary().disabled(selected == 0 || blocked).on_click(cx.listener(|v, _, _, cx| {
-                    let mut batch = v.selected.iter().filter_map(|media| v.versions.get(media).map(|recipe| (*media, *recipe))).collect::<Vec<_>>();
-                    batch.sort_by_key(|(media, _)| v.rows.positions.get(media).copied());
-                    let _ = v.editor.update(cx, |e, cx| e.add_media_batch(batch, cx));
-                }))))
-            .children(busy.then(|| div().flex().gap_2().items_center().child(Spinner::new().small()).child(status.clone())))
-            .children((!busy && !status.is_empty()).then(|| div().text_sm().child(status)))
+        let list = if self.rows.rows.is_empty() {
+            div()
+                .p_6()
+                .child(theme::note(tr!(
+                    "Votre médiathèque est vide. Importez un fichier ou une vidéo pour commencer."
+                )))
+                .into_any_element()
+        } else {
+            rows.into_any_element()
+        };
+        let actions = div()
+            .flex()
+            .gap_2()
+            .items_center()
+            .child(theme::pill(
+                Button::new("picker-import-media")
+                    .label(tr!("Importer de l’audio"))
+                    .on_click(cx.listener(|v, _, window, cx| v.go_to_imports(window, cx))),
+                theme::Look::Outline,
+                theme::Height::Medium,
+                busy,
+                cx,
+            ))
+            .child(div().flex_1())
+            .child(DialogClose::new().child(theme::pill(
+                Button::new("picker-cancel").label(tr!("Annuler")),
+                theme::Look::Ghost,
+                theme::Height::Medium,
+                busy,
+                cx,
+            )))
+            .child(theme::pill(
+                Button::new("picker-add-selected")
+                    .label(if busy {
+                        tr!("Envoi en cours…").into()
+                    } else {
+                        tr!("Ajouter ({selected})", selected = selected)
+                    })
+                    .on_click(cx.listener(|v, _, _, cx| v.add_selected(cx))),
+                theme::Look::Primary,
+                theme::Height::Medium,
+                selected == 0 || blocked,
+                cx,
+            ));
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(theme::note(if replacing {
+                tr!("Choisissez le média qui remplacera cette piste.")
+            } else {
+                tr!("Sélectionnez vos médias et la version à envoyer.")
+            }))
+            .child(list)
+            .child(theme::note(tr!(
+                "L’audio est envoyé à Yoto avant d’apparaître dans votre playlist."
+            )))
+            .child(actions)
+            .children(busy.then(|| {
+                div()
+                    .flex()
+                    .gap_2()
+                    .items_center()
+                    .child(Spinner::new().small())
+                    .child(status.clone())
+            }))
+            .children((!busy && !status.is_empty()).then(|| theme::note(status)))
+    }
+}
+impl MediaPicker {
+    /// Close the picker and open « Imports » to bring in new audio.
+    fn go_to_imports(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let editor = self.editor.clone();
+        window.close_dialog(cx);
+        let _ = editor.update(cx, |e, cx| {
+            e.picker_window = None;
+            let _ = e.parent.update(cx, |p, cx| p.navigate(Route::Imports, cx));
+        });
+    }
+    /// Send the ticked media, in library order, with the version chosen for each.
+    fn add_selected(&mut self, cx: &mut Context<Self>) {
+        let mut batch = self
+            .selected
+            .iter()
+            .filter_map(|media| self.versions.get(media).map(|recipe| (*media, *recipe)))
+            .collect::<Vec<_>>();
+        batch.sort_by_key(|(media, _)| self.rows.positions.get(media).copied());
+        let _ = self.editor.update(cx, |e, cx| e.add_media_batch(batch, cx));
     }
 }
 #[cfg(test)]
@@ -313,6 +377,7 @@ mod tests {
             result,
             info: None,
             tool_version: String::new(),
+            part: None,
         };
         let snapshot = Snapshot {
             media: vec![media],

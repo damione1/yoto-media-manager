@@ -129,6 +129,14 @@ impl Session {
             }
         }
     }
+    /// Let the owning process keep the YouTube tool current: choose the newest intact copy,
+    /// then check for a newer release once a day when `daily`. Must run inside a Tokio
+    /// runtime; a proxy leaves this to the owner.
+    pub fn start_tool_updates(&self, daily: bool) {
+        if let Some(owner) = &self.owner {
+            owner.youtube.start(daily);
+        }
+    }
     pub async fn interface_changes(
         &self,
         since: Vec<u64>,
@@ -195,9 +203,7 @@ impl Session {
     pub async fn prepare_update_shutdown(&self) -> Result<()> {
         match &self.owner {
             Some(owner) => owner.prepare_update_shutdown().await,
-            None => Err(Failure::Validation(
-                "Close the other Yoto instance or MCP owner before installing an update".into(),
-            )),
+            None => Err(Failure::Validation(messages::UPDATE_OTHER_INSTANCE.into())),
         }
     }
     pub fn cancel_update_shutdown(&self) {
@@ -206,11 +212,10 @@ impl Session {
         }
     }
     pub async fn install_update(&self) -> Result<()> {
-        let owner = self.owner.clone().ok_or_else(|| {
-            Failure::Validation(
-                "Close the other Yoto instance or MCP owner before installing an update".into(),
-            )
-        })?;
+        let owner = self
+            .owner
+            .clone()
+            .ok_or_else(|| Failure::Validation(messages::UPDATE_OTHER_INSTANCE.into()))?;
         let prepared = owner.updater.prepared().map_err(crate::storage)?;
         if let Err(error) = owner.prepare_update_shutdown().await {
             owner.updater.install_blocked(error.to_string());
@@ -226,9 +231,7 @@ impl Session {
             Ok(Err(error)) => {
                 owner.cancel_update_shutdown();
                 owner.updater.failed(error);
-                Err(Failure::Validation(
-                    "The update helper could not start".into(),
-                ))
+                Err(Failure::Validation(messages::UPDATE_HELPER_FAILED.into()))
             }
             Err(error) => {
                 owner.cancel_update_shutdown();
@@ -238,6 +241,10 @@ impl Session {
                 Err(crate::storage(error))
             }
         }
+    }
+    /// The profile directory this session opened, after resolving aliases.
+    pub fn profile(&self) -> &std::path::Path {
+        &self.profile
     }
     pub fn is_owner(&self) -> bool {
         self.owner.is_some()

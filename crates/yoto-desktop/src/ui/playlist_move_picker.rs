@@ -26,8 +26,49 @@ impl MovePicker {
         }
     }
 }
+impl MovePicker {
+    /// Move the track at the end of the chosen chapter; it is written with the next group.
+    fn confirm(&mut self, cx: &mut Context<Self>) {
+        let Some((chapter, end)) = self.selected else {
+            return;
+        };
+        let track = self.track;
+        let _ = self.owner.update(cx, |owner, cx| {
+            if owner.blocked() || owner.owning_remote(cx).is_err() {
+                return;
+            }
+            if let Err(error) = owner.draft.move_track(track, chapter, end) {
+                owner.status = failure_text(&error);
+                cx.notify();
+                return;
+            }
+            owner.close_picker(cx);
+            owner.changed(Change::Discrete, cx);
+        });
+    }
+    fn chapter_row(&self, chapter: &media_picker::ChapterChoice, cx: &mut Context<Self>) -> Div {
+        let destination = chapter.id;
+        let end = chapter.tracks;
+        let blocked = self
+            .owner
+            .upgrade()
+            .is_none_or(|owner| owner.read(cx).blocked());
+        div().h(px(48.)).child(
+            Button::new(element_id("move-chapter", destination))
+                .label(chapter.title.clone())
+                .w_full()
+                .disabled(destination == self.source || blocked)
+                .selected(self.selected.is_some_and(|(id, _)| id == destination))
+                .on_click(cx.listener(move |v, _, _, cx| {
+                    v.selected = Some((destination, end));
+                    cx.notify();
+                })),
+        )
+    }
+}
 impl Render for MovePicker {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use theme::{Height, Look};
         let (busy, blocked, status) = self
             .owner
             .upgrade()
@@ -36,23 +77,57 @@ impl Render for MovePicker {
                 (owner.busy(), owner.blocked(), owner.status.clone())
             })
             .unwrap_or((false, true, String::new()));
-        div().flex().flex_col().gap_4()
-            .child("Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses références sont conservés.")
-            .child(gpui_kit::uniform_list("move-chapter-targets", self.rows.len(), cx.processor(|v: &mut Self, range: std::ops::Range<usize>, _, cx: &mut Context<Self>| {
-                range.filter_map(|index| v.rows.get(index)).map(|chapter| { let destination = chapter.id; let end = chapter.tracks;
-                    div().h(px(48.)).child(Button::new(element_id("move-chapter", destination)).label(chapter.title.clone()).w_full().disabled(destination == v.source || v.owner.upgrade().is_none_or(|owner| owner.read(cx).blocked())).selected(v.selected.is_some_and(|(id, _)| id == destination)).on_click(cx.listener(move |v, _, _, cx| { v.selected = Some((destination, end)); cx.notify(); })))
-                }).collect()
-            })).h(px(300.)))
-            .child(div().flex().gap_2().items_center().child(div().flex_1())
-                .child(DialogClose::new().child(Button::new("cancel-move").label("Annuler").disabled(busy)))
-                .child(Button::new("confirm-move").label("Déplacer").primary().disabled(blocked || self.selected.is_none()).on_click(cx.listener(|v, _, _, cx| {
-                    if let Some((chapter, end)) = v.selected { let track = v.track; let _ = v.owner.update(cx, |owner, cx| {
-                        if owner.blocked() || owner.owning_remote(cx).is_err() { return }
-                        if let Err(error) = owner.draft.move_track(track, chapter, end) { owner.status = error.to_string(); cx.notify(); return }
-                        owner.persist(CommitTarget::MovePicker, cx);
-                    }); }
-                }))))
-            .children(busy.then(|| div().flex().gap_2().child(Spinner::new().small()).child(status.clone())))
-            .children((!busy && blocked).then(|| div().text_sm().child(status)))
+        let targets = gpui_kit::uniform_list(
+            "move-chapter-targets",
+            self.rows.len(),
+            cx.processor(
+                |v: &mut Self, range: std::ops::Range<usize>, _, cx: &mut Context<Self>| {
+                    let rows = v.rows.clone();
+                    range
+                        .filter_map(|index| rows.get(index))
+                        .map(|chapter| v.chapter_row(chapter, cx).into_any_element())
+                        .collect()
+                },
+            ),
+        )
+        .h(px(300.));
+        let actions = div()
+            .flex()
+            .gap_2()
+            .items_center()
+            .child(div().flex_1())
+            .child(DialogClose::new().child(theme::pill(
+                Button::new("cancel-move").label(tr!("Annuler")),
+                Look::Ghost,
+                Height::Medium,
+                busy,
+                cx,
+            )))
+            .child(theme::pill(
+                Button::new("confirm-move")
+                    .label(tr!("Déplacer"))
+                    .on_click(cx.listener(|v, _, _, cx| v.confirm(cx))),
+                Look::Primary,
+                Height::Medium,
+                blocked || self.selected.is_none(),
+                cx,
+            ));
+        div()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(theme::note(
+                tr!("Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses références sont conservés."),
+            ))
+            .child(targets)
+            .child(actions)
+            .children(busy.then(|| {
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(Spinner::new().small())
+                    .child(status.clone())
+            }))
+            .children((!busy && blocked).then(|| theme::note(status)))
     }
 }

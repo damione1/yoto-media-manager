@@ -18,6 +18,8 @@ Open the link in your browser and check that it is a publicly accessible YouTube
 
 Private, deleted, region-restricted, or login-required videos may be inaccessible to the app. Task details help distinguish access problems, size limits, and processing errors.
 
+When YouTube changes, the tool the app uses to read videos can stop working until it is updated. The app checks for a newer version of this tool once a day, and again as soon as an import fails for this reason; it then tries the import once more. To update it right away, turn on `Mode avancé` in `Compte` and choose `Mettre à jour l’outil YouTube`. The same place shows the version in use.
+
 ## Trimming does not work
 
 Check that the start precedes the end and both positions stay within the audio duration. Enter positions in seconds. Wait for the import to finish before starting preparation.
@@ -26,7 +28,7 @@ If the preview works but conversion fails, open the task's `Détails` in `Import
 
 ## Yoto login does not complete
 
-Keep the app open during browser login. Return to `Compte` after confirmation. If the operation expired, start again with `Connecter mon compte Yoto`.
+Keep the app open during browser login. Return to `Compte` after confirmation. If the operation expired, start again with `Connecter mon compte Yoto`. If the browser shows an error page and the app keeps waiting, choose `Annuler` next to the connect button, then start again.
 
 Declining a permission may make some features unavailable. Reconnect the account to review the requested access.
 
@@ -48,9 +50,13 @@ Check the selected player, its Wi-Fi connection, and whether it is online. Refre
 
 The media or its version is still used by a playlist or task. Remove the relevant track or wait for the task to finish, then try again.
 
-## Open a restored library
+## Open an imported library
 
-After restoring, choose `Ouvrir la médiathèque restaurée` in the advanced options in `Compte`. A new window opens that library and the original window stays available. To find an existing profile, choose `Ouvrir une autre médiathèque` and select its folder. You must reconnect Yoto in a restored profile.
+Right after an import, choose `Ouvrir la médiathèque importée` in the import dialog. A new window opens that library and the original window stays available. To open it again later, turn on `Mode avancé` in `Compte`, choose `Ouvrir une autre médiathèque` and select its folder, next to your usual library. You must reconnect Yoto in an imported library.
+
+## The recovery key is refused
+
+Type the key exactly as it was shown at export time: eight groups of eight letters and digits. Spaces, dashes and letter case do not matter. Each export has its own key, so a key from another export does not work. Without the right key, the export cannot be opened.
 
 ## Report a problem
 

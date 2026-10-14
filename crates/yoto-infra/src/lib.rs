@@ -3,10 +3,14 @@ pub mod assets;
 pub mod auth;
 pub mod db;
 pub mod media;
+pub mod pipeline;
 pub mod players;
 pub mod process;
 pub mod service;
+pub mod settings;
 pub mod sources;
+pub mod transcode;
+pub mod youtube_tool;
 pub use service::{Command, Reply, Service, Snapshot};
 use yoto_domain::Failure;
 fn storage(e: impl std::fmt::Display) -> Failure {

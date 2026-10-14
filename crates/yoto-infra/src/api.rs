@@ -60,6 +60,13 @@ pub struct IngestedInfo {
     pub channels: AudioChannels,
     pub format: AudioFormat,
 }
+/// Yoto's answer while it converts an upload.
+#[derive(Debug, Clone)]
+pub enum Ingestion {
+    Ready(Ingested),
+    Working(crate::transcode::Progress),
+    Failed(crate::transcode::Progress),
+}
 impl Ingested {
     pub fn audio_info(&self) -> Result<AudioInfo> {
         let channels = match self.info.channels {
@@ -75,11 +82,26 @@ impl Ingested {
         })
     }
 }
+/// Time allowed to open a connection, for API calls and file uploads alike.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Slowest upstream throughput an upload is expected to sustain (about 400 kbit/s).
+const UPLOAD_SLOWEST_BYTES_PER_SECOND: u64 = 50_000;
+const UPLOAD_TIMEOUT_MIN: Duration = Duration::from_secs(5 * 60);
+const UPLOAD_TIMEOUT_MAX: Duration = Duration::from_secs(45 * 60);
+/// Whole-request limit for sending a file of `bytes` to signed storage.
+///
+/// The shared 30-second API limit covers the whole request, which a long story on a slow
+/// connection exceeds; the upload instead gets time in proportion to its size.
+pub fn upload_timeout(bytes: u64) -> Duration {
+    Duration::from_secs(bytes / UPLOAD_SLOWEST_BYTES_PER_SECOND)
+        .clamp(UPLOAD_TIMEOUT_MIN, UPLOAD_TIMEOUT_MAX)
+}
 impl YotoGateway {
     pub fn new() -> Result<Self> {
         Ok(Self {
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(30))
+                .connect_timeout(CONNECT_TIMEOUT)
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
                 .map_err(storage)?,
@@ -114,7 +136,7 @@ impl YotoGateway {
     pub async fn card(&self, token: &str, id: &CardId) -> Result<Value> {
         self.card_if_present(token, id)
             .await?
-            .ok_or_else(|| Failure::Validation("Yoto rejected the request (404)".into()))
+            .ok_or_else(|| Failure::Validation(messages::YOTO_NOT_FOUND.into()))
     }
     pub async fn card_if_present(&self, token: &str, id: &CardId) -> Result<Option<Value>> {
         match content_api::get_content(&self.configuration(token), id.as_str(), None, None, None)
@@ -184,6 +206,7 @@ impl YotoGateway {
         let response = self
             .http
             .put(url)
+            .timeout(upload_timeout(bytes))
             .header(reqwest::header::CONTENT_TYPE, "audio/mpeg")
             .header(reqwest::header::CONTENT_LENGTH, bytes)
             .body(reqwest::Body::wrap_stream(stream))
@@ -195,7 +218,8 @@ impl YotoGateway {
         }
         Ok(())
     }
-    pub async fn ingestion(&self, token: &str, id: &UploadId) -> Result<Option<Ingested>> {
+    /// Where Yoto's conversion of an upload stands.
+    pub async fn ingestion(&self, token: &str, id: &UploadId) -> Result<Ingestion> {
         let r = media_api::get_transcoded_upload(&self.configuration(token), id.as_str(), false)
             .await
             .map_err(classify)?;
@@ -205,9 +229,16 @@ impl YotoGateway {
             .ok_or_else(|| Failure::Compatibility("Transcode envelope missing".into()))?;
         match value.get("transcodedSha256") {
             Some(Value::String(_)) => serde_json::from_value(value.clone())
-                .map(Some)
+                .map(Ingestion::Ready)
                 .map_err(|e| Failure::Compatibility(format!("Transcoded media fields: {e}"))),
-            Some(Value::Null) | None => Ok(None),
+            Some(Value::Null) | None => {
+                let progress = crate::transcode::Progress::read(value);
+                Ok(if progress.failed() {
+                    Ingestion::Failed(progress)
+                } else {
+                    Ingestion::Working(progress)
+                })
+            }
             Some(_) => Err(Failure::Compatibility("Invalid transcodedSha256".into())),
         }
     }
@@ -315,13 +346,15 @@ impl YotoGateway {
                 .ok_or_else(|| Failure::Compatibility("Icon mediaId missing".into()))?,
         )
     }
+    /// Send a playlist cover. Yoto converts it itself to the standard card cover (638×1011,
+    /// cropped around the centre), so a phone photo or a square image displays correctly.
     pub async fn upload_cover(&self, token: &str, path: &Path) -> Result<String> {
         let r = media_api::upload_cover_image(
             &self.configuration(token),
             path.to_owned(),
             None,
-            Some("false"),
-            None,
+            Some("true"),
+            Some("default"),
             Some("cover.png"),
         )
         .await
@@ -376,9 +409,7 @@ impl YotoGateway {
         image: Option<&str>,
     ) -> Result<Value> {
         if name.is_empty() || name.chars().count() > 100 {
-            return Err(Failure::Validation(
-                "Group name must contain 1–100 characters".into(),
-            ));
+            return Err(Failure::Validation(messages::GROUP_NAME_LENGTH.into()));
         }
         let config = self.configuration(token);
         match id {
@@ -457,7 +488,7 @@ impl YotoGateway {
     }
     pub async fn upload_family_image(&self, token: &str, path: &Path) -> Result<FamilyImageId> {
         if std::fs::metadata(path).map_err(storage)?.len() > 8_000_000 {
-            return Err(Failure::Validation("Family image exceeds 8 MB".into()));
+            return Err(Failure::Validation(messages::FAMILY_IMAGE_TOO_LARGE.into()));
         }
         let r = family_api::upload_a_family_image(&self.configuration(token), path.to_owned())
             .await
@@ -496,12 +527,12 @@ impl YotoGateway {
             return Err(Failure::Connection);
         }
         if response.content_length().is_some_and(|n| n > 8_000_000) {
-            return Err(Failure::Validation("Image exceeds 8 MB".into()));
+            return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
         }
         let mut bytes = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(|_| Failure::Connection)? {
             if bytes.len() + chunk.len() > 8_000_000 {
-                return Err(Failure::Validation("Image exceeds 8 MB".into()));
+                return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
             }
             bytes.extend_from_slice(&chunk);
         }
@@ -515,18 +546,100 @@ pub fn classify<T>(e: apis::Error<T>) -> Failure {
         apis::Error::Io(e) => storage(e),
         apis::Error::ResponseError(e) => match e.status.as_u16() {
             401 => Failure::Authentication,
-            403 => Failure::Permission("Yoto denied this operation".into()),
+            403 => Failure::Permission(messages::YOTO_DENIED.into()),
             409 => Failure::Conflict,
             429 => Failure::RateLimit {
-                retry_after_seconds: 30,
+                retry_after_seconds: retry_after_seconds(
+                    e.retry_after.as_deref(),
+                    std::time::SystemTime::now(),
+                ),
             },
-            400 | 404 | 422 => {
-                Failure::Validation(format!("Yoto rejected the request ({})", e.status.as_u16()))
-            }
+            status @ (400 | 404 | 413 | 422) => match limit_message(&e.content) {
+                Some(message) if status != 404 => Failure::Validation(message.into()),
+                Some(_) | None if status == 413 => {
+                    Failure::Compatibility(format!("Unexpected HTTP status {status}"))
+                }
+                Some(_) | None => {
+                    Failure::Validation(format!("Yoto rejected the request ({status})"))
+                }
+            },
             500..=599 => Failure::Connection,
             _ => Failure::Compatibility(format!("Unexpected HTTP status {}", e.status.as_u16())),
         },
     }
+}
+/// Wait used when Yoto limits requests without saying for how long.
+const RETRY_AFTER_DEFAULT: u64 = 30;
+/// Longest wait accepted from Yoto, so a wrong header cannot park a job for hours.
+const RETRY_AFTER_MAX: u64 = 300;
+/// Seconds to wait after a 429, from its `Retry-After` header: a number of seconds or an
+/// HTTP date. Kept between 1 second and 5 minutes; 30 seconds when absent or unreadable.
+pub fn retry_after_seconds(header: Option<&str>, now: std::time::SystemTime) -> u64 {
+    let Some(value) = header.map(str::trim).filter(|v| !v.is_empty()) else {
+        return RETRY_AFTER_DEFAULT;
+    };
+    let seconds = if let Ok(seconds) = value.parse::<u64>() {
+        seconds
+    } else if let Ok(date) = httpdate::parse_http_date(value) {
+        date.duration_since(now)
+            .map(|wait| wait.as_secs() + u64::from(wait.subsec_nanos() > 0))
+            .unwrap_or(0)
+    } else {
+        return RETRY_AFTER_DEFAULT;
+    };
+    seconds.clamp(1, RETRY_AFTER_MAX)
+}
+/// Recognise a refusal that names one of Yoto's playlist limits (100 tracks; 60 minutes or
+/// 100 MB per track; 5 hours or 500 MB in total) and return the matching message.
+pub fn limit_message(body: &str) -> Option<&'static str> {
+    let text = body.to_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| text.contains(w));
+    if !has(&[
+        "limit",
+        "exceed",
+        "max",
+        "too many",
+        "too long",
+        "too large",
+        "too big",
+        "greater than",
+        "more than",
+        "longer than",
+        "larger than",
+    ]) {
+        return None;
+    }
+    let duration = has(&[
+        "duration",
+        "minute",
+        "hour",
+        "length",
+        "too long",
+        "longer than",
+    ]);
+    let size = has(&[
+        "size",
+        "bytes",
+        "megabyte",
+        " mb",
+        "too large",
+        "too big",
+        "larger than",
+    ]);
+    let total = has(&["total", "card", "playlist"]);
+    let track = has(&["track", "chapter", "file", "audio"]);
+    Some(match (duration, size) {
+        (false, false) if has(&["too many", "tracks", "track count", "number of"]) => {
+            messages::PLAYLIST_TRACKS_MAX
+        }
+        (true, false) if total => messages::YOTO_PLAYLIST_TOO_LONG,
+        (false, true) if total => messages::YOTO_PLAYLIST_TOO_LARGE,
+        (true, true) if total => messages::PLAYLIST_EXCEEDS_LIMITS,
+        (true, false) if track => messages::YOTO_TRACK_TOO_LONG,
+        (false, true) if track => messages::YOTO_TRACK_TOO_LARGE,
+        (true, true) if track => messages::TRACK_EXCEEDS_LIMITS,
+        (false, false) | (true, false) | (false, true) | (true, true) => return None,
+    })
 }
 fn object(v: &Value) -> Result<Extra> {
     serde_json::from_value(v.clone()).map_err(|_| Failure::Compatibility("Expected object".into()))
@@ -766,11 +879,11 @@ pub fn write_playlist(
                 }
                 TrackMedia::Stream { url, format } => {
                     if url::Url::parse(url)
-                        .map_err(|_| Failure::Validation("Invalid stream URL".into()))?
+                        .map_err(|_| Failure::Validation(messages::STREAM_URL_INVALID.into()))?
                         .scheme()
                         != "https"
                     {
-                        return Err(Failure::Validation("Streaming requires HTTPS".into()));
+                        return Err(Failure::Validation(messages::STREAM_HTTPS_ONLY.into()));
                     }
                     (url.clone(), None, TrackType::Stream, Some(*format))
                 }
@@ -779,7 +892,7 @@ pub fn write_playlist(
                 if info.bytes > Rules::TRACK_BYTES_MAX
                     || info.duration.micros() > Rules::TRACK_MICROS_MAX
                 {
-                    return Err(Failure::Validation("Track exceeds Yoto limits".into()));
+                    return Err(Failure::Validation(messages::TRACK_EXCEEDS_LIMITS.into()));
                 }
                 bytes = bytes
                     .checked_add(info.bytes)
@@ -835,7 +948,9 @@ pub fn write_playlist(
         chapters.push(chapter);
     }
     if bytes > Rules::CARD_BYTES_MAX || duration > Rules::CARD_MICROS_MAX {
-        return Err(Failure::Validation("Playlist exceeds Yoto limits".into()));
+        return Err(Failure::Validation(
+            messages::PLAYLIST_EXCEEDS_LIMITS.into(),
+        ));
     }
     let mut config = preserve(wire::PlaybackConfig::new(), &p.playback.extra)?;
     config.autoadvance = Some(p.playback.autoadvance);
@@ -905,7 +1020,7 @@ fn apply_icon(
         Some(IconReference::Local { asset }) => Some(
             icons
                 .get(asset)
-                .ok_or_else(|| Failure::Validation("Icon has not been uploaded".into()))?,
+                .ok_or_else(|| Failure::Validation(messages::ICON_NOT_UPLOADED.into()))?,
         ),
         Some(IconReference::Yoto {
             account: owner,

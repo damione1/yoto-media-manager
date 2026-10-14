@@ -1,6 +1,6 @@
 use super::*;
 use gpui_kit::component::WindowExt;
-use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::{checkbox::Checkbox, spinner::Spinner};
 use yoto_infra::service::ConflictChoice;
 impl AppView {
     pub fn begin_youtube(&mut self, cx: &mut Context<Self>) {
@@ -9,11 +9,10 @@ impl AppView {
         }
         let url = self.youtube.read(cx).value().trim().to_owned();
         if url.is_empty() {
-            self.error = Some(Failure::Validation(
-                "Collez un lien YouTube pour importer son audio.".into(),
-            ));
-            self.status = "Collez un lien YouTube pour commencer.".into();
-            cx.notify();
+            self.report_error(
+                Failure::Validation(tr!("Collez un lien YouTube pour importer son audio.").into()),
+                cx,
+            );
             return;
         }
         self.youtube_import_pending = true;
@@ -23,75 +22,200 @@ impl AppView {
         self.youtube_selection_url = None;
         self.selected_entries.clear();
         self.error = None;
-        self.status = "Recherche du titre et des informations YouTube…".into();
+        self.status = tr!("Recherche du titre et des informations YouTube…").into();
         cx.notify();
         let service = self.service.clone();
         let rt = self.runtime.clone();
         cx.spawn(async move |weak, cx| {
             let request_url = url.clone();
-            let result = rt.spawn(async move { service.execute(Command::InspectYoutube(request_url)).await }).await;
+            let result = rt
+                .spawn(async move { service.execute(Command::InspectYoutube(request_url)).await })
+                .await;
             let _ = weak.update(cx, |view, cx| {
-                if generation != view.youtube_inspection_generation { return; }
+                if generation != view.youtube_inspection_generation {
+                    return;
+                }
                 view.youtube_import_pending = false;
-                if view.youtube.read(cx).value().trim() != url { cx.notify(); return; }
-                match result {
-                    Ok(Ok(Reply::Entries(inspection))) => match inspection.kind {
+                if view.youtube.read(cx).value().trim() != url {
+                    cx.notify();
+                    return;
+                }
+                match joined(result).and_then(Reply::into_entries) {
+                    Ok(inspection) => match inspection.kind {
                         SourceShape::Video => {
                             if let [entry] = inspection.entries.as_slice() {
-                                view.status = format!("Import de « {} »…", entry.title);
-                                view.send(Command::Import(vec![ImportSelection::Youtube { url: entry.url.clone(), entry: Some(entry.id.clone()) }]), cx);
+                                view.youtube_titles
+                                    .insert(entry.url.clone(), entry.title.clone());
+                                view.send(
+                                    Command::Import(vec![ImportSelection::Youtube {
+                                        url: entry.url.clone(),
+                                        entry: Some(entry.id.clone()),
+                                    }]),
+                                    cx,
+                                );
+                                view.status = tr!(
+                                    "Import de « {title} » lancé. Suivez sa progression dans « Imports ».",
+                                    title = entry.title
+                                );
+                                view.clear_youtube_link(cx);
                             } else {
-                                view.status = "Cette vidéo n’est pas disponible. Vérifiez le lien et réessayez.".into();
-                                view.error = Some(Failure::Validation(view.status.clone()));
+                                view.report_error(
+                                    Failure::Validation(
+                                        tr!("Cette vidéo n’est pas disponible. Vérifiez le lien et réessayez.").into(),
+                                    ),
+                                    cx,
+                                );
                             }
                         }
                         SourceShape::Playlist => {
                             view.youtube_selection_url = Some(url.clone());
                             view.youtube_entries = inspection.entries;
-                            view.status = if view.youtube_entries.is_empty() { "Cette playlist ne contient aucune vidéo disponible.".into() } else { "Choisissez les vidéos de cette playlist à importer.".into() };
+                            view.status = if view.youtube_entries.is_empty() {
+                                tr!("Cette playlist ne contient aucune vidéo disponible.").into()
+                            } else {
+                                tr!("Cochez les vidéos de cette playlist à importer.").into()
+                            };
                         }
                     },
-                    Ok(Ok(Reply::AppUpdate(_) | Reply::Updated | Reply::Saved(_) | Reply::OpenedPlaylist(_) | Reply::PlaylistOperation { .. } | Reply::Waveform(_) | Reply::Prepared(_) | Reply::Asset(_) | Reply::PixelArt(_) | Reply::Image(_) | Reply::Images(_) | Reply::Player(_) | Reply::Data(_))) => {
-                        view.status = "Impossible de lire les informations YouTube. Réessayez.".into();
-                        view.error = Some(Failure::Validation(view.status.clone()));
-                    }
-                    Ok(Err(error)) => { view.status = "Impossible d’importer ce lien. Vérifiez qu’il est accessible puis réessayez.".into(); view.error = Some(error); }
-                    Err(error) => { view.status = "L’import n’a pas pu démarrer. Réessayez.".into(); view.error = Some(Failure::Storage(error.to_string())); }
+                    Err(error) => view.report_error(error, cx),
                 }
                 cx.notify();
             });
-        }).detach();
+        })
+        .detach();
+    }
+    /// Empty the link field once its import is queued, so a second click cannot import
+    /// the same video twice.
+    pub(super) fn clear_youtube_link(&mut self, cx: &mut Context<Self>) {
+        let input = self.youtube.clone();
+        if let Some(window) = cx.windows().first().copied() {
+            cx.defer(move |cx| {
+                let _ = cx.update_window(window, |_, window, cx| {
+                    input.update(cx, |input, cx| input.set_value("", window, cx));
+                });
+            });
+        }
     }
 }
 pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> AnyElement {
-    let mut body = div()
-        .id("imports-content")
-        .size_full()
-        .p_7()
-        .flex()
-        .flex_col()
-        .gap_4()
-        .min_h_0()
-        .child(div().text_2xl().child("Importer de l’audio"))
+    use theme::{Height, Look};
+    let pending = view.youtube_import_pending;
+    let youtube = theme::card()
+        .flex_1()
+        .min_w(px(320.))
         .child(
             div()
                 .flex()
-                .gap_3()
-                .child(Input::new(&view.youtube).disabled(view.youtube_import_pending).flex_1())
-                .child(
-                    Button::new("inspect-youtube")
-                        .label(if view.youtube_import_pending { "Recherche…" } else { "Importer" })
-                        .primary()
-                        .disabled(view.youtube_import_pending)
-                        .loading(view.youtube_import_pending)
-                        .on_click(cx.listener(|v, _, _, cx| v.begin_youtube(cx))),
-                ),
+                .items_center()
+                .gap(px(10.))
+                .child(theme::icon_tile(
+                    IconName::MonitorPlay,
+                    &theme::PEACH,
+                    36.,
+                    12.,
+                ))
+                .child(theme::heading(tr!("Lien YouTube"), 18.)),
         )
-        .child(div().text_sm().text_color(cx.theme().muted_foreground).child("Collez un lien vidéo : son audio rejoint votre médiathèque. Pour une playlist, choisissez les vidéos."));
+        .child(
+            div()
+                .flex()
+                .gap(px(8.))
+                .child(
+                    theme::field(Input::new(&view.youtube))
+                        .h(px(50.))
+                        .disabled(pending)
+                        .flex_1(),
+                )
+                .child(theme::pill(
+                    Button::new("inspect-youtube")
+                        .label(if pending { tr!("Recherche…") } else { tr!("Importer") })
+                        .loading(pending)
+                        .on_click(cx.listener(|v, _, _, cx| v.begin_youtube(cx))),
+                    Look::Primary,
+                    Height::Large,
+                    pending,
+                    cx,
+                )
+                .h(px(50.))),
+        )
+        .child(theme::note(
+            tr!("Une vidéo ou une playlist publique. On récupère seulement l’audio ; pour une playlist, vous choisirez les vidéos à garder."),
+        ));
+    let drop_zone = {
+        use gpui_kit::component::button::{ButtonCustomVariant, ButtonRounded};
+        Button::new("imports-add-file")
+            .custom(
+                ButtonCustomVariant::new(cx)
+                    .color(theme::c(theme::SAND))
+                    .hover(theme::c(theme::CREAM))
+                    .active(theme::c(theme::SAND)),
+            )
+            .accessibility_label(tr!("Ajouter un fichier audio depuis mon ordinateur"))
+            .bg(theme::c(theme::SAND))
+            .rounded(ButtonRounded::Size(px(22.)))
+            .border_2()
+            .border_dashed()
+            .border_color(theme::c(theme::BOX_BORDER))
+            .w(px(300.))
+            .flex_shrink_0()
+            .h_auto()
+            .min_h(px(170.))
+            .p(px(16.))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .size(px(44.))
+                            .rounded_full()
+                            .bg(theme::c(theme::SURFACE))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                gpui_kit::component::Icon::new(IconName::Upload)
+                                    .size(px(20.))
+                                    .text_color(theme::c(theme::PEACH.icon)),
+                            ),
+                    )
+                    .child(theme::heading(tr!("Ajouter un fichier audio"), 17.))
+                    .child(
+                        theme::meta(tr!("ou glissez-le ici · MP3, M4A, WAV…")).text_size(px(14.)),
+                    ),
+            )
+            .on_click(cx.listener(|v, _, _, cx| v.add_files(cx)))
+    };
+    let mut main = div()
+        .id("imports-content")
+        .flex_1()
+        .min_w_0()
+        .h_full()
+        .overflow_y_scroll()
+        .py(px(24.))
+        .px(px(28.))
+        .flex()
+        .flex_col()
+        .gap(px(18.))
+        .child(theme::screen_header(
+            tr!("Importer de l’audio"),
+            tr!("Depuis YouTube ou depuis un fichier de votre ordinateur."),
+        ))
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(14.))
+                .child(youtube)
+                .child(drop_zone),
+        );
     let choosing = view.youtube_selection_url.as_deref()
         == Some(view.youtube.read(cx).value().trim())
         && !view.youtube_entries.is_empty();
     if choosing {
+        let all_selected = view.selected_entries.len() == view.youtube_entries.len();
         let choices = gpui_kit::uniform_list(
             "youtube-playlist-choices",
             view.youtube_entries.len(),
@@ -105,14 +229,15 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                             let entry = &view.youtube_entries[index];
                             let id = entry.id.clone();
                             div()
-                                .h(px(36.))
+                                .h(px(48.))
                                 .flex()
                                 .items_center()
+                                .gap(px(12.))
                                 .min_w_0()
                                 .child(
                                     Checkbox::new(element_id("youtube-entry", id.clone()))
+                                        .large()
                                         .accessibility_label(entry.title.clone())
-                                        .child(div().truncate().child(entry.title.clone()))
                                         .checked(view.selected_entries.contains(&id))
                                         .on_click(cx.listener(move |v, checked, _, cx| {
                                             if *checked {
@@ -123,193 +248,512 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                                             cx.notify();
                                         })),
                                 )
+                                .child(
+                                    div()
+                                        .w(px(64.))
+                                        .h(px(36.))
+                                        .flex_shrink_0()
+                                        .rounded(px(8.))
+                                        .bg(theme::c(theme::family_for(&entry.id).soft)),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .font_weight(FontWeight::BOLD)
+                                        .child(entry.title.clone()),
+                                )
+                                .children(
+                                    entry
+                                        .duration
+                                        .map(|d| theme::meta(wording::position_text(d.seconds()))),
+                                )
                                 .into_any_element()
                         })
                         .collect()
                 },
             ),
         )
-        .h(px(180.))
+        .h(px(240.))
         .flex_shrink_0();
-        body = body
-            .child(div().text_lg().child("Vidéos de la playlist"))
-            .child(choices)
-            .child(
-                Button::new("import-youtube")
-                    .label(format!(
-                        "Importer la sélection ({})",
-                        view.selected_entries.len()
-                    ))
-                    .primary()
-                    .disabled(view.selected_entries.is_empty())
-                    .on_click(cx.listener(|v, _, _, cx| {
-                        let selections = v
-                            .youtube_entries
-                            .iter()
-                            .filter(|e| v.selected_entries.contains(&e.id))
-                            .map(|e| ImportSelection::Youtube {
-                                url: e.url.clone(),
-                                entry: Some(e.id.clone()),
-                            })
-                            .collect();
-                        v.send(Command::Import(selections), cx);
-                        v.selected_entries.clear();
-                        cx.notify();
-                    })),
-            )
+        main = main.child(
+            theme::card()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .child(
+                            div()
+                                .flex_1()
+                                .child(theme::heading(tr!("Vidéos de la playlist"), 18.))
+                                .child(theme::meta(tr!("Choisissez les vidéos à importer."))),
+                        )
+                        .child(theme::pill(
+                            Button::new("youtube-select-all")
+                                .label(if all_selected {
+                                    tr!("Tout désélectionner")
+                                } else {
+                                    tr!("Tout sélectionner")
+                                })
+                                .on_click(cx.listener(move |v, _, _, cx| {
+                                    if all_selected {
+                                        v.selected_entries.clear();
+                                    } else {
+                                        v.selected_entries =
+                                            v.youtube_entries.iter().map(|e| e.id.clone()).collect();
+                                    }
+                                    cx.notify();
+                                })),
+                            Look::Link(&theme::PEACH),
+                            Height::Small,
+                            false,
+                            cx,
+                        )),
+                )
+                .child(choices)
+                .child(
+                    div()
+                        .flex()
+                        .justify_end()
+                        .gap(px(8.))
+                        .child(theme::pill(
+                            Button::new("cancel-youtube-selection")
+                                .label(tr!("Annuler"))
+                                .on_click(cx.listener(|v, _, _, cx| {
+                                    v.youtube_entries.clear();
+                                    v.selected_entries.clear();
+                                    v.youtube_selection_url = None;
+                                    v.clear_youtube_link(cx);
+                                    cx.notify();
+                                })),
+                            Look::Outline,
+                            Height::Large,
+                            false,
+                            cx,
+                        ))
+                        .child(theme::pill(
+                            Button::new("import-youtube")
+                                .label(tr!(
+                                    "Importer la sélection ({count})",
+                                    count = view.selected_entries.len()
+                                ))
+                                .on_click(cx.listener(|v, _, _, cx| {
+                                    let chosen: Vec<_> = v
+                                        .youtube_entries
+                                        .iter()
+                                        .filter(|e| v.selected_entries.contains(&e.id))
+                                        .cloned()
+                                        .collect();
+                                    let count = chosen.len();
+                                    let selections = chosen
+                                        .into_iter()
+                                        .map(|e| {
+                                            v.youtube_titles.insert(e.url.clone(), e.title);
+                                            ImportSelection::Youtube {
+                                                url: e.url,
+                                                entry: Some(e.id),
+                                            }
+                                        })
+                                        .collect();
+                                    v.send(Command::Import(selections), cx);
+                                    v.selected_entries.clear();
+                                    v.youtube_entries.clear();
+                                    v.youtube_selection_url = None;
+                                    v.status = trn!(
+                                        "{count} vidéo en cours d’import. Suivez sa progression dans « Imports ».",
+                                        "{count} vidéos en cours d’import. Suivez leur progression dans « Imports ».",
+                                        count
+                                    );
+                                    v.clear_youtube_link(cx);
+                                    cx.notify();
+                                })),
+                            Look::Primary,
+                            Height::Large,
+                            view.selected_entries.is_empty(),
+                            cx,
+                        )),
+                ),
+        );
     }
-    let jobs_count = view
+    div()
+        .size_full()
+        .flex()
+        .child(main)
+        .child(activity(view, cx))
+        .into_any_element()
+}
+
+/// The right column: every import, preparation and sending, newest first.
+fn activity(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
+    use theme::{Height, Look};
+    let jobs = view
         .job_page
         .as_ref()
-        .map_or(view.snapshot.jobs.len(), |v| v.len());
-    if jobs_count == 0 {
-        return body.child(div().text_color(cx.theme().muted_foreground).child("Vos imports apparaîtront ici. Vous pouvez aussi ajouter un fichier audio depuis votre ordinateur.")).into_any_element();
+        .map_or(&view.snapshot.jobs, |v| v.as_ref());
+    let mut aside = div()
+        .w(px(380.))
+        .flex_shrink_0()
+        .h_full()
+        .border_l_2()
+        .border_color(theme::c(theme::DIVIDER))
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .pt(px(24.))
+                .px(px(22.))
+                .pb(px(12.))
+                .flex()
+                .items_end()
+                .justify_between()
+                .child(theme::heading(tr!("Activités"), 22.))
+                .children((!jobs.is_empty()).then(|| {
+                    theme::meta(format!(
+                        "{}–{}",
+                        view.job_offset + 1,
+                        view.job_offset + jobs.len()
+                    ))
+                })),
+        );
+    if jobs.is_empty() {
+        return aside
+            .child(div().px(px(22.)).child(theme::note(tr!(
+                "Vos imports apparaîtront ici, avec leur progression."
+            ))))
+            .into_any_element();
     }
-    let mut history = div().flex().gap_2().child(format!(
-        "Historique · {}–{}",
-        view.job_offset + 1,
-        view.job_offset + jobs_count
-    ));
-    if view.job_offset > 0 || jobs_count >= 200 {
-        history = history
-            .child(
-                Button::new("jobs-newer")
-                    .label("Plus récentes")
-                    .disabled(view.job_offset == 0)
-                    .on_click(cx.listener(|v, _, _, cx| {
-                        v.load_job_page(v.job_offset.saturating_sub(200), cx)
-                    })),
-            )
-            .child(
-                Button::new("jobs-older")
-                    .label("Plus anciennes")
-                    .disabled(jobs_count < 200)
-                    .on_click(cx.listener(|v, _, _, cx| v.load_job_page(v.job_offset + 200, cx))),
-            );
+    let mut list = div()
+        .id("durable-job-list")
+        .flex_1()
+        .min_h_0()
+        .overflow_y_scroll()
+        .px(px(22.))
+        .pb(px(12.))
+        .flex()
+        .flex_col()
+        .gap(px(12.));
+    for job in jobs.iter() {
+        list = list.child(job_card(view, job, cx));
     }
-    body = body.child(history);
-    let jobs = gpui_kit::uniform_list(
-        "durable-job-list",
-        jobs_count,
-        cx.processor(
-            |view: &mut AppView, range: std::ops::Range<usize>, _, cx: &mut Context<AppView>| {
-                range
-                    .map(|index| {
-                        let job = &view
-                            .job_page
-                            .as_ref()
-                            .map_or(&view.snapshot.jobs, |v| v.as_ref())[index];
-                        let id = job.id;
-                        let title = job_title(job, &view.snapshot);
-                        let mut actions = div().flex().items_center().gap_2();
-                        match &job.state {
-                            JobState::Failed { .. } | JobState::Retry { .. } => {
-                                actions = actions.child(
-                                    Button::new(element_id("retry", id))
-                                        .label("Réessayer")
-                                        .on_click(cx.listener(move |v, _, _, cx| {
-                                            v.send(Command::Retry(id), cx)
-                                        })),
-                                );
-                            }
-                            JobState::WaitingForAuthentication => {
-                                actions = actions.child(
-                                    Button::new(element_id("connect-job", id))
-                                        .label("Se connecter")
-                                        .on_click(
-                                            cx.listener(|v, _, _, cx| v.send(Command::Connect, cx)),
-                                        ),
-                                );
-                            }
-                            JobState::Conflict { .. } | JobState::Reconciling => {
-                                actions = actions.child(
-                                    Button::new(element_id("resolve-job", id))
-                                        .label("Vérifier la publication")
-                                        .on_click(cx.listener(move |v, _, window, cx| {
-                                            show_details(v, id, window, cx)
-                                        })),
-                                );
-                            }
-                            JobState::Completed { output } => match output {
-                                JobOutput::Imported { media } => {
-                                    let media = *media;
-                                    if view.snapshot.media.iter().any(|item| item.id == media) {
-                                        actions = actions.child(
-                                            Button::new(element_id("open-imported-media", id))
-                                                .label("Écouter dans ma médiathèque")
-                                                .on_click(cx.listener(move |v, _, window, cx| {
-                                                    v.navigate(Route::Library, cx);
-                                                    v.select_media(media, window, cx);
-                                                    cx.notify();
-                                                })),
-                                        );
-                                    } else {
-                                        actions = actions.child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child("Média retiré de votre médiathèque"),
-                                        );
-                                    }
-                                }
-                                JobOutput::Encoded { .. } | JobOutput::Published { .. } => {}
-                            },
-                            JobState::Cancelled => {}
-                            JobState::Queued | JobState::Running { .. } => {
-                                actions = actions.child(
-                                    Button::new(element_id("cancel", id))
-                                        .label("Annuler")
-                                        .on_click(cx.listener(move |v, _, _, cx| {
-                                            v.send(Command::Cancel(id), cx)
-                                        })),
-                                );
-                            }
-                        }
-                        if !matches!(job.state, JobState::Conflict { .. } | JobState::Reconciling) {
-                            actions = actions.child(
-                                Button::new(element_id("import-details", id))
-                                    .label("Détails")
-                                    .ghost()
-                                    .on_click(cx.listener(move |v, _, window, cx| {
-                                        show_details(v, id, window, cx)
-                                    })),
-                            );
-                        }
-                        div()
-                            .w_full()
-                            .h(px(128.))
-                            .p_3()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_lg()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .truncate()
-                                    .child(title),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(job.state.label()),
-                            )
-                            .child(actions)
-                            .into_any_element()
-                    })
-                    .collect()
-            },
-        ),
-    )
-    .w_full()
-    .flex_1()
-    .min_h_0();
-    body.child(jobs).into_any_element()
+    aside = aside.child(list);
+    if view.job_offset > 0 || jobs.len() >= 200 {
+        aside = aside.child(
+            div()
+                .px(px(22.))
+                .py(px(12.))
+                .flex()
+                .justify_between()
+                .child(theme::pill(
+                    Button::new("jobs-newer")
+                        .label(tr!("Plus récentes"))
+                        .on_click(cx.listener(|v, _, _, cx| {
+                            v.load_job_page(v.job_offset.saturating_sub(200), cx)
+                        })),
+                    Look::Soft(&theme::LIGHT_SAND),
+                    Height::Small,
+                    view.job_offset == 0,
+                    cx,
+                ))
+                .child(theme::pill(
+                    Button::new("jobs-older")
+                        .label(tr!("Plus anciennes"))
+                        .on_click(
+                            cx.listener(|v, _, _, cx| v.load_job_page(v.job_offset + 200, cx)),
+                        ),
+                    Look::Soft(&theme::LIGHT_SAND),
+                    Height::Small,
+                    jobs.len() < 200,
+                    cx,
+                )),
+        );
+    }
+    aside.into_any_element()
 }
-fn job_title(job: &Job, snapshot: &Snapshot) -> String {
+fn job_card(view: &AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement {
+    use theme::{Height, Look};
+    let id = job.id;
+    let title = job_title(job, &view.snapshot, &view.youtube_titles);
+    let family = match job.request {
+        JobRequest::Publish { .. } => &theme::SKY,
+        JobRequest::Import { .. } | JobRequest::Encode { .. } => &theme::BUTTER,
+    };
+    let details = theme::pill(
+        Button::new(element_id("import-details", id))
+            .label(tr!("Détails"))
+            .on_click(cx.listener(move |v, _, window, cx| show_details(v, id, window, cx))),
+        Look::Ghost,
+        Height::Tiny,
+        false,
+        cx,
+    );
+    let spinner = || {
+        Spinner::new()
+            .color(theme::c(family.accent))
+            .into_any_element()
+    };
+    let rose_mark = || {
+        div()
+            .size(px(26.))
+            .flex_shrink_0()
+            .rounded_full()
+            .bg(theme::c(theme::ROSE.soft))
+            .text_color(theme::c(theme::ROSE.ink))
+            .font_weight(FontWeight::EXTRA_BOLD)
+            .flex()
+            .items_center()
+            .justify_center()
+            .child("!")
+            .into_any_element()
+    };
+    let (mark, line, line_color, actions): (AnyElement, String, u32, Vec<AnyElement>) = match &job
+        .state
+    {
+        JobState::Queued => (
+            spinner(),
+            tr!("En attente…").into(),
+            family.ink,
+            vec![
+                theme::pill(
+                    Button::new(element_id("cancel", id))
+                        .label(tr!("Annuler"))
+                        .on_click(cx.listener(move |v, _, _, cx| v.send(Command::Cancel(id), cx))),
+                    Look::Outline,
+                    Height::Tiny,
+                    false,
+                    cx,
+                )
+                .into_any_element(),
+                details.into_any_element(),
+            ],
+        ),
+        JobState::Running { phase } => (
+            spinner(),
+            match &job.request {
+                JobRequest::Publish { snapshot, .. } => {
+                    tr!(
+                        "{phase} · « {title} »",
+                        phase = phase_text(phase),
+                        title = snapshot.title
+                    )
+                }
+                JobRequest::Import { .. } | JobRequest::Encode { .. } => {
+                    format!("{}…", phase_text(phase))
+                }
+            },
+            family.ink,
+            vec![
+                theme::pill(
+                    Button::new(element_id("cancel", id))
+                        .label(tr!("Annuler"))
+                        .on_click(cx.listener(move |v, _, _, cx| v.send(Command::Cancel(id), cx))),
+                    Look::Outline,
+                    Height::Tiny,
+                    false,
+                    cx,
+                )
+                .into_any_element(),
+                details.into_any_element(),
+            ],
+        ),
+        JobState::Failed { failure } | JobState::Retry { failure, .. } => (
+            rose_mark(),
+            if matches!(job.state, JobState::Retry { .. }) {
+                format!(
+                    "{} · {}",
+                    wording::labels::job_state(&job.state),
+                    failure_text(failure)
+                )
+            } else {
+                failure_text(failure)
+            },
+            theme::MUTED,
+            vec![
+                theme::pill(
+                    Button::new(element_id("retry", id))
+                        .label(tr!("Réessayer"))
+                        .on_click(cx.listener(move |v, _, _, cx| v.send(Command::Retry(id), cx))),
+                    Look::Outline,
+                    Height::Tiny,
+                    false,
+                    cx,
+                )
+                .into_any_element(),
+                details.into_any_element(),
+            ],
+        ),
+        JobState::WaitingForAuthentication => (
+            rose_mark(),
+            wording::labels::job_state(&job.state).into(),
+            theme::MUTED,
+            vec![
+                theme::pill(
+                    Button::new(element_id("connect-job", id))
+                        .label(tr!("Se connecter"))
+                        .on_click(cx.listener(|v, _, _, cx| v.send(Command::Connect, cx))),
+                    Look::Primary,
+                    Height::Tiny,
+                    false,
+                    cx,
+                )
+                .into_any_element(),
+                details.into_any_element(),
+            ],
+        ),
+        JobState::Conflict { .. } => {
+            let mut actions = vec![];
+            for (choice, look) in CONFLICT_CHOICES {
+                let label = conflict_label(choice);
+                actions.push(
+                    theme::pill(
+                        Button::new(element_id(label, id))
+                            .label(label)
+                            .on_click(cx.listener(move |v, _, _, cx| {
+                                v.send(Command::Resolve { job: id, choice }, cx)
+                            })),
+                        look,
+                        Height::Tiny,
+                        false,
+                        cx,
+                    )
+                    .into_any_element(),
+                );
+            }
+            let playlist = match &job.request {
+                JobRequest::Publish { snapshot, .. } => snapshot.title.clone(),
+                JobRequest::Import { .. } | JobRequest::Encode { .. } => title.clone(),
+            };
+            return theme::card()
+                    .p(px(14.))
+                    .gap(px(10.))
+                    .rounded(px(18.))
+                    .border_t_4()
+                    .border_color(theme::c(theme::BUTTER.accent))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::EXTRA_BOLD)
+                            .child(tr!("Conflit sur « {playlist} »", playlist = playlist)),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .line_height(relative(1.45))
+                            .text_color(theme::c(theme::INK_SOFT))
+                            .child(tr!("La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver.")),
+                    )
+                    .child(div().flex().flex_wrap().gap(px(6.)).children(actions))
+                    .into_any_element();
+        }
+        JobState::Reconciling => (
+            rose_mark(),
+            wording::labels::job_state(&job.state).into(),
+            theme::MUTED,
+            vec![
+                theme::pill(
+                    Button::new(element_id("resolve-job", id))
+                        .label(tr!("Vérifier la publication"))
+                        .on_click(
+                            cx.listener(move |v, _, window, cx| show_details(v, id, window, cx)),
+                        ),
+                    Look::Primary,
+                    Height::Tiny,
+                    false,
+                    cx,
+                )
+                .into_any_element(),
+            ],
+        ),
+        JobState::Completed { output } => match output {
+            JobOutput::Imported { media } => {
+                let media = *media;
+                let present = view.snapshot.media.iter().any(|item| item.id == media);
+                (
+                    theme::done_mark(26.).into_any_element(),
+                    if present {
+                        tr!("Prêt dans la médiathèque").into()
+                    } else {
+                        tr!("Média retiré de votre médiathèque").into()
+                    },
+                    if present {
+                        theme::MINT.ink
+                    } else {
+                        theme::MUTED
+                    },
+                    if present {
+                        vec![
+                            theme::pill(
+                                Button::new(element_id("open-imported-media", id))
+                                    .label(tr!("Écouter"))
+                                    .on_click(cx.listener(move |v, _, window, cx| {
+                                        v.navigate(Route::Library, cx);
+                                        v.select_media(media, window, cx);
+                                        cx.notify();
+                                    })),
+                                Look::Soft(&theme::MINT),
+                                Height::Tiny,
+                                false,
+                                cx,
+                            )
+                            .into_any_element(),
+                        ]
+                    } else {
+                        vec![]
+                    },
+                )
+            }
+            JobOutput::Encoded { .. } => (
+                theme::done_mark(26.).into_any_element(),
+                tr!("Version préparée").into(),
+                theme::MINT.ink,
+                vec![],
+            ),
+            JobOutput::Published { .. } => (
+                theme::done_mark(26.).into_any_element(),
+                tr!("Enregistré sur Yoto").into(),
+                theme::MINT.ink,
+                vec![details.into_any_element()],
+            ),
+        },
+        JobState::Cancelled => (
+            div()
+                .size(px(26.))
+                .flex_shrink_0()
+                .rounded_full()
+                .bg(theme::c(theme::SAND))
+                .into_any_element(),
+            tr!("Annulé").into(),
+            theme::MUTED,
+            vec![details.into_any_element()],
+        ),
+    };
+    let mut card = theme::card()
+        .p(px(14.))
+        .gap(px(8.))
+        .rounded(px(18.))
+        .child(
+            div().flex().items_center().gap(px(10.)).child(mark).child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .font_weight(FontWeight::EXTRA_BOLD)
+                    .truncate()
+                    .child(title),
+            ),
+        )
+        .child(
+            div()
+                .text_size(px(13.))
+                .font_weight(FontWeight::BOLD)
+                .text_color(theme::c(line_color))
+                .child(line),
+        );
+    if !actions.is_empty() {
+        card = card.child(div().flex().flex_wrap().gap(px(6.)).children(actions));
+    }
+    card.into_any_element()
+}
+fn job_title(job: &Job, snapshot: &Snapshot, youtube_titles: &BTreeMap<String, String>) -> String {
     if let JobState::Completed {
         output: JobOutput::Imported { media },
     } = &job.state
@@ -324,7 +768,10 @@ fn job_title(job: &Job, snapshot: &Snapshot) -> String {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
-            ImportSelection::Youtube { .. } => "Audio YouTube".into(),
+            ImportSelection::Youtube { url, .. } => youtube_titles.get(url).map_or_else(
+                || tr!("Vidéo YouTube").into(),
+                |title| format!("YouTube · {title}"),
+            ),
         },
         JobRequest::Encode { recipe } => snapshot
             .recipes
@@ -332,10 +779,12 @@ fn job_title(job: &Job, snapshot: &Snapshot) -> String {
             .find(|item| item.id == *recipe)
             .and_then(|recipe| snapshot.media.iter().find(|item| item.id == recipe.media))
             .map_or_else(
-                || "Préparation audio locale".into(),
-                |item| format!("Préparation · {}", item.title),
+                || tr!("Préparation audio locale").into(),
+                |item| tr!("Préparation · {title}", title = item.title),
             ),
-        JobRequest::Publish { snapshot, .. } => format!("Publication · {}", snapshot.title),
+        JobRequest::Publish { snapshot, .. } => {
+            tr!("Publication · {title}", title = snapshot.title)
+        }
     }
 }
 fn show_details(view: &mut AppView, id: JobId, window: &mut Window, cx: &mut Context<AppView>) {
@@ -349,78 +798,197 @@ fn show_details(view: &mut AppView, id: JobId, window: &mut Window, cx: &mut Con
     else {
         return;
     };
-    let title = job_title(&job, &view.snapshot);
+    let title = job_title(&job, &view.snapshot, &view.youtube_titles);
     let owner = cx.entity().downgrade();
     window.open_dialog(cx, move |dialog, _, cx| {
         let content = owner
             .update(cx, |view, cx| details_content(view, &job, cx))
             .unwrap_or_else(|_| {
                 div()
-                    .child("Cette médiathèque a été fermée.")
+                    .child(tr!("Cette médiathèque a été fermée."))
                     .into_any_element()
             });
         dialog.title(title.clone()).w(px(700.)).child(content)
     });
 }
+/// The three answers to a playlist changed both here and on Yoto, in the order offered.
+const CONFLICT_CHOICES: [(ConflictChoice, theme::Look); 3] = [
+    (ConflictChoice::KeepLocal, theme::Look::Primary),
+    (ConflictChoice::UseRemote, theme::Look::Outline),
+    (ConflictChoice::CreateCopy, theme::Look::Ghost),
+];
+/// One label per conflict answer, shared by the job card and its details.
+fn conflict_label(choice: ConflictChoice) -> &'static str {
+    match choice {
+        ConflictChoice::KeepLocal => tr!("Publier ma version"),
+        ConflictChoice::UseRemote => tr!("Garder la version Yoto"),
+        ConflictChoice::CreateCopy => tr!("Créer une copie"),
+    }
+}
 fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> AnyElement {
+    use gpui_kit::component::dialog::DialogClose;
+    use theme::{Height, Look};
     let id = job.id;
-    let mut body = div().flex().flex_col().gap_3().child(job.state.label());
+    let state_family = match &job.state {
+        JobState::Completed { .. } => &theme::MINT,
+        JobState::Failed { .. }
+        | JobState::Retry { .. }
+        | JobState::WaitingForAuthentication
+        | JobState::Reconciling => &theme::ROSE,
+        JobState::Conflict { .. } => &theme::BUTTER,
+        JobState::Queued | JobState::Running { .. } => &theme::SKY,
+        JobState::Cancelled => &theme::STONE,
+    };
+    let actions = || div().flex().flex_wrap().gap(px(8.));
+    let mut body = div()
+        .flex()
+        .flex_col()
+        .gap(px(14.))
+        .child(div().flex().child(theme::tag(
+            wording::labels::job_state(&job.state),
+            state_family,
+        )));
     if let JobRequest::Import {
         selection: ImportSelection::Youtube { url, .. },
     } = &job.request
     {
         let source = url.clone();
-        body = body
-            .child(div().text_sm().child(format!("Lien source : {url}")))
-            .child(
-                Button::new(element_id("copy-import-url", id))
-                    .label("Copier le lien source")
-                    .on_click(cx.listener(move |_, _, _, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(source.clone()))
-                    })),
-            );
+        body = body.child(
+            theme::inset()
+                .child(
+                    div()
+                        .font_weight(FontWeight::EXTRA_BOLD)
+                        .child(tr!("Vidéo YouTube d’origine")),
+                )
+                .child(theme::meta(url.clone()).truncate())
+                .child(
+                    div().flex().child(theme::pill(
+                        Button::new(element_id("copy-import-url", id))
+                            .icon(IconName::Link)
+                            .label(tr!("Copier le lien"))
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(source.clone()))
+                            })),
+                        Look::Outline,
+                        Height::Small,
+                        false,
+                        cx,
+                    )),
+                ),
+        );
     }
     match &job.state {
         JobState::Failed { failure } | JobState::Retry { failure, .. } => {
-            body = body.child(failure.to_string()).child(
-                Button::new(element_id("retry-details", id))
-                    .label("Réessayer")
-                    .on_click(cx.listener(move |v, _, window, cx| {
-                        v.send(Command::Retry(id), cx);
-                        window.close_dialog(cx);
-                    })),
-            );
+            body = body
+                .child(
+                    theme::inset().bg(theme::c(theme::ROSE.soft)).child(
+                        div()
+                            .text_color(theme::c(theme::ROSE.ink))
+                            .font_weight(FontWeight::BOLD)
+                            .child(failure_text(failure)),
+                    ),
+                )
+                .child(
+                    actions().child(theme::pill(
+                        Button::new(element_id("retry-details", id))
+                            .label(tr!("Réessayer"))
+                            .on_click(cx.listener(move |v, _, window, cx| {
+                                v.send(Command::Retry(id), cx);
+                                window.close_dialog(cx);
+                            })),
+                        Look::Primary,
+                        Height::Medium,
+                        false,
+                        cx,
+                    )),
+                );
         }
         JobState::Conflict { .. } => {
-            body = body.child(
-                "La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver.",
-            );
-            for (choice, label) in [
-                (ConflictChoice::KeepLocal, "Publier ma version"),
-                (ConflictChoice::UseRemote, "Conserver la version Yoto"),
-                (ConflictChoice::CreateCopy, "Créer une copie"),
-            ] {
-                body = body.child(Button::new(element_id(label, id)).label(label).on_click(
-                    cx.listener(move |v, _, window, cx| {
-                        v.send(Command::Resolve { job: id, choice }, cx);
-                        window.close_dialog(cx);
-                    }),
+            let mut choices = actions();
+            for (choice, look) in CONFLICT_CHOICES {
+                let label = conflict_label(choice);
+                choices = choices.child(theme::pill(
+                    Button::new(element_id(label, id))
+                        .label(label)
+                        .on_click(cx.listener(move |v, _, window, cx| {
+                            v.send(Command::Resolve { job: id, choice }, cx);
+                            window.close_dialog(cx);
+                        })),
+                    look,
+                    Height::Medium,
+                    false,
+                    cx,
                 ));
             }
+            body = body
+                .child(theme::note(tr!(
+                    "La playlist a aussi été modifiée sur Yoto. Choisissez la version à conserver."
+                )))
+                .child(choices);
         }
         JobState::Reconciling => {
-            body = body.child("La réponse de Yoto est incertaine. Vérifiez la publication avant de la renvoyer.")
-                .child(Button::new(element_id("reconcile", id)).label("Vérifier auprès de Yoto").primary().on_click(cx.listener(move |v, _, window, cx| { v.send(Command::Reconcile(id), cx); window.close_dialog(cx); })))
-                .child(div().text_sm().child("Si votre compte a été déconnecté, vous pouvez associer explicitement l’ID de la carte déjà créée :"))
-                .child(Input::new(&view.receipt_card))
-                .child(Button::new(element_id("attach-receipt", id)).label("Associer cette carte").on_click(cx.listener(move |v, _, window, cx| match CardId::new(v.receipt_card.read(cx).value().to_string()) {
-                    Ok(card) => { v.send(Command::AttachPublicationReceipt { job: id, card }, cx); window.close_dialog(cx); }
-                    Err(error) => { v.error = Some(error); cx.notify(); }
-                })));
+            body = body
+                .child(theme::note(
+                    tr!("Yoto n’a pas confirmé cet envoi. Vérifiez-le avant de le renvoyer, pour ne pas créer la playlist deux fois."),
+                ))
+                .child(actions().child(theme::pill(
+                    Button::new(element_id("reconcile", id))
+                        .label(tr!("Vérifier auprès de Yoto"))
+                        .on_click(cx.listener(move |v, _, window, cx| {
+                            v.send(Command::Reconcile(id), cx);
+                            window.close_dialog(cx);
+                        })),
+                    Look::Primary,
+                    Height::Medium,
+                    false,
+                    cx,
+                )));
+            if view.advanced {
+                body = body.child(
+                    theme::inset()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::EXTRA_BOLD)
+                                .child(tr!("La carte existe déjà ?")),
+                        )
+                        .child(theme::note(
+                            tr!("Si l’envoi a créé une carte avant une déconnexion, collez son identifiant (affiché dans l’application Yoto) pour la relier à cet envoi."),
+                        ))
+                        .child(theme::small_field(Input::new(&view.receipt_card)))
+                        .child(div().flex().child(theme::pill(
+                            Button::new(element_id("attach-receipt", id))
+                                .label(tr!("Relier cette carte"))
+                                .on_click(cx.listener(move |v, _, window, cx| {
+                                    match CardId::new(v.receipt_card.read(cx).value().trim()) {
+                                        Ok(card) => {
+                                            v.send(
+                                                Command::AttachPublicationReceipt { job: id, card },
+                                                cx,
+                                            );
+                                            window.close_dialog(cx);
+                                        }
+                                        Err(_) => v.report_error(
+                                            Failure::Validation(
+                                                tr!("Collez l’identifiant de la carte, tel qu’il apparaît dans l’application Yoto.")
+                                                    .into(),
+                                            ),
+                                            cx,
+                                        ),
+                                    }
+                                })),
+                            Look::Outline,
+                            Height::Small,
+                            false,
+                            cx,
+                        ))),
+                );
+            }
         }
         JobState::Completed { output } => match output {
-            JobOutput::Published { card, .. } => {
-                body = body.child(format!("Publié : {card}. Associez ensuite ce contenu à votre carte MYO dans l’application Yoto."));
+            JobOutput::Published { .. } => {
+                body = body.child(theme::note(
+                    tr!("Enregistré sur votre compte Yoto. Pour l’écouter sur une carte, associez cette playlist à une carte « Make Your Own » dans l’application Yoto."),
+                ));
             }
             JobOutput::Imported { .. } | JobOutput::Encoded { .. } => {}
         },
@@ -429,5 +997,60 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
         | JobState::WaitingForAuthentication
         | JobState::Cancelled => {}
     }
-    body.into_any_element()
+    body.child(
+        div()
+            .flex()
+            .justify_end()
+            .child(DialogClose::new().child(theme::pill(
+                Button::new(element_id("close-job-details", id)).label(tr!("Fermer")),
+                Look::Outline,
+                Height::Medium,
+                false,
+                cx,
+            ))),
+    )
+    .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn job(request: JobRequest, state: JobState) -> Job {
+        Job {
+            id: JobId::new(),
+            request,
+            state,
+            attempts: 0,
+            created: 0,
+            checkpoint: None,
+        }
+    }
+    #[core::prelude::v1::test]
+    fn youtube_imports_show_the_title_learned_while_inspecting() {
+        let url = "https://www.youtube.com/watch?v=abc".to_owned();
+        let request = JobRequest::Import {
+            selection: ImportSelection::Youtube {
+                url: url.clone(),
+                entry: None,
+            },
+        };
+        let snapshot = Snapshot::default();
+        let mut titles = BTreeMap::new();
+        let queued = job(request.clone(), JobState::Queued);
+        assert_eq!(job_title(&queued, &snapshot, &titles), "Vidéo YouTube");
+        titles.insert(url, "La petite sirène".to_owned());
+        assert_eq!(
+            job_title(&queued, &snapshot, &titles),
+            "YouTube · La petite sirène"
+        );
+        let local = job(
+            JobRequest::Import {
+                selection: ImportSelection::LocalFile {
+                    path: "/musique/berceuse.mp3".into(),
+                },
+            },
+            JobState::Queued,
+        );
+        assert_eq!(job_title(&local, &snapshot, &titles), "berceuse.mp3");
+    }
 }

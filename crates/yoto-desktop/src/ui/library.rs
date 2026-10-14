@@ -1,5 +1,60 @@
 use super::*;
-use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
+use gpui_kit::component::{
+    Icon,
+    menu::{DropdownMenu, PopupMenuItem},
+};
+use gpui_kit::prelude::FluentBuilder;
+use theme::{Height, Look};
+impl AppView {
+    fn preview_playing(&self, media: MediaId, cx: &App) -> bool {
+        self.trims
+            .get(&media)
+            .is_some_and(|panel| panel.read(cx).is_playing())
+    }
+}
+
+/// Where an audio came from, as a parent names it.
+pub fn source_label(media: &MediaItem) -> &'static str {
+    match media.provenance {
+        Provenance::Youtube { .. } => "YouTube",
+        Provenance::LocalFile { .. } => tr!("Fichier audio"),
+    }
+}
+/// Duration, then the author when known, otherwise the source.
+fn media_meta(media: &MediaItem) -> String {
+    let duration = duration_text(media.info.duration.seconds());
+    if media.author.trim().is_empty() {
+        format!("{duration} · {}", source_label(media))
+    } else {
+        format!("{duration} · {}", media.author)
+    }
+}
+/// « Découpé » only once a cut is ready: the first version is the original, and a cut
+/// still preparing or failed does not count.
+fn has_finished_cut(snapshot: &Snapshot, media: &MediaItem) -> bool {
+    media.recipes.iter().skip(1).any(|id| {
+        snapshot
+            .recipes
+            .iter()
+            .any(|recipe| recipe.id == *id && recipe.result.is_some())
+    })
+}
+/// The version a playlist receives by default: the latest finished cut, else the original.
+fn default_recipe(snapshot: &Snapshot, media: &MediaItem) -> Option<RecipeId> {
+    media
+        .recipes
+        .iter()
+        .rev()
+        .find(|id| {
+            snapshot
+                .recipes
+                .iter()
+                .any(|recipe| recipe.id == **id && recipe.result.is_some())
+        })
+        .or_else(|| media.recipes.first())
+        .copied()
+}
+
 pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView>) -> AnyElement {
     let mut list = gpui_kit::uniform_list(
         "library-list",
@@ -14,59 +69,89 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     let media = &view.snapshot.media[view.library_rows[index]];
                     let id = media.id;
                     let selected = view.selected_media_set.contains(&id);
+                    let open = view.selected_media == Some(id);
+                    let trimmed = has_finished_cut(&view.snapshot, media);
                     rows.push(
-                        div()
-                            .p_4()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_lg()
-                            .flex()
-                            .gap_3()
-                            .items_center()
-                            .child(
-                                gpui_kit::component::checkbox::Checkbox::new(element_id(
-                                    "select-media",
-                                    id,
-                                ))
-                                .checked(selected)
-                                .on_click(cx.listener(
-                                    move |v, checked, _, cx| {
-                                        if *checked {
-                                            v.selected_media_set.insert(id);
+                        div().h(px(76.)).pb(px(8.)).child(
+                            div()
+                                .h_full()
+                                .px(px(12.))
+                                .rounded(px(18.))
+                                .bg(theme::c(theme::SURFACE))
+                                .border_2()
+                                .border_color(theme::c(if open {
+                                    theme::PEACH.accent
+                                } else {
+                                    theme::SURFACE
+                                }))
+                                .when(!open, |row| row.shadow(theme::step(theme::BORDER, 2.)))
+                                .flex()
+                                .gap(px(14.))
+                                .items_center()
+                                .child(
+                                    gpui_kit::component::checkbox::Checkbox::new(element_id(
+                                        "select-media",
+                                        id,
+                                    ))
+                                    .large()
+                                    .accessibility_label(tr!(
+                                        "Sélectionner {title}",
+                                        title = media.title
+                                    ))
+                                    .checked(selected)
+                                    .on_click(cx.listener(
+                                        move |v, checked, _, cx| {
+                                            if *checked {
+                                                v.selected_media_set.insert(id);
+                                            } else {
+                                                v.selected_media_set.remove(&id);
+                                            }
+                                            cx.notify();
+                                        },
+                                    )),
+                                )
+                                .child(theme::thumbnail(&id.to_string(), 48., 14.))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .child(theme::heading(media.title.clone(), 17.).truncate())
+                                        .child(theme::meta(media_meta(media)).truncate()),
+                                )
+                                .child(if trimmed {
+                                    theme::tag(tr!("Découpé"), &theme::SKY)
+                                } else {
+                                    theme::tag_colors(tr!("Original"), theme::SAND, theme::BROWN)
+                                })
+                                .child(theme::round(
+                                    Button::new(element_id("open-media", id.to_string()))
+                                        .icon(if open && view.preview_playing(id, cx) {
+                                            IconName::Pause
                                         } else {
-                                            v.selected_media_set.remove(&id);
-                                        }
-                                        cx.notify();
-                                    },
+                                            IconName::Play
+                                        })
+                                        .accessibility_label(tr!(
+                                            "Écouter {title}",
+                                            title = media.title
+                                        ))
+                                        .tooltip(if open {
+                                            tr!("Écouter")
+                                        } else {
+                                            tr!("Ouvrir et écouter")
+                                        })
+                                        .on_click(cx.listener(move |v, _, window, cx| {
+                                            if v.selected_media != Some(id) {
+                                                v.open_media(id, true, window, cx);
+                                            } else if let Some(panel) = v.trims.get(&id).cloned() {
+                                                panel.update(cx, |p, cx| p.toggle_play(cx));
+                                            }
+                                        })),
+                                    Look::Soft(&theme::PEACH),
+                                    40.,
+                                    false,
+                                    cx,
                                 )),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .child(media.title.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!(
-                                                "{:.1} min · {} · {:.1} Mo",
-                                                media.info.duration.seconds() / 60.,
-                                                media.info.codec,
-                                                media.info.bytes as f64 / 1_000_000.
-                                            )),
-                                    ),
-                            )
-                            .child(
-                                Button::new(element_id("open-media", id.to_string()))
-                                    .label("Écouter")
-                                    .on_click(cx.listener(move |v, _, window, cx| {
-                                        v.select_media(id, window, cx)
-                                    })),
-                            ),
+                        ),
                     );
                 }
                 rows
@@ -80,33 +165,53 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         list = div()
             .flex_1()
             .child(
-                div()
-                    .p_8()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(div().text_xl().child("Commencez votre bibliothèque audio"))
+                theme::card()
+                    .p(px(28.))
+                    .gap(px(14.))
+                    .items_start()
+                    .child(theme::thumbnail("bienvenue", 64., 18.))
+                    .child(theme::heading(tr!("Commencez votre médiathèque"), 24.))
                     .child(
-                        "Importez vos fichiers, préparez vos extraits, puis composez une playlist.",
+                        div().text_color(theme::c(theme::INK_SOFT)).child(
+                            tr!("Ajoutez un fichier audio ou un lien YouTube. Vous pourrez ensuite écouter, découper, puis ajouter l’audio à une playlist Yoto."),
+                        ),
                     )
                     .child(
-                        Button::new("first-file")
-                            .label("Ajouter un fichier audio")
-                            .primary()
-                            .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
-                    )
-                    .child(
-                        Button::new("first-youtube")
-                            .label("Ajouter une URL YouTube")
-                            .on_click(cx.listener(|v, _, _, cx| {
-                                v.route = Route::Imports;
-                                cx.notify();
-                            })),
+                        div()
+                            .flex()
+                            .gap(px(10.))
+                            .child(theme::pill(
+                                Button::new("first-file")
+                                    .icon(IconName::Plus)
+                                    .label(tr!("Ajouter un fichier audio"))
+                                    .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
+                                Look::Primary,
+                                Height::Large,
+                                false,
+                                cx,
+                            ))
+                            .child(theme::pill(
+                                Button::new("first-youtube")
+                                    .icon(IconName::Link)
+                                    .label(tr!("Importer depuis un lien YouTube"))
+                                    .on_click(cx.listener(|v, _, _, cx| {
+                                        v.navigate(Route::Imports, cx);
+                                    })),
+                                Look::Outline,
+                                Height::Large,
+                                false,
+                                cx,
+                            )),
                     ),
             )
+            .into_any_element();
+    } else if view.library_rows.is_empty() {
+        list = div()
+            .flex_1()
+            .pt(px(12.))
+            .child(theme::note(tr!(
+                "Aucun audio ne correspond à votre recherche. Essayez un autre mot."
+            )))
             .into_any_element();
     }
     let panel = view
@@ -114,45 +219,66 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
         .and_then(|id| view.trims.get(&id))
         .map(|panel| {
             div()
-                .w(px(390.))
+                .w(px(340.))
+                .flex_shrink_0()
                 .h_full()
-                .border_l_1()
-                .border_color(cx.theme().border)
+                .border_l_2()
+                .border_color(theme::c(theme::DIVIDER))
                 .child(panel.clone())
                 .into_any_element()
         });
+    let count = view.snapshot.media.len();
+    let header = div()
+        .flex()
+        .items_center()
+        .gap(px(12.))
+        .child(div().flex_1().min_w_0().child(theme::screen_header(
+            tr!("Médiathèque"),
+            trn!(
+                "{count} audio · sur cet ordinateur",
+                "{count} audios · sur cet ordinateur",
+                count
+            ),
+        )))
+        .child(theme::pill(
+            Button::new("add-youtube")
+                .icon(IconName::Link)
+                .label(tr!("Lien YouTube"))
+                .on_click(cx.listener(|v, _, _, cx| v.navigate(Route::Imports, cx))),
+            Look::Outline,
+            Height::Large,
+            false,
+            cx,
+        ))
+        .child(theme::pill(
+            Button::new("add-file")
+                .icon(IconName::Plus)
+                .label(tr!("Ajouter un fichier audio"))
+                .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
+            Look::Primary,
+            Height::Large,
+            false,
+            cx,
+        ))
+        .child(library_menu(count > 0, cx));
     div()
         .size_full()
         .flex()
         .child(
             div()
+                .relative()
                 .flex_1()
                 .min_w_0()
-                .p_7()
+                .h_full()
+                .pt(px(24.))
+                .px(px(28.))
                 .flex()
                 .flex_col()
-                .gap_4()
-                .child(
-                    div()
-                        .flex()
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            div()
-                                .text_2xl()
-                                .font_weight(FontWeight::BOLD)
-                                .child("Médiathèque"),
-                        )
-                        .child(
-                            Button::new("add-file")
-                                .label("+ Ajouter")
-                                .primary()
-                                .on_click(cx.listener(|v, _, _, cx| v.add_files(cx))),
-                        ),
-                )
-                .child(Input::new(&view.search))
-                .child(library_controls(view, cx))
-                .child(list),
+                .gap(px(16.))
+                .child(header)
+                .children((count > 0).then(|| library_controls(view, cx)))
+                .child(list)
+                .children(selection_bar(view, cx)),
         )
         .children(panel)
         .into_any_element()
@@ -160,135 +286,250 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
 
 fn sort_label(sort: CatalogueSort) -> &'static str {
     match sort {
-        CatalogueSort::Title => "Titre",
-        CatalogueSort::Author => "Auteur",
-        CatalogueSort::Duration => "Durée",
-        CatalogueSort::RecentlyImported => "Plus récents",
+        CatalogueSort::Title => tr!("Titre"),
+        CatalogueSort::Author => tr!("Auteur"),
+        CatalogueSort::Duration => tr!("Durée"),
+        CatalogueSort::RecentlyImported => tr!("Plus récents"),
     }
 }
 fn library_controls(view: &AppView, cx: &mut Context<AppView>) -> AnyElement {
-    let sorting = cx.entity().downgrade();
-    let more = sorting.clone();
     let current = view.sort;
-    let mut controls = div()
+    let sorts = [
+        CatalogueSort::Title,
+        CatalogueSort::RecentlyImported,
+        CatalogueSort::Duration,
+        CatalogueSort::Author,
+    ]
+    .map(|sort| {
+        theme::segment(
+            Button::new(element_id("sort-library", sort_label(sort)))
+                .label(sort_label(sort))
+                .accessibility_label(tr!("Trier par : {order}", order = sort_label(sort)))
+                .on_click(cx.listener(move |v, _, _, cx| {
+                    v.sort = sort;
+                    v.filter_library(cx);
+                    cx.notify();
+                })),
+            current == sort,
+            Height::Small,
+            cx,
+        )
+    });
+    div()
         .flex()
-        .gap_2()
+        .flex_wrap()
+        .gap(px(12.))
         .items_center()
         .child(
-            Button::new("sort-library")
-                .label(format!("Trier : {}", sort_label(current)))
-                .dropdown_menu(move |mut menu, _, _| {
-                    for sort in [
-                        CatalogueSort::Title,
-                        CatalogueSort::Author,
-                        CatalogueSort::Duration,
-                        CatalogueSort::RecentlyImported,
-                    ] {
-                        let parent = sorting.clone();
-                        menu = menu.item(
-                            PopupMenuItem::new(sort_label(sort))
-                                .checked(current == sort)
-                                .on_click(move |_, _, cx| {
-                                    let _ = parent.update(cx, |v, cx| {
-                                        v.sort = sort;
-                                        v.filter_library(cx);
-                                        cx.notify();
-                                    });
-                                }),
-                        );
-                    }
-                    menu
-                }),
+            theme::field(Input::new(&view.search))
+                .flex_1()
+                .min_w(px(240.))
+                .prefix(
+                    Icon::new(IconName::Search)
+                        .size(px(18.))
+                        .text_color(theme::c(theme::MUTED_WARM)),
+                ),
         )
-        .child(div().flex_1())
-        .child(
-            Button::new("library-more")
-                .label("⋯")
-                .ghost()
-                .dropdown_menu(move |menu, _, _| {
-                    let select = more.clone();
-                    let clean = more.clone();
-                    menu.item(
-                        PopupMenuItem::new("Tout sélectionner").on_click(move |_, _, cx| {
-                            let _ = select.update(cx, |v, cx| {
-                                v.selected_media_set = v
-                                    .library_rows
-                                    .iter()
-                                    .map(|i| v.snapshot.media[*i].id)
-                                    .collect();
-                                cx.notify();
-                            });
-                        }),
-                    )
-                    .separator()
-                    .item(
-                        PopupMenuItem::new("Nettoyer le cache audio").on_click(move |_, _, cx| {
-                            let _ = clean.update(cx, |v, cx| v.send(Command::CollectGarbage, cx));
-                        }),
-                    )
-                }),
-        );
-    if let Some(playlist) = view
+        .child(theme::segmented().children(sorts))
+        .into_any_element()
+}
+
+/// « Plus d’options » of the whole library: select every audio, free unused space, and
+/// export or import the library. Always shown, so an empty library can be imported.
+fn library_menu(has_media: bool, cx: &mut Context<AppView>) -> impl IntoElement + use<> {
+    use wording::library_transfer as text;
+    let owner = cx.entity().downgrade();
+    theme::round(
+        Button::new("library-more")
+            .icon(IconName::Ellipsis)
+            .accessibility_label(tr!("Plus d’options"))
+            .tooltip(tr!("Plus d’options")),
+        Look::Ghost,
+        44.,
+        false,
+        cx,
+    )
+    .dropdown_menu(move |mut menu, _, _| {
+        let select = owner.clone();
+        let clean = owner.clone();
+        let export = owner.clone();
+        let import = owner.clone();
+        if has_media {
+            menu = menu
+                .item(
+                    PopupMenuItem::new(tr!("Tout sélectionner")).on_click(move |_, _, cx| {
+                        let _ = select.update(cx, |v, cx| {
+                            v.selected_media_set = v
+                                .library_rows
+                                .iter()
+                                .map(|i| v.snapshot.media[*i].id)
+                                .collect();
+                            cx.notify();
+                        });
+                    }),
+                )
+                .separator();
+        }
+        menu.item(
+            PopupMenuItem::new(tr!("Libérer l’espace inutilisé")).on_click(move |_, _, cx| {
+                let _ = clean.update(cx, |v, cx| v.send(Command::CollectGarbage, cx));
+            }),
+        )
+        .separator()
+        .item(
+            PopupMenuItem::new(text::export_menu()).on_click(move |_, window, cx| {
+                let _ = export.update(cx, |v, cx| {
+                    v.open_transfer(transfer::Direction::Export, window, cx)
+                });
+            }),
+        )
+        .item(
+            PopupMenuItem::new(text::import_menu()).on_click(move |_, window, cx| {
+                let _ = import.update(cx, |v, cx| {
+                    v.open_transfer(transfer::Direction::Import, window, cx)
+                });
+            }),
+        )
+    })
+}
+
+/// The dark bar floating over the list: what is selected and what can be done with it.
+/// Without a ticked audio it offers to send the open audio to the open playlist.
+fn selection_bar(view: &AppView, cx: &mut Context<AppView>) -> Option<AnyElement> {
+    let playlist = view
         .selected_playlist
         .and_then(|id| view.snapshot.playlists.iter().find(|p| p.id == id))
-        && let Some(media) = view
-            .selected_media
-            .and_then(|id| view.snapshot.media.iter().find(|m| m.id == id))
-        && let Some(recipe) = view
-            .trims
-            .get(&media.id)
-            .and_then(|p| p.read(cx).chosen_recipe())
-            .or_else(|| media.recipes.first().copied())
-    {
-        let id = playlist.id;
-        let media = media.clone();
-        controls = controls.child(
-            Button::new("add-selected-audio-to-playlist")
-                .label("Ajouter à la playlist ouverte")
-                .primary()
-                .on_click(cx.listener(move |v, _, window, cx| {
-                    v.select_playlist(id, window, cx);
-                    if let Some(editor) = v.editors.get(&id).cloned() {
-                        let handle = window.window_handle();
-                        let media = media.clone();
-                        cx.defer(move |cx| {
-                            let _ = cx.update_window(handle, move |_, window, cx| {
-                                editor.update(cx, |e, cx| e.add_media(&media, recipe, window, cx))
-                            });
-                        });
-                        v.navigate(Route::Playlists, cx);
-                    }
-                })),
-        );
+        .filter(|playlist| view.editors.contains_key(&playlist.id));
+    let ticked = view.selected_media_set.len();
+    let open = view
+        .selected_media
+        .and_then(|id| view.snapshot.media.iter().find(|m| m.id == id));
+    if ticked == 0 && (playlist.is_none() || open.is_none()) {
+        return None;
     }
-    if !view.selected_media_set.is_empty() {
-        controls = controls
-            .child(
-                div()
-                    .text_sm()
-                    .child(format!("{} sélectionné(s)", view.selected_media_set.len())),
-            )
-            .child(
-                Button::new("delete-selected-media")
-                    .label("Supprimer")
-                    .on_click(cx.listener(|v, _, _, cx| {
-                        v.send(
-                            Command::DeleteMediaBatch {
-                                media: v.selected_media_set.iter().copied().collect(),
-                                policy: ReferencePolicy::RejectReferenced,
-                            },
-                            cx,
-                        );
-                    })),
-            )
-            .child(
+    let label = match (ticked, open) {
+        (0, Some(media)) => tr!("« {title} »", title = media.title),
+        (count, _) => trn!(
+            "{count} audio sélectionné",
+            "{count} audios sélectionnés",
+            count
+        ),
+    };
+    let mut bar = div()
+        .absolute()
+        .left(px(28.))
+        .right(px(28.))
+        .bottom(px(20.))
+        .h(px(60.))
+        .rounded(px(20.))
+        .bg(theme::c(theme::INK))
+        .text_color(theme::c(theme::SURFACE))
+        .shadow(theme::float(0.25))
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .pl(px(20.))
+        .pr(px(10.))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .font_weight(FontWeight::EXTRA_BOLD)
+                .child(label),
+        );
+    if ticked > 0 {
+        bar = bar
+            .child(theme::pill(
                 Button::new("clear-media-selection")
-                    .label("Désélectionner")
+                    .label(tr!("Désélectionner"))
                     .on_click(cx.listener(|v, _, _, cx| {
                         v.selected_media_set.clear();
                         cx.notify();
                     })),
-            );
+                Look::OnDark,
+                Height::Medium,
+                false,
+                cx,
+            ))
+            .child(theme::pill(
+                Button::new("delete-selected-media")
+                    .label(tr!("Supprimer"))
+                    .on_click(cx.listener(|v, _, window, cx| {
+                        let count = v.selected_media_set.len();
+                        let owner = cx.entity().downgrade();
+                        confirm_destructive(
+                            window,
+                            cx,
+                            trn!(
+                                "Supprimer {count} média de la médiathèque ?",
+                                "Supprimer {count} médias de la médiathèque ?",
+                                count
+                            ),
+                            tr!("Les fichiers audio et leurs versions préparées seront effacés de cet ordinateur. Les médias encore utilisés dans une playlist ou par une tâche en cours seront conservés. Cette action est irréversible."),
+                            tr!("Supprimer"),
+                            move |_, cx| {
+                                let _ = owner.update(cx, |v, cx| {
+                                    v.send(
+                                        Command::DeleteMediaBatch {
+                                            media: v.selected_media_set.iter().copied().collect(),
+                                            policy: ReferencePolicy::RejectReferenced,
+                                        },
+                                        cx,
+                                    );
+                                });
+                            },
+                        );
+                    })),
+                Look::OnDarkDanger,
+                Height::Medium,
+                false,
+                cx,
+            ));
     }
-    controls.into_any_element()
+    if let Some(playlist) = playlist {
+        let id = playlist.id;
+        let blocked = view.editors.get(&id).is_none_or(|e| e.read(cx).blocked());
+        bar = bar.child(theme::pill(
+            Button::new("add-selected-audio-to-playlist")
+                .label(tr!("Ajouter à « {title} »", title = playlist.title))
+                .on_click(cx.listener(move |v, _, window, cx| {
+                    let chosen: Vec<_> = if v.selected_media_set.is_empty() {
+                        v.selected_media.into_iter().collect()
+                    } else {
+                        v.library_rows
+                            .iter()
+                            .map(|i| v.snapshot.media[*i].id)
+                            .filter(|id| v.selected_media_set.contains(id))
+                            .collect()
+                    };
+                    let batch: Vec<_> = chosen
+                        .into_iter()
+                        .filter_map(|media| {
+                            let item = v.snapshot.media.iter().find(|m| m.id == media)?;
+                            // The open audio keeps the version chosen in its panel.
+                            let recipe = v
+                                .trims
+                                .get(&media)
+                                .and_then(|p| p.read(cx).chosen_recipe())
+                                .or_else(|| default_recipe(&v.snapshot, item))?;
+                            Some((media, recipe))
+                        })
+                        .collect();
+                    v.select_playlist(id, window, cx);
+                    if let Some(editor) = v.editors.get(&id).cloned() {
+                        cx.defer(move |cx| {
+                            editor.update(cx, |e, cx| e.add_media_batch(batch, cx));
+                        });
+                        v.selected_media_set.clear();
+                        v.navigate(Route::Playlists, cx);
+                    }
+                })),
+            Look::Primary,
+            Height::Medium,
+            blocked,
+            cx,
+        ));
+    }
+    Some(bar.into_any_element())
 }

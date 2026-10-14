@@ -92,12 +92,18 @@ pub async fn get_a_family_image(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `String`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetAFamilyImageError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -142,12 +148,18 @@ pub async fn get_family_images(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::FamilyImagesResponse`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetFamilyImagesError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -195,12 +207,18 @@ pub async fn upload_a_family_image(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::FamilyImageUploaded`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<UploadAFamilyImageError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }

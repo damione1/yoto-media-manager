@@ -11,7 +11,7 @@ sidebar_position: 6
 1. Open `Compte` and choose `Connecter mon compte Yoto`.
 2. Your browser opens the Yoto login page.
 3. Sign in there and approve the access the app needs.
-4. Return to Yoto Atelier after confirmation. The connected account becomes active and your playlists load automatically. The sidebar also shows the account in use.
+4. Return to YotoMediaManager after confirmation. The connected account becomes active and your playlists load automatically. The sidebar also shows the account in use.
 
 You enter your password on Yoto's website. The app keeps login authorizations in your operating system's secure vault. You do not need to create a developer key to use the configured app.
 
@@ -57,8 +57,12 @@ In `Imports`, open `Vérifier la publication`, then choose `Vérifier auprès de
 
 If another app changed the playlist, the update may require a choice between your version and the Yoto version. Read the proposed choices before deciding. You can keep a copy to preserve your work.
 
+## Advanced mode
+
+`Mode avancé`, in `Compte`, shows technical settings most families never need: interactive playback, track events, random playback ranges and streams in playlists; raw Yoto values, shortcuts and technical commands for players; manually linking a card after an uncertain upload; and `Ouvrir une autre médiathèque`, to open another library of this computer, such as an imported one, in a new window. It is off each time the app starts.
+
 ## Disconnect
 
-In `Compte`, open `Options` for the account and choose `Déconnecter ce compte`. Its authorizations and cached remote data are removed. Your original audio and local work are preserved.
+In `Compte`, open the account's `⋯` button (`Options du compte`) and choose `Déconnecter ce compte`. Its authorizations and cached remote data are removed. Your original audio and local work are preserved.
 
 After reconnecting, your playlists load automatically again. Disconnecting does not delete creations already published on Yoto. The app keeps minimal references to confirmed publications so it can find the same creation during a later update. A genuinely uncertain result still needs to be resolved after reconnecting.

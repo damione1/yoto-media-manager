@@ -87,6 +87,7 @@ pub async fn smoke(tools: Tools) -> Result<()> {
         .execute(Command::AddMedia {
             playlist: p,
             media: vec![(media.id, recipe)],
+            part_title: None,
         })
         .await?;
     let draft = service.playlist(p)?;

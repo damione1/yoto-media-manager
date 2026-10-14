@@ -37,6 +37,8 @@ pub struct Snapshot {
 #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub enum Command {
     AppUpdate(yoto_updater::UpdateAction),
+    /// Report or update the YouTube tool used for imports.
+    YoutubeTool(crate::youtube_tool::YoutubeToolAction),
     Import(Vec<ImportSelection>),
     InspectYoutube(String),
     NewPlaylist(String),
@@ -50,6 +52,9 @@ pub enum Command {
     AddMedia {
         playlist: PlaylistId,
         media: Vec<(MediaId, RecipeId)>,
+        /// As in [`Command::AddYotoMedia`].
+        #[serde(default)]
+        part_title: Option<String>,
     },
     DeleteMedia {
         media: MediaId,
@@ -104,6 +109,8 @@ pub enum Command {
         destination: PathBuf,
     },
     Connect,
+    /// Stop waiting for the browser sign-in started by `Connect`.
+    CancelConnect,
     Disconnect(AccountId),
     SelectAccount(AccountId),
     Sync(AccountId),
@@ -122,6 +129,10 @@ pub enum Command {
         account: AccountId,
         card: CardId,
         media: Vec<(MediaId, RecipeId)>,
+        /// Title of each part of a media too long for one track, in the client's language;
+        /// `{title}`, `{part}` and `{parts}` are replaced. `None` uses [`PART_TITLE`].
+        #[serde(default)]
+        part_title: Option<String>,
     },
     DuplicateYotoPlaylist {
         account: AccountId,
@@ -233,6 +244,7 @@ pub enum ConflictChoice {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Reply {
     AppUpdate(std::sync::Arc<yoto_updater::UpdateState>),
+    YoutubeTool(crate::youtube_tool::YoutubeToolStatus),
     Updated,
     Saved(Revision),
     OpenedPlaylist(PlaylistId),
@@ -246,6 +258,69 @@ pub enum Reply {
     Images(Vec<FamilyImageId>),
     Player(crate::players::CommandResult),
     Data(serde_json::Value),
+}
+/// Typed access to the reply a command is documented to return. Any other reply is a
+/// compatibility failure, so callers handle one success shape and the usual failures.
+impl Reply {
+    fn unexpected() -> Failure {
+        Failure::Compatibility(messages::UNEXPECTED_REPLY.into())
+    }
+    pub fn into_unit(self) -> Result<()> {
+        if let Self::Updated = self {
+            Ok(())
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_data(self) -> Result<serde_json::Value> {
+        if let Self::Data(value) = self {
+            Ok(value)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_asset(self) -> Result<AssetId> {
+        if let Self::Asset(asset) = self {
+            Ok(asset)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_pixel_art(self) -> Result<PixelArt> {
+        if let Self::PixelArt(art) = self {
+            Ok(*art)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_entries(self) -> Result<SourceInspection> {
+        if let Self::Entries(entries) = self {
+            Ok(entries)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_app_update(self) -> Result<Arc<yoto_updater::UpdateState>> {
+        if let Self::AppUpdate(state) = self {
+            Ok(state)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_youtube_tool(self) -> Result<crate::youtube_tool::YoutubeToolStatus> {
+        if let Self::YoutubeTool(status) = self {
+            Ok(status)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
+    pub fn into_operation(self) -> Result<(PlaylistId, JobId)> {
+        if let Self::PlaylistOperation { playlist, job } = self {
+            Ok((playlist, job))
+        } else {
+            Err(Self::unexpected())
+        }
+    }
 }
 type InterfaceBytes = (String, Vec<u64>, Arc<Vec<u8>>);
 type PlayerOwners =
@@ -271,9 +346,37 @@ pub struct Service {
     login_session: Mutex<Arc<AccountSession>>,
     sessions: Mutex<BTreeMap<AccountId, Arc<AccountSession>>>,
     pub(crate) updater: Arc<yoto_updater::Updater>,
+    /// The YouTube tool imports run: the bundled copy or a newer verified download.
+    pub youtube: Arc<crate::youtube_tool::YoutubeTool>,
     players: PlayerOwners,
     update_gate: tokio::sync::RwLock<()>,
     update_shutdown: std::sync::atomic::AtomicBool,
+}
+/// A publication job shared by the stages of its upload pipeline.
+type JobCell = Arc<Mutex<Job>>;
+/// A prepared track on its way to Yoto, with the mapping of an earlier upload if any.
+struct Outgoing {
+    recipe: RecipeId,
+    title: String,
+    asset: Asset,
+    key: String,
+    known: Option<PublicationMapping>,
+}
+/// A track after its upload stage.
+enum Sent {
+    /// Yoto already had this exact audio.
+    Known(PublicationMapping),
+    Uploaded {
+        track: Outgoing,
+        upload: UploadId,
+    },
+}
+/// How waiting for Yoto's conversion of one upload ended.
+enum TranscodeEnd {
+    Ready(Box<crate::api::Ingested>),
+    Stalled,
+    OutOfTime,
+    Failed,
 }
 struct AccountSession {
     cancelled: std::sync::atomic::AtomicBool,
@@ -391,6 +494,10 @@ impl Service {
     fn with_key(profile: PathBuf, tools: Tools, key: [u8; 32], lock: File) -> Result<Arc<Self>> {
         let db = Database::open(&profile.join("catalogue.db"), &key)?;
         let namespace = crate::profile_namespace(&profile);
+        let youtube = Arc::new(crate::youtube_tool::YoutubeTool::new(
+            profile.join("tools").join("yt-dlp"),
+            tools.youtube.clone(),
+        ));
         let store = AssetStore::new(profile, key)?;
         let (tx, rx) = std::sync::mpsc::channel();
         let playback = Arc::new(Mutex::new(PreviewStatus::Stopped));
@@ -433,6 +540,7 @@ impl Service {
             login_session: Mutex::new(Arc::new(AccountSession::new())),
             sessions: Mutex::new(BTreeMap::new()),
             updater: yoto_updater::Updater::new().map_err(storage)?,
+            youtube,
             players: tokio::sync::Mutex::new(BTreeMap::new()),
             update_gate: tokio::sync::RwLock::new(()),
             update_shutdown: false.into(),
@@ -567,9 +675,7 @@ impl Service {
             .update_shutdown
             .load(std::sync::atomic::Ordering::SeqCst)
         {
-            return Err(Failure::Validation(
-                "An application restart is already pending".into(),
-            ));
+            return Err(Failure::Validation(messages::RESTART_PENDING.into()));
         }
         for job in self.db.list::<Job>(Table::Job)? {
             match job.state {
@@ -577,10 +683,7 @@ impl Service {
                 | JobState::Running { .. }
                 | JobState::Retry { .. }
                 | JobState::Reconciling => {
-                    return Err(Failure::Validation(
-                        "Finish imports, audio processing and Yoto uploads before restarting"
-                            .into(),
-                    ));
+                    return Err(Failure::Validation(messages::RESTART_BUSY.into()));
                 }
                 JobState::WaitingForAuthentication
                 | JobState::Conflict { .. }
@@ -685,6 +788,7 @@ impl Service {
                 JobRequest::Import { .. } | JobRequest::Encode { .. } => None,
             },
             Command::AppUpdate(_)
+            | Command::YoutubeTool(_)
             | Command::Import(_)
             | Command::InspectYoutube(_)
             | Command::NewPlaylist(_)
@@ -710,6 +814,7 @@ impl Service {
             | Command::PreviewStatus
             | Command::Export { .. }
             | Command::Connect
+            | Command::CancelConnect
             | Command::Disconnect(_)
             | Command::SavePixelArt(_)
             | Command::ReadPixelArt(_)
@@ -724,14 +829,15 @@ impl Service {
             self.updater.request(*action);
             return Ok(Reply::AppUpdate(self.updater.state()));
         }
+        if let Command::YoutubeTool(action) = &command {
+            return Ok(Reply::YoutubeTool(self.youtube.request(*action)));
+        }
         let _update_guard = self.update_gate.read().await;
         if self
             .update_shutdown
             .load(std::sync::atomic::Ordering::SeqCst)
         {
-            return Err(Failure::Validation(
-                "The application is restarting for an update".into(),
-            ));
+            return Err(Failure::Validation(messages::RESTARTING.into()));
         }
         if matches!(&command, Command::StopPreview) {
             self.stop_preview()?;
@@ -741,6 +847,13 @@ impl Service {
             return Ok(Reply::Data(
                 serde_json::to_value(&*self.playback.lock().map_err(storage)?).map_err(storage)?,
             ));
+        }
+        if matches!(&command, Command::CancelConnect) {
+            self.login_session.lock().map_err(storage)?.cancel();
+            // The running sign-in holds the gate until it has dropped its callback listener,
+            // so a new `Connect` sent after this reply finds the port free.
+            let _login = self.login_gate.write().await;
+            return Ok(Reply::Updated);
         }
         if matches!(&command, Command::Connect) {
             let _login = self.login_gate.read().await;
@@ -832,8 +945,8 @@ impl Service {
             None
         };
         match command {
-            Command::AppUpdate(_) => {
-                unreachable!("Updater command was handled before mutation admission")
+            Command::AppUpdate(_) | Command::YoutubeTool(_) | Command::CancelConnect => {
+                unreachable!("Updater and sign-in commands were handled before mutation admission")
             }
             Command::Connect => {
                 let account = self.auth.login().await?;
@@ -1034,9 +1147,10 @@ impl Service {
                 account,
                 card,
                 media,
+                part_title,
             } => {
                 if media.is_empty() {
-                    return Err(Failure::Validation("Choisissez au moins un média.".into()));
+                    return Err(Failure::Validation(messages::MEDIA_SELECTION_EMPTY.into()));
                 }
                 let id = self.load_cloud_playlist(&account, &card).await?;
                 let mut draft = self.playlist(id)?;
@@ -1044,11 +1158,9 @@ impl Service {
                 for (id, recipe) in media {
                     let media = self.media(id)?;
                     if !media.recipes.contains(&recipe) {
-                        return Err(Failure::Validation(
-                            "Cette version n’appartient pas au média choisi.".into(),
-                        ));
+                        return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    draft.add_media(&media, recipe)?;
+                    self.add_to_playlist(&mut draft, &media, recipe, part_title.as_deref())?;
                 }
                 self.auth.access(&account, Scope::UserContentManage).await?;
                 self.enqueue_cloud(account, draft, CloudPlaylistWrite::Update { expected })
@@ -1226,7 +1338,7 @@ impl Service {
                     .iter()
                     .find(|d| d.id == device)
                     .cloned()
-                    .ok_or_else(|| Failure::Validation("Select a player".into()))?;
+                    .ok_or_else(|| Failure::Validation(messages::SELECT_PLAYER.into()))?;
                 Ok(Reply::Player({
                     let owner = self
                         .players
@@ -1304,7 +1416,7 @@ impl Service {
                 name,
             } => {
                 if name.trim().is_empty() {
-                    return Err(Failure::Validation("Enter a player name".into()));
+                    return Err(Failure::Validation(messages::PLAYER_NAME_EMPTY.into()));
                 }
                 let token = self
                     .auth
@@ -1460,7 +1572,7 @@ impl Service {
     }
     fn execute_local(&self, command: Command) -> Result<Reply> {
         let _assets = match &command {
-            Command::AppUpdate(_) => None,
+            Command::AppUpdate(_) | Command::YoutubeTool(_) => None,
             Command::SavePlaylist { .. }
             | Command::SaveCopy(_)
             | Command::Duplicate(_)
@@ -1496,6 +1608,7 @@ impl Service {
             | Command::Retry(_)
             | Command::Cancel(_)
             | Command::Connect
+            | Command::CancelConnect
             | Command::Disconnect(_)
             | Command::SelectAccount(_)
             | Command::Sync(_)
@@ -1523,7 +1636,7 @@ impl Service {
             | Command::UploadFamilyImage { .. } => None,
         };
         match command {
-            Command::AppUpdate(_) => Err(Failure::Validation(
+            Command::AppUpdate(_) | Command::YoutubeTool(_) => Err(Failure::Validation(
                 "Updater command requires the async service".into(),
             )),
             Command::Import(selections) => {
@@ -1533,7 +1646,7 @@ impl Service {
                 Ok(Reply::Updated)
             }
             Command::InspectYoutube(url) => Ok(Reply::Entries(crate::sources::inspect_youtube(
-                &self.tools,
+                &self.youtube_tools(),
                 &url,
             )?)),
             Command::NewPlaylist(title) => {
@@ -1559,25 +1672,30 @@ impl Service {
                 self.db.remove(Table::Playlist, &id.to_string())?;
                 Ok(Reply::Updated)
             }
-            Command::AddMedia { playlist, media } => {
+            Command::AddMedia {
+                playlist,
+                media,
+                part_title,
+            } => {
                 let mut p = self.playlist(playlist)?;
                 let base = p.revision;
                 for (id, recipe) in media {
                     let m = self.media(id)?;
                     if !m.recipes.contains(&recipe) {
-                        return Err(Failure::Validation(
-                            "Recipe does not belong to this media".into(),
-                        ));
+                        return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    p.add_media(&m, recipe)?;
+                    self.add_to_playlist(&mut p, &m, recipe, part_title.as_deref())?;
                 }
                 self.db.save_playlist_cas(&p, base)?;
                 Ok(Reply::Updated)
             }
             Command::DeleteMediaBatch { media, policy } => {
-                self.db.delete_media_batch(&media, policy)?;
+                let kept = self.db.delete_media_batch(&media, policy)?;
                 self.collect_garbage()?;
-                Ok(Reply::Updated)
+                Ok(Reply::Data(serde_json::json!({
+                    "deleted": media.len() - kept.len(),
+                    "kept": kept.len(),
+                })))
             }
             Command::DeleteMedia { media, policy } => {
                 self.db.delete_media(media, None, policy)?;
@@ -1646,6 +1764,7 @@ impl Service {
                     result: None,
                     info: None,
                     tool_version: self.tools.validate()?,
+                    part: None,
                 };
                 self.db.add_recipe(&r)?;
                 self.enqueue(JobRequest::Encode { recipe: r.id })?;
@@ -1694,9 +1813,16 @@ impl Service {
                 self.stop_preview()?;
                 Ok(Reply::Updated)
             }
-            Command::Export { media, destination } => {
+            Command::Export {
+                media,
+                mut destination,
+            } => {
                 let m = self.media(media)?;
                 let a = self.asset(m.original)?;
+                // A name typed without extension still opens as audio.
+                if destination.extension().is_none() && !a.extension.is_empty() {
+                    destination.set_extension(&a.extension);
+                }
                 self.store.export(&a, &destination)?;
                 Ok(Reply::Updated)
             }
@@ -1734,7 +1860,7 @@ impl Service {
                     | PublicationOutcome::Confirmed { .. } => true,
                     PublicationOutcome::Prepared | PublicationOutcome::Rejected => false,
                 }) {
-                    return Err(Failure::Validation("This publication has a durable remote effect; reconcile it rather than retrying".into()));
+                    return Err(Failure::Validation(messages::PUBLICATION_DURABLE.into()));
                 }
                 match &job.state {
                     JobState::Failed { .. }
@@ -1750,9 +1876,9 @@ impl Service {
                     | JobState::Running { .. }
                     | JobState::Conflict { .. }
                     | JobState::Reconciling
-                    | JobState::Completed { .. } => Err(Failure::Validation(
-                        "This task requires a separate resolution".into(),
-                    )),
+                    | JobState::Completed { .. } => {
+                        Err(Failure::Validation(messages::TASK_NEEDS_RESOLUTION.into()))
+                    }
                 }
             }
             Command::Cancel(id) => {
@@ -1762,7 +1888,7 @@ impl Service {
                 let mut job = self.job(id)?;
                 match &job.state {
                     JobState::Completed { .. } => {
-                        return Err(Failure::Validation("This task is already completed".into()));
+                        return Err(Failure::Validation(messages::TASK_COMPLETED.into()));
                     }
                     JobState::Reconciling => return Err(Failure::Ambiguous),
                     JobState::Queued
@@ -1792,7 +1918,7 @@ impl Service {
                     .flat_map(|row| row.iter().flat_map(|pixel| pixel.iter().copied()))
                     .collect::<Vec<_>>();
                 let image = image::RgbaImage::from_raw(16, 16, bytes)
-                    .ok_or_else(|| Failure::Media("Pixel image invalid".into()))?;
+                    .ok_or_else(|| Failure::Media(messages::PIXEL_IMAGE_INVALID.into()))?;
                 let lease = self.store.lease("png")?;
                 image.save(lease.path()).map_err(crate::media_error)?;
                 let asset = self.store.put(lease.path(), "png")?;
@@ -1811,12 +1937,12 @@ impl Service {
                 } else {
                     let metadata = std::fs::metadata(&path).map_err(storage)?;
                     if metadata.len() > 8_000_000 {
-                        return Err(Failure::Validation("Image exceeds 8 MB".into()));
+                        return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
                     }
                     let decoded = crate::media::read_image(&path)?;
                     if decoded.width() > 8192 || decoded.height() > 8192 {
                         return Err(Failure::Validation(
-                            "Image dimensions exceed 8192 pixels".into(),
+                            messages::IMAGE_DIMENSIONS_EXCEED.into(),
                         ));
                     }
                     let lease = self.store.lease("png")?;
@@ -1842,13 +1968,13 @@ impl Service {
                     .chapters
                     .iter_mut()
                     .find(|c| c.id == chapter)
-                    .ok_or_else(|| Failure::Validation("Chapter absent".into()))?;
+                    .ok_or_else(|| Failure::Validation(messages::CHAPTER_ABSENT.into()))?;
                 match track {
                     Some(id) => {
                         c.tracks
                             .iter_mut()
                             .find(|t| t.id == id)
-                            .ok_or_else(|| Failure::Validation("Track absent".into()))?
+                            .ok_or_else(|| Failure::Validation(messages::TRACK_ABSENT.into()))?
                             .icon = Some(IconReference::Local { asset: asset.id })
                     }
                     None => c.icon = Some(IconReference::Local { asset: asset.id }),
@@ -1942,6 +2068,7 @@ impl Service {
                 Ok(Reply::Updated)
             }
             Command::Connect
+            | Command::CancelConnect
             | Command::Disconnect(_)
             | Command::SelectAccount(_)
             | Command::DeviceConfig { .. }
@@ -1974,7 +2101,7 @@ impl Service {
     pub fn media(&self, id: MediaId) -> Result<MediaItem> {
         self.db
             .get(Table::Media, &id.to_string())?
-            .ok_or_else(|| Failure::Storage("Media not found".into()))
+            .ok_or_else(|| Failure::Storage(messages::MEDIA_NOT_FOUND.into()))
     }
     fn pixel_art(&self, id: AssetId, thumbnail: bool) -> Result<PixelArt> {
         let asset = self.asset(id)?;
@@ -1984,7 +2111,7 @@ impl Service {
             image = image::imageops::resize(&image, 16, 16, image::imageops::FilterType::Triangle);
         }
         if image.width() != 16 || image.height() != 16 {
-            return Err(Failure::Validation("A pixel icon must be 16×16".into()));
+            return Err(Failure::Validation(messages::PIXEL_ICON_SIZE.into()));
         }
         let mut art = PixelArt::blank();
         for (y, row) in art.pixels.iter_mut().enumerate() {
@@ -2044,7 +2171,7 @@ impl Service {
             Ok(result) => result,
             Err(_) => {
                 cancel.store(true, std::sync::atomic::Ordering::SeqCst);
-                Err(Failure::Media("Audio output did not respond".into()))
+                Err(Failure::Media(messages::AUDIO_OUTPUT_SILENT.into()))
             }
         }
     }
@@ -2093,7 +2220,7 @@ impl Service {
     pub fn recipe(&self, id: RecipeId) -> Result<MediaRecipe> {
         self.db
             .get(Table::Recipe, &id.to_string())?
-            .ok_or_else(|| Failure::Storage("Recipe not found".into()))
+            .ok_or_else(|| Failure::Storage(messages::RECIPE_NOT_FOUND.into()))
     }
     pub fn asset(&self, id: AssetId) -> Result<Asset> {
         self.db
@@ -2103,12 +2230,12 @@ impl Service {
     pub fn playlist(&self, id: PlaylistId) -> Result<Playlist> {
         self.db
             .get(Table::Playlist, &id.to_string())?
-            .ok_or_else(|| Failure::Storage("Playlist not found".into()))
+            .ok_or_else(|| Failure::Storage(messages::PLAYLIST_NOT_FOUND.into()))
     }
     fn job(&self, id: JobId) -> Result<Job> {
         self.db
             .get(Table::Job, &id.to_string())?
-            .ok_or_else(|| Failure::Storage("Task not found".into()))
+            .ok_or_else(|| Failure::Storage(messages::TASK_NOT_FOUND.into()))
     }
     fn save_job(&self, job: &Job) -> Result<()> {
         self.db.put(Table::Job, &job.id.to_string(), job)
@@ -2240,25 +2367,24 @@ impl Service {
         match job.request.clone() {
             JobRequest::Import { selection } => {
                 self.phase(job, JobPhase::Acquiring)?;
-                let service = self.clone();
-                let worker_cancel = cancel.clone();
-                let frozen_job = job.clone();
-                let media = tokio::task::spawn_blocking(move || {
-                    let _guard = crate::process::OperationGuard::install(worker_cancel.clone());
-                    let _assets = service.protect_assets()?;
-                    let (media, asset, recipe, waveform) =
-                        crate::sources::import(&service.tools, &service.store, &selection)?;
-                    let _completion = service.jobs.lock().map_err(storage)?;
-                    if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                        return Err(Failure::Cancelled);
+                let tools = self.youtube_tools();
+                let media = match self.import(job, &selection, tools.clone(), &cancel).await {
+                    // YouTube changed: fetch a newer downloader when there is one, then try once more.
+                    Err(Failure::Media(message))
+                        if message == messages::YOUTUBE_OUTDATED
+                            && !cancel.load(std::sync::atomic::Ordering::SeqCst) =>
+                    {
+                        self.youtube
+                            .update(crate::youtube_tool::Trigger::Outdated)
+                            .await;
+                        let refreshed = self.youtube_tools();
+                        if refreshed.youtube == tools.youtube {
+                            return Err(Failure::Media(message));
+                        }
+                        self.import(job, &selection, refreshed, &cancel).await?
                     }
-                    service
-                        .db
-                        .finish_import(&frozen_job, &media, &asset, &recipe, &waveform)?;
-                    Ok(media)
-                })
-                .await
-                .map_err(storage)??;
+                    result => result?,
+                };
                 Ok(JobOutput::Imported { media: media.id })
             }
             JobRequest::Encode { recipe } => {
@@ -2269,99 +2395,19 @@ impl Service {
                 Ok(JobOutput::Encoded { asset })
             }
             JobRequest::Publish { account, snapshot } => {
-                let mut mappings = vec![];
-                for chapter in &snapshot.chapters {
-                    for track in &chapter.tracks {
-                        match &track.media {
-                            TrackMedia::Local { recipe, .. } => {
-                                let asset_id =
-                                    self.encode_recipe(*recipe, cancel.clone(), None).await?;
-                                let asset = self.asset(asset_id)?;
-                                let key = format!("{account}:{recipe}:{}", asset.sha256);
-                                let mapping: Option<PublicationMapping> =
-                                    self.db.get(Table::Mapping, &key)?;
-                                let mapping = match mapping {
-                                    Some(m) => m,
-                                    None => {
-                                        let token = self
-                                            .auth
-                                            .access(&account, Scope::UserContentManage)
-                                            .await?;
-                                        self.phase(
-                                            job,
-                                            JobPhase::Uploading {
-                                                recipe: *recipe,
-                                                upload: None,
-                                            },
-                                        )?;
-                                        let reservation = self
-                                            .api
-                                            .reserve(&token, &asset.sha256, &track.title)
-                                            .await?;
-                                        self.phase(
-                                            job,
-                                            JobPhase::Uploading {
-                                                recipe: *recipe,
-                                                upload: Some(reservation.id.clone()),
-                                            },
-                                        )?;
-                                        if let Some(url) = reservation.url {
-                                            let service = self.clone();
-                                            let asset = asset.clone();
-                                            let lease = tokio::task::spawn_blocking(move || {
-                                                service.store.materialize(&asset)
-                                            })
-                                            .await
-                                            .map_err(storage)??;
-                                            self.api
-                                                .put_signed(
-                                                    &url,
-                                                    lease.path(),
-                                                    self.asset(asset_id)?.bytes,
-                                                )
-                                                .await?;
-                                        }
-                                        self.phase(
-                                            job,
-                                            JobPhase::Ingesting {
-                                                recipe: *recipe,
-                                                upload: reservation.id.clone(),
-                                            },
-                                        )?;
-                                        let mut ingested = None;
-                                        for attempt in 0..30 {
-                                            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                                                return Err(Failure::Cancelled);
-                                            }
-                                            if let Some(info) =
-                                                self.api.ingestion(&token, &reservation.id).await?
-                                            {
-                                                ingested = Some(info);
-                                                break;
-                                            }
-                                            tokio::time::sleep(std::time::Duration::from_secs(
-                                                (1 + attempt / 5).min(6),
-                                            ))
-                                            .await;
-                                        }
-                                        let ingested = ingested.ok_or(Failure::Connection)?;
-                                        let mapping = PublicationMapping {
-                                            account: account.clone(),
-                                            recipe: *recipe,
-                                            digest: asset.sha256,
-                                            info: ingested.audio_info()?,
-                                            media: ingested.media,
-                                        };
-                                        self.db.put(Table::Mapping, &key, &mapping)?;
-                                        mapping
-                                    }
-                                };
-                                mappings.push(mapping);
-                            }
-                            TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => {}
-                        }
+                // A track over Yoto's limit would only be refused after its upload.
+                for track in snapshot.chapters.iter().flat_map(|c| &c.tracks) {
+                    if let TrackMedia::Local { recipe, .. } = &track.media
+                        && self.recipe(*recipe)?.trim.duration().micros() > Rules::TRACK_MICROS_MAX
+                    {
+                        return Err(Failure::Validation(
+                            messages::TRACK_LONGER_THAN_YOTO_ALLOWS.into(),
+                        ));
                     }
                 }
+                let mappings = self
+                    .upload_tracks(job, &account, &snapshot, cancel.clone())
+                    .await?;
                 let token = self.auth.access(&account, Scope::UserContentManage).await?;
                 let mut icons = BTreeMap::new();
                 for chapter in &snapshot.chapters {
@@ -2517,10 +2563,347 @@ impl Service {
             }
         }
     }
+    /// Add a media version to a playlist. A version too long for one Yoto track becomes
+    /// one track per part; parts already cut earlier are reused, so their prepared audio
+    /// and Yoto uploads are too.
+    fn add_to_playlist(
+        &self,
+        playlist: &mut Playlist,
+        media: &MediaItem,
+        recipe: RecipeId,
+        part_title: Option<&str>,
+    ) -> Result<()> {
+        let version = self.recipe(recipe)?;
+        let ranges = plan_parts(version.trim);
+        if ranges.len() == 1 {
+            return playlist.add_media(media, recipe);
+        }
+        let count = u16::try_from(ranges.len()).map_err(storage)?;
+        let existing: Vec<MediaRecipe> = self
+            .db
+            .list::<MediaRecipe>(Table::Recipe)?
+            .into_iter()
+            .filter(|r| r.part.is_some_and(|p| p.of == recipe && p.count == count))
+            .collect();
+        let mut parts = Vec::with_capacity(ranges.len());
+        for (index, trim) in (1..=count).zip(ranges) {
+            let part = RecipePart {
+                of: recipe,
+                index,
+                count,
+            };
+            let reused = existing.iter().find(|r| {
+                r.part == Some(part) && r.trim == trim && r.normalization == version.normalization
+            });
+            let id = match reused {
+                Some(r) => r.id,
+                None => {
+                    let r = MediaRecipe {
+                        id: RecipeId::new(),
+                        media: media.id,
+                        original: version.original,
+                        trim,
+                        normalization: version.normalization,
+                        result: None,
+                        info: None,
+                        tool_version: version.tool_version.clone(),
+                        part: Some(part),
+                    };
+                    self.db.add_recipe(&r)?;
+                    r.id
+                }
+            };
+            parts.push(id);
+        }
+        playlist.add_media_parts(media, &parts, part_title)
+    }
+    /// Acquire, analyse and record one import with the given tools.
+    async fn import(
+        self: &Arc<Self>,
+        job: &Job,
+        selection: &ImportSelection,
+        tools: Tools,
+        cancel: &Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<MediaItem> {
+        let service = self.clone();
+        let worker_cancel = cancel.clone();
+        let frozen_job = job.clone();
+        let selection = selection.clone();
+        tokio::task::spawn_blocking(move || {
+            let _guard = crate::process::OperationGuard::install(worker_cancel.clone());
+            let _assets = service.protect_assets()?;
+            let (media, asset, recipe, waveform) =
+                crate::sources::import(&tools, &service.store, &selection)?;
+            let _completion = service.jobs.lock().map_err(storage)?;
+            if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(Failure::Cancelled);
+            }
+            service
+                .db
+                .finish_import(&frozen_job, &media, &asset, &recipe, &waveform)?;
+            Ok(media)
+        })
+        .await
+        .map_err(storage)?
+    }
+    /// The bundled tools, with the YouTube downloader currently chosen for imports.
+    pub fn youtube_tools(&self) -> Tools {
+        let mut tools = self.tools.clone();
+        tools.youtube = self.youtube.path();
+        tools
+    }
+    fn shared_phase(&self, job: &JobCell, phase: JobPhase) -> Result<()> {
+        let mut job = job.lock().map_err(storage)?;
+        self.phase(&mut job, phase)
+    }
+    /// Prepare, upload and follow the conversion of every local track of a publication
+    /// through a bounded pipeline: encoding runs ahead one track at a time while earlier
+    /// tracks upload and convert. Returns one mapping per distinct recipe, in track order.
+    async fn upload_tracks(
+        self: &Arc<Self>,
+        job: &mut Job,
+        account: &AccountId,
+        snapshot: &Playlist,
+        cancel: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Vec<PublicationMapping>> {
+        use crate::pipeline::{Gates, Halt};
+        let mut seen = std::collections::BTreeSet::new();
+        let tracks: Vec<(RecipeId, String)> = snapshot
+            .chapters
+            .iter()
+            .flat_map(|c| &c.tracks)
+            .filter_map(|t| match &t.media {
+                TrackMedia::Local { recipe, .. } => {
+                    seen.insert(*recipe).then(|| (*recipe, t.title.clone()))
+                }
+                TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => None,
+            })
+            .collect();
+        let cell: JobCell = Arc::new(Mutex::new(job.clone()));
+        let prepare = {
+            let service = self.clone();
+            let account = account.clone();
+            move |(recipe, title): (RecipeId, String), halt: Halt| {
+                let service = service.clone();
+                let account = account.clone();
+                async move {
+                    let asset = service
+                        .encode_recipe_until(recipe, halt.flags(), None)
+                        .await?;
+                    let asset = service.asset(asset)?;
+                    let key = format!("{account}:{recipe}:{}", asset.sha256);
+                    let known = service.db.get(Table::Mapping, &key)?;
+                    Ok(Outgoing {
+                        recipe,
+                        title,
+                        asset,
+                        key,
+                        known,
+                    })
+                }
+            }
+        };
+        let send = {
+            let service = self.clone();
+            let account = account.clone();
+            let cell = cell.clone();
+            move |track: Outgoing, _halt: Halt| {
+                let (service, account, cell) = (service.clone(), account.clone(), cell.clone());
+                async move {
+                    if let Some(mapping) = track.known {
+                        return Ok(Sent::Known(mapping));
+                    }
+                    let token = service
+                        .auth
+                        .access(&account, Scope::UserContentManage)
+                        .await?;
+                    let upload = service
+                        .send_audio(&cell, &token, track.recipe, &track.asset, &track.title)
+                        .await?;
+                    Ok(Sent::Uploaded { track, upload })
+                }
+            }
+        };
+        let finish = {
+            let service = self.clone();
+            let account = account.clone();
+            let cell = cell.clone();
+            move |sent: Sent, gates: Gates| {
+                let (service, account, cell) = (service.clone(), account.clone(), cell.clone());
+                async move {
+                    let (track, mut upload) = match sent {
+                        Sent::Known(mapping) => return Ok(mapping),
+                        Sent::Uploaded { track, upload } => (track, upload),
+                    };
+                    let audio_seconds = service
+                        .recipe(track.recipe)?
+                        .info
+                        .map_or(0., |info| info.duration.seconds());
+                    let budget = crate::transcode::budget(audio_seconds, track.asset.bytes);
+                    let mut sent_again = false;
+                    let ingested = loop {
+                        let (end, percent) = service
+                            .await_transcode(
+                                &cell,
+                                &account,
+                                track.recipe,
+                                &upload,
+                                budget,
+                                gates.halt(),
+                            )
+                            .await?;
+                        let problem = match end {
+                            TranscodeEnd::Ready(ingested) => break ingested,
+                            TranscodeEnd::Stalled if !sent_again => {
+                                sent_again = true;
+                                let _slot = gates.upload().await?;
+                                let token = service
+                                    .auth
+                                    .access(&account, Scope::UserContentManage)
+                                    .await?;
+                                upload = service
+                                    .send_audio(
+                                        &cell,
+                                        &token,
+                                        track.recipe,
+                                        &track.asset,
+                                        &track.title,
+                                    )
+                                    .await?;
+                                continue;
+                            }
+                            TranscodeEnd::Stalled => TranscodeProblem::Stalled,
+                            TranscodeEnd::OutOfTime => TranscodeProblem::TimedOut,
+                            TranscodeEnd::Failed => TranscodeProblem::Failed,
+                        };
+                        return Err(Failure::Transcode {
+                            track: track.title.clone(),
+                            problem,
+                            percent,
+                        });
+                    };
+                    let mapping = PublicationMapping {
+                        account: account.clone(),
+                        recipe: track.recipe,
+                        digest: track.asset.sha256,
+                        info: ingested.audio_info()?,
+                        media: ingested.media,
+                    };
+                    service.db.put(Table::Mapping, &track.key, &mapping)?;
+                    Ok(mapping)
+                }
+            }
+        };
+        let result = crate::pipeline::run(
+            tracks,
+            crate::pipeline::PUBLISH,
+            cancel,
+            prepare,
+            send,
+            finish,
+        )
+        .await;
+        // Keep the phase and checkpoint the stages recorded.
+        *job = cell.lock().map_err(storage)?.clone();
+        result
+    }
+    /// Reserve an upload for a prepared track and send the file when Yoto does not have it.
+    async fn send_audio(
+        self: &Arc<Self>,
+        job: &JobCell,
+        token: &str,
+        recipe: RecipeId,
+        asset: &Asset,
+        title: &str,
+    ) -> Result<UploadId> {
+        self.shared_phase(
+            job,
+            JobPhase::Uploading {
+                recipe,
+                upload: None,
+            },
+        )?;
+        let reservation = self.api.reserve(token, &asset.sha256, title).await?;
+        self.shared_phase(
+            job,
+            JobPhase::Uploading {
+                recipe,
+                upload: Some(reservation.id.clone()),
+            },
+        )?;
+        if let Some(url) = reservation.url {
+            let service = self.clone();
+            let file = asset.clone();
+            let lease = tokio::task::spawn_blocking(move || service.store.materialize(&file))
+                .await
+                .map_err(storage)??;
+            self.api.put_signed(&url, lease.path(), asset.bytes).await?;
+        }
+        Ok(reservation.id)
+    }
+    /// Wait for Yoto to convert an upload, showing its progress on the job.
+    /// Returns how the wait ended and the last percentage Yoto reported.
+    async fn await_transcode(
+        self: &Arc<Self>,
+        job: &JobCell,
+        account: &AccountId,
+        recipe: RecipeId,
+        upload: &UploadId,
+        budget: std::time::Duration,
+        halt: &crate::pipeline::Halt,
+    ) -> Result<(TranscodeEnd, Option<u8>)> {
+        use crate::{
+            api::Ingestion,
+            transcode::{Verdict, Watch, poll_interval},
+        };
+        let ingesting = |percent| JobPhase::Ingesting {
+            recipe,
+            upload: upload.clone(),
+            percent,
+        };
+        self.shared_phase(job, ingesting(None))?;
+        let started = std::time::Instant::now();
+        let mut watch = Watch::new(budget);
+        loop {
+            if halt.halted() {
+                return Err(Failure::Cancelled);
+            }
+            let token = self.auth.access(account, Scope::UserContentManage).await?;
+            let progress = match self.api.ingestion(&token, upload).await? {
+                Ingestion::Ready(ingested) => {
+                    return Ok((TranscodeEnd::Ready(Box::new(ingested)), Some(100)));
+                }
+                Ingestion::Failed(progress) => {
+                    return Ok((TranscodeEnd::Failed, progress.percent.or(watch.percent())));
+                }
+                Ingestion::Working(progress) => progress,
+            };
+            let shown = watch.percent();
+            let verdict = watch.observe(started.elapsed(), &progress);
+            if watch.percent() != shown {
+                self.shared_phase(job, ingesting(watch.percent()))?;
+            }
+            match verdict {
+                Verdict::Wait => {}
+                Verdict::Stalled => return Ok((TranscodeEnd::Stalled, watch.percent())),
+                Verdict::OutOfTime => return Ok((TranscodeEnd::OutOfTime, watch.percent())),
+            }
+            tokio::time::sleep(poll_interval(started.elapsed())).await;
+        }
+    }
     async fn encode_recipe(
         self: &Arc<Self>,
         id: RecipeId,
         cancel: Arc<std::sync::atomic::AtomicBool>,
+        completion: Option<Job>,
+    ) -> Result<AssetId> {
+        self.encode_recipe_until(id, vec![cancel], completion).await
+    }
+    /// Prepare a recipe's audio unless it is ready, stopping when any of `stops` is raised.
+    async fn encode_recipe_until(
+        self: &Arc<Self>,
+        id: RecipeId,
+        stops: Vec<Arc<std::sync::atomic::AtomicBool>>,
         completion: Option<Job>,
     ) -> Result<AssetId> {
         let recipe = self.recipe(id)?;
@@ -2529,7 +2912,7 @@ impl Service {
         }
         let service = self.clone();
         tokio::task::spawn_blocking(move || {
-            let _guard = crate::process::OperationGuard::install(cancel.clone());
+            let _guard = crate::process::OperationGuard::install_any(stops.clone());
             let _assets = service.protect_assets()?;
             let mut r = service.recipe(id)?;
             let m = service.media(r.media)?;
@@ -2540,7 +2923,10 @@ impl Service {
             let info = service.tools.encode(source.path(), output.path(), &r)?;
             let asset = service.store.put(output.path(), "mp3")?;
             let _completion = service.jobs.lock().map_err(storage)?;
-            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            if stops
+                .iter()
+                .any(|s| s.load(std::sync::atomic::Ordering::SeqCst))
+            {
                 return Err(Failure::Cancelled);
             }
             r.result = Some(asset.id);

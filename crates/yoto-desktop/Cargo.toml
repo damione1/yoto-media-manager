@@ -14,6 +14,7 @@ rand = "0.8"
 anyhow = "1"
 futures = "0.3"
 reqwest.workspace = true
+sys-locale = "0.3"
 
 [build-dependencies]
 winresource = "0.1"
