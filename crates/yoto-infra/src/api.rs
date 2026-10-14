@@ -75,11 +75,26 @@ impl Ingested {
         })
     }
 }
+/// Time allowed to open a connection, for API calls and file uploads alike.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Slowest upstream throughput an upload is expected to sustain (about 400 kbit/s).
+const UPLOAD_SLOWEST_BYTES_PER_SECOND: u64 = 50_000;
+const UPLOAD_TIMEOUT_MIN: Duration = Duration::from_secs(5 * 60);
+const UPLOAD_TIMEOUT_MAX: Duration = Duration::from_secs(45 * 60);
+/// Whole-request limit for sending a file of `bytes` to signed storage.
+///
+/// The shared 30-second API limit covers the whole request, which a long story on a slow
+/// connection exceeds; the upload instead gets time in proportion to its size.
+pub fn upload_timeout(bytes: u64) -> Duration {
+    Duration::from_secs(bytes / UPLOAD_SLOWEST_BYTES_PER_SECOND)
+        .clamp(UPLOAD_TIMEOUT_MIN, UPLOAD_TIMEOUT_MAX)
+}
 impl YotoGateway {
     pub fn new() -> Result<Self> {
         Ok(Self {
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(30))
+                .connect_timeout(CONNECT_TIMEOUT)
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
                 .map_err(storage)?,
@@ -184,6 +199,7 @@ impl YotoGateway {
         let response = self
             .http
             .put(url)
+            .timeout(upload_timeout(bytes))
             .header(reqwest::header::CONTENT_TYPE, "audio/mpeg")
             .header(reqwest::header::CONTENT_LENGTH, bytes)
             .body(reqwest::Body::wrap_stream(stream))

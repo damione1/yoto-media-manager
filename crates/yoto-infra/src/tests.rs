@@ -469,6 +469,15 @@ async fn upload_contract_has_no_storage_bearer_and_null_reservation() {
             .is_none()
     );
 }
+#[test]
+fn upload_time_grows_with_the_file_within_bounds() {
+    use crate::api::upload_timeout;
+    use std::time::Duration;
+    assert_eq!(upload_timeout(5), Duration::from_secs(5 * 60));
+    assert_eq!(upload_timeout(40_000_000), Duration::from_secs(800));
+    assert_eq!(upload_timeout(100_000_000), Duration::from_secs(2000));
+    assert_eq!(upload_timeout(u64::MAX), Duration::from_secs(45 * 60));
+}
 fn base64url_zero() -> String {
     use base64::Engine;
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([0; 32])
