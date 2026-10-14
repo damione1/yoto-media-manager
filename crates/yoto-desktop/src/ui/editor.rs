@@ -57,6 +57,9 @@ pub struct PlaylistEditor {
     options_open: bool,
     advanced_open: bool,
     expanded_tracks: std::collections::BTreeSet<TrackId>,
+    /// The version playing on this computer from a track's « Écouter » button.
+    previewing: Option<RecipeId>,
+    preview_generation: u64,
 }
 impl PlaylistEditor {
     pub fn new(
@@ -192,6 +195,8 @@ impl PlaylistEditor {
             options_open: false,
             advanced_open: false,
             expanded_tracks: Default::default(),
+            previewing: None,
+            preview_generation: 0,
             draft,
             service,
             runtime,
@@ -259,7 +264,7 @@ impl PlaylistEditor {
                                 v.adopt(canonical, window, cx);
                             } else {
                                 v.external=Some(canonical);
-                                v.status="La playlist a changé sur Yoto. Rechargez la version actuelle avant de continuer.".into();
+                                v.status="La playlist a changé sur Yoto. Choisissez « Recharger la version Yoto » avant de continuer.".into();
                                 cx.notify();
                             }
                         })
@@ -267,7 +272,7 @@ impl PlaylistEditor {
                 }
             });
         } else {
-            self.status=if self.deleted { "Cette playlist a été supprimée sur Yoto. Choisissez une autre playlist dans la liste." } else { "La playlist a changé sur Yoto. Rechargez la version actuelle avant de continuer." }.into();
+            self.status=if self.deleted { "Cette playlist a été supprimée sur Yoto. Choisissez une autre playlist dans la liste." } else { "La playlist a changé sur Yoto. Choisissez « Recharger la version Yoto » avant de continuer." }.into();
         }
         cx.notify();
     }
@@ -278,6 +283,7 @@ impl PlaylistEditor {
             self.advanced_open,
             std::mem::take(&mut self.expanded_tracks),
         );
+        let preview = (self.previewing, self.preview_generation);
         *self = Self::new(
             draft,
             self.parent.clone(),
@@ -287,6 +293,8 @@ impl PlaylistEditor {
             cx,
         );
         (self.options_open, self.advanced_open, self.expanded_tracks) = open;
+        // A track still playing keeps its « Arrêter » button and its follower.
+        (self.previewing, self.preview_generation) = preview;
         self.status = "Playlist actualisée depuis Yoto.".into();
         cx.notify();
     }
@@ -399,6 +407,77 @@ impl PlaylistEditor {
                 };
                 cx.notify();
             });
+        }));
+    }
+    /// Listen to a track's version on this computer, or stop it when it is already playing.
+    /// The button follows the player until playback ends, wherever it was stopped from.
+    fn toggle_preview(&mut self, recipe: RecipeId, media: MediaId, cx: &mut Context<Self>) {
+        self.preview_generation = self.preview_generation.wrapping_add(1);
+        let generation = self.preview_generation;
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        if self.previewing == Some(recipe) {
+            self.previewing = None;
+            cx.notify();
+            rt.spawn(async move {
+                let _ = service.execute(Command::StopPreview).await;
+            });
+            return;
+        }
+        self.previewing = Some(recipe);
+        cx.notify();
+        self.tasks.push(cx.spawn(async move |weak, cx| {
+            let started = {
+                let service = service.clone();
+                rt.spawn(async move { service.execute(Command::Preview(recipe)).await })
+                    .await
+            };
+            let failure = match started {
+                Ok(Ok(_)) => None,
+                Ok(Err(e)) => Some(e),
+                Err(e) => Some(Failure::Storage(e.to_string())),
+            };
+            if let Some(failure) = failure {
+                let _ = weak.update(cx, |v, cx| {
+                    if v.preview_generation == generation {
+                        v.previewing = None;
+                        v.status = failure_text(&failure);
+                        cx.notify();
+                    }
+                });
+                return;
+            }
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(400))
+                    .await;
+                let service = service.clone();
+                let playing = match rt
+                    .spawn(async move { service.execute(Command::PreviewStatus).await })
+                    .await
+                {
+                    Ok(Ok(Reply::Data(data))) => matches!(
+                        serde_json::from_value::<PreviewStatus>(data),
+                        Ok(PreviewStatus::Playing { media: id, .. }) if id == media
+                    ),
+                    _ => false,
+                };
+                let current = weak
+                    .update(cx, |v, cx| {
+                        if v.preview_generation != generation {
+                            return false;
+                        }
+                        if !playing {
+                            v.previewing = None;
+                            cx.notify();
+                        }
+                        playing
+                    })
+                    .unwrap_or(false);
+                if !current {
+                    break;
+                }
+            }
         }));
     }
     pub fn save(&mut self, cx: &mut Context<Self>) {
@@ -903,7 +982,7 @@ impl PlaylistEditor {
             let owner = cx.entity().downgrade();
             let has_icon = track.icon.is_some();
             let (meta, playable) = match &track.media {
-                TrackMedia::Local { recipe, .. } => (
+                TrackMedia::Local { recipe, media } => (
                     snapshot
                         .recipes
                         .iter()
@@ -917,7 +996,7 @@ impl PlaylistEditor {
                             )
                         })
                         .unwrap_or_else(|| "Audio de la médiathèque".into()),
-                    Some(*recipe),
+                    Some((*recipe, *media)),
                 ),
                 TrackMedia::RemoteAudio { info, .. } => {
                     (duration_text(info.duration.seconds()), None)
@@ -1078,14 +1157,27 @@ impl PlaylistEditor {
                                 .child(theme::meta(meta).pl(px(8.))),
                         )
                         .child(theme::tag(state.0, state.1))
-                        .children(playable.map(|recipe| {
+                        .children(playable.map(|(recipe, media)| {
+                            let playing = self.previewing == Some(recipe);
                             theme::round(
                                 Button::new(element_id("preview-track-basic", tid))
-                                    .icon(IconName::Play)
-                                    .accessibility_label(format!("Écouter {}", track.title))
-                                    .tooltip("Écouter sur cet ordinateur")
+                                    .icon(if playing {
+                                        IconName::Pause
+                                    } else {
+                                        IconName::Play
+                                    })
+                                    .accessibility_label(if playing {
+                                        format!("Arrêter l’écoute de {}", track.title)
+                                    } else {
+                                        format!("Écouter {}", track.title)
+                                    })
+                                    .tooltip(if playing {
+                                        "Arrêter l’écoute"
+                                    } else {
+                                        "Écouter sur cet ordinateur"
+                                    })
                                     .on_click(cx.listener(move |v, _, _, cx| {
-                                        v.send(Command::Preview(recipe), cx)
+                                        v.toggle_preview(recipe, media, cx)
                                     })),
                                 Look::Soft(&theme::PEACH),
                                 36.,
@@ -2198,50 +2290,21 @@ impl Render for PlaylistEditor {
                             .font_weight(FontWeight::BOLD)
                             .child(self.status.clone()),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .gap(px(8.))
-                            .child(theme::pill(
-                                Button::new("reload-playlist")
-                                    .label("Recharger la version actuelle")
-                                    .on_click(cx.listener(|v, _, window, cx| {
-                                        if let Some(p) = v.external.take() {
-                                            v.adopt(p, window, cx);
-                                        }
-                                    })),
-                                Look::Primary,
-                                Height::Medium,
-                                self.external.is_none(),
-                                cx,
-                            ))
-                            .child(theme::pill(
-                                Button::new("copy-conflicted-draft")
-                                    .label("Recharger depuis Yoto")
-                                    .on_click(cx.listener(|v, _, _, cx| {
-                                        if v.gather(cx).is_ok() {
-                                            let draft = Box::new(v.draft.clone());
-                                            let _ = v.parent.update(cx, |parent, cx| {
-                                                if let DraftOrigin::Existing { base } =
-                                                    &draft.origin
-                                                {
-                                                    parent.send(
-                                                        Command::LoadRemote {
-                                                            account: base.account.clone(),
-                                                            card: base.card.clone(),
-                                                        },
-                                                        cx,
-                                                    );
-                                                }
-                                            });
-                                        }
-                                    })),
-                                Look::Outline,
-                                Height::Medium,
-                                false,
-                                cx,
-                            )),
-                    ),
+                    .children(self.external.is_some().then(|| {
+                        div().flex().gap(px(8.)).child(theme::pill(
+                            Button::new("reload-playlist")
+                                .label("Recharger la version Yoto")
+                                .on_click(cx.listener(|v, _, window, cx| {
+                                    if let Some(p) = v.external.take() {
+                                        v.adopt(p, window, cx);
+                                    }
+                                })),
+                            Look::Primary,
+                            Height::Medium,
+                            false,
+                            cx,
+                        ))
+                    })),
             );
         }
         body = body

@@ -419,6 +419,13 @@ impl TrimPanel {
                             view.media.author = metadata.author;
                             view.media.tags = metadata.tags;
                             view.status = "Informations enregistrées.".into();
+                            // Saving is the end of this dialog: close it, as « Appliquer » does.
+                            if view.editing.is_none()
+                                && let Some(handle) = view.editor_window.take()
+                            {
+                                let _ = cx
+                                    .update_window(handle, |_, window, cx| window.close_dialog(cx));
+                            }
                         }
                     }
                     Ok(Err(e)) => {
