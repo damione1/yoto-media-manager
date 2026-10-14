@@ -90,12 +90,18 @@ pub async fn create_a_group(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::GroupDocument`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<CreateAGroupError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -143,12 +149,18 @@ pub async fn delete_a_group(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::DeleteAGroup200Response`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<DeleteAGroupError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -194,12 +206,18 @@ pub async fn get_a_group(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::GroupDocument`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetAGroupError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -237,12 +255,18 @@ pub async fn get_groups(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `Vec&lt;models::GetGroups200ResponseInner&gt;`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetGroupsError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -291,12 +315,18 @@ pub async fn update_a_group(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::GroupDocument`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<UpdateAGroupError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }

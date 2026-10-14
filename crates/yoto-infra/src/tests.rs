@@ -574,6 +574,43 @@ async fn a_refused_card_names_the_limit_it_broke() {
     assert!(matches!(failure, Failure::Validation(m) if m == messages::YOTO_PLAYLIST_TOO_LONG));
 }
 #[test]
+fn retry_after_accepts_seconds_and_dates_within_bounds() {
+    use crate::api::retry_after_seconds as wait;
+    use std::time::Duration;
+    let now = httpdate::parse_http_date("Tue, 13 Oct 2026 10:00:00 GMT").unwrap();
+    assert_eq!(wait(Some("120"), now), 120);
+    assert_eq!(wait(Some(" 7 "), now), 7);
+    assert_eq!(wait(Some("0"), now), 1);
+    assert_eq!(wait(Some("86400"), now), 300);
+    assert_eq!(wait(Some("Tue, 13 Oct 2026 10:01:30 GMT"), now), 90);
+    assert_eq!(wait(Some("Tue, 13 Oct 2026 09:00:00 GMT"), now), 1);
+    assert_eq!(wait(Some("Wed, 14 Oct 2026 10:00:00 GMT"), now), 300);
+    assert_eq!(wait(Some("soon"), now), 30);
+    assert_eq!(wait(Some("-5"), now), 30);
+    assert_eq!(wait(None, now), 30);
+    let later = now + Duration::from_millis(400);
+    assert_eq!(wait(Some("Tue, 13 Oct 2026 10:00:10 GMT"), later), 10);
+}
+#[tokio::test]
+async fn a_rate_limited_request_waits_as_long_as_yoto_asks() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
+    let server = MockServer::start().await;
+    let mut api = crate::api::YotoGateway::new().unwrap();
+    api.host = server.uri();
+    Mock::given(method("GET"))
+        .and(path("/device-v2/devices/mine"))
+        .respond_with(ResponseTemplate::new(429).insert_header("retry-after", "75"))
+        .mount(&server)
+        .await;
+    let failure = api.devices("API-TOKEN").await.unwrap_err();
+    assert!(matches!(
+        failure,
+        Failure::RateLimit {
+            retry_after_seconds: 75
+        }
+    ));
+}
+#[test]
 fn upload_time_grows_with_the_file_within_bounds() {
     use crate::api::upload_timeout;
     use std::time::Duration;

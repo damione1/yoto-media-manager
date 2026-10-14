@@ -86,12 +86,18 @@ pub async fn get_an_upload_url(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::ReservationResponse`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetAnUploadUrlError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -140,12 +146,18 @@ pub async fn get_transcoded_upload(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::TranscodedUploadResponse`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<GetTranscodedUploadError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }
@@ -216,12 +228,18 @@ pub async fn upload_cover_image(
             ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::CoverUploadResponse`")))),
         }
     } else {
+        let retry_after = resp
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let content = resp.text().await?;
         let entity: Option<UploadCoverImageError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,
             entity,
+            retry_after,
         }))
     }
 }

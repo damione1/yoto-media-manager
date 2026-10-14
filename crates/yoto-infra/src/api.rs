@@ -549,7 +549,10 @@ pub fn classify<T>(e: apis::Error<T>) -> Failure {
             403 => Failure::Permission(messages::YOTO_DENIED.into()),
             409 => Failure::Conflict,
             429 => Failure::RateLimit {
-                retry_after_seconds: 30,
+                retry_after_seconds: retry_after_seconds(
+                    e.retry_after.as_deref(),
+                    std::time::SystemTime::now(),
+                ),
             },
             status @ (400 | 404 | 413 | 422) => match limit_message(&e.content) {
                 Some(message) if status != 404 => Failure::Validation(message.into()),
@@ -564,6 +567,27 @@ pub fn classify<T>(e: apis::Error<T>) -> Failure {
             _ => Failure::Compatibility(format!("Unexpected HTTP status {}", e.status.as_u16())),
         },
     }
+}
+/// Wait used when Yoto limits requests without saying for how long.
+const RETRY_AFTER_DEFAULT: u64 = 30;
+/// Longest wait accepted from Yoto, so a wrong header cannot park a job for hours.
+const RETRY_AFTER_MAX: u64 = 300;
+/// Seconds to wait after a 429, from its `Retry-After` header: a number of seconds or an
+/// HTTP date. Kept between 1 second and 5 minutes; 30 seconds when absent or unreadable.
+pub fn retry_after_seconds(header: Option<&str>, now: std::time::SystemTime) -> u64 {
+    let Some(value) = header.map(str::trim).filter(|v| !v.is_empty()) else {
+        return RETRY_AFTER_DEFAULT;
+    };
+    let seconds = if let Ok(seconds) = value.parse::<u64>() {
+        seconds
+    } else if let Ok(date) = httpdate::parse_http_date(value) {
+        date.duration_since(now)
+            .map(|wait| wait.as_secs() + u64::from(wait.subsec_nanos() > 0))
+            .unwrap_or(0)
+    } else {
+        return RETRY_AFTER_DEFAULT;
+    };
+    seconds.clamp(1, RETRY_AFTER_MAX)
 }
 /// Recognise a refusal that names one of Yoto's playlist limits (100 tracks; 60 minutes or
 /// 100 MB per track; 5 hours or 500 MB in total) and return the matching message.

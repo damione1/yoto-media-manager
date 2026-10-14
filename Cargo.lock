@@ -9515,6 +9515,7 @@ dependencies = [
  "directories",
  "fs2",
  "hex",
+ "httpdate",
  "image",
  "keyring",
  "libc",
