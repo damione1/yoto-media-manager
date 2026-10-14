@@ -780,7 +780,9 @@ fn mcp_redacts_capabilities() {
 fn child_timeout_kills_descendants_and_cancellation_is_typed() {
     use std::sync::{Arc, atomic::AtomicBool};
     let mut cmd = std::process::Command::new("/bin/sh");
-    cmd.args(["-c", "sleep 60 & wait"]);
+    // `wait $!` names the child: a bare `wait` in macOS's sh can return before the
+    // background job is registered, ending the script cleanly before the timeout.
+    cmd.args(["-c", "sleep 60 & wait $!"]);
     let start = std::time::Instant::now();
     let output = crate::process::output(cmd, 1024, std::time::Duration::from_millis(100)).unwrap();
     assert!(!output.status.success());
@@ -789,10 +791,12 @@ fn child_timeout_kills_descendants_and_cancellation_is_typed() {
     let _guard = crate::process::OperationGuard::install(flag);
     let mut cmd = std::process::Command::new("/bin/sh");
     cmd.args(["-c", "sleep 60"]);
-    assert!(matches!(
-        crate::process::output(cmd, 1024, std::time::Duration::from_secs(10)),
-        Err(Failure::Cancelled)
-    ));
+    let cancelled = crate::process::output(cmd, 1024, std::time::Duration::from_secs(10));
+    assert!(
+        matches!(cancelled, Err(Failure::Cancelled)),
+        "{:?}",
+        cancelled.map(|o| o.status)
+    );
 }
 
 pub(crate) fn catalogue_fixture(
