@@ -127,6 +127,7 @@ impl GroupEditor {
                     Ok(Ok(
                         Reply::Data(_)
                         | Reply::AppUpdate(_)
+                        | Reply::YoutubeTool(_)
                         | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)

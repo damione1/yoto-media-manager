@@ -129,6 +129,14 @@ impl Session {
             }
         }
     }
+    /// Let the owning process keep the YouTube tool current: choose the newest intact copy,
+    /// then check for a newer release once a day when `daily`. Must run inside a Tokio
+    /// runtime; a proxy leaves this to the owner.
+    pub fn start_tool_updates(&self, daily: bool) {
+        if let Some(owner) = &self.owner {
+            owner.youtube.start(daily);
+        }
+    }
     pub async fn interface_changes(
         &self,
         since: Vec<u64>,

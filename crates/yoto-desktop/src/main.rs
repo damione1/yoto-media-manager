@@ -46,6 +46,10 @@ fn launch() -> Result<(), Box<dyn std::error::Error>> {
         tools,
         cfg!(debug_assertions) && std::env::args().any(|a| a == "--isolated"),
     ))?;
+    {
+        let _runtime = runtime.enter();
+        service.start_tool_updates(!cfg!(debug_assertions));
+    }
     let delta = runtime.block_on(service.interface_changes(vec![]))?;
     let mut snapshot = yoto_infra::Snapshot::default();
     let revisions = delta.apply(&mut snapshot);

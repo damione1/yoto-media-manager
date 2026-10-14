@@ -8,6 +8,7 @@ fn returned_asset(reply: Reply) -> AssetId {
     match reply {
         Reply::Asset(asset) => asset,
         Reply::AppUpdate(_)
+        | Reply::YoutubeTool(_)
         | Reply::Updated
         | Reply::Saved(_)
         | Reply::PlaylistOperation { .. }
@@ -826,6 +827,7 @@ fn opened_playlist(reply: Reply) -> PlaylistId {
     match reply {
         Reply::OpenedPlaylist(id) => id,
         Reply::AppUpdate(_)
+        | Reply::YoutubeTool(_)
         | Reply::Updated
         | Reply::Saved(_)
         | Reply::PlaylistOperation { .. }

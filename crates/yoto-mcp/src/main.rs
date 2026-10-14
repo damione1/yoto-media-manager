@@ -118,6 +118,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Probe IPC first. A running UI retains ownership; proxies do not obtain a second DB connection.
     let session =
         yoto_infra::Session::connect(profile.clone(), Tools::bundled()?, isolated).await?;
+    session.start_tool_updates(!cfg!(debug_assertions));
     let server = Server {
         session: session.clone(),
     }

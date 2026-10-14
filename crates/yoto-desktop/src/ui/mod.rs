@@ -77,6 +77,8 @@ pub struct AppView {
     /// « Mode avancé » in Compte: shows the technical settings parents rarely need.
     /// Kept for this session only; it starts off.
     pub advanced: bool,
+    /// The YouTube tool imports use, read when « Mode avancé » is turned on.
+    pub youtube_tool: Option<yoto_infra::youtube_tool::YoutubeToolStatus>,
 }
 impl AppView {
     pub fn navigate(&mut self, route: Route, cx: &mut Context<Self>) {
@@ -224,6 +226,7 @@ impl AppView {
             group_editors: BTreeMap::new(),
             selected_group: None,
             advanced: false,
+            youtube_tool: None,
         };
         view.refresh_playlists(cx);
         view
@@ -520,6 +523,7 @@ impl AppView {
                         };
                         match reply {
                             Reply::AppUpdate(_)
+                            | Reply::YoutubeTool(_)
                             | Reply::Updated
                             | Reply::Saved(_)
                             | Reply::Prepared(_)
@@ -800,6 +804,9 @@ impl AppView {
     /// Turn « Mode avancé » on or off everywhere it applies.
     pub fn set_advanced(&mut self, advanced: bool, cx: &mut Context<Self>) {
         self.advanced = advanced;
+        if advanced {
+            self.youtube_tool(yoto_infra::youtube_tool::YoutubeToolAction::State, cx);
+        }
         for editor in self.editors.values() {
             editor.update(cx, |e, cx| {
                 e.advanced = advanced;
@@ -807,6 +814,47 @@ impl AppView {
             });
         }
         cx.notify();
+    }
+}
+impl AppView {
+    /// Ask about the YouTube tool or start its update, then follow a running update
+    /// until it ends.
+    pub fn youtube_tool(
+        &mut self,
+        action: yoto_infra::youtube_tool::YoutubeToolAction,
+        cx: &mut Context<Self>,
+    ) {
+        use yoto_infra::youtube_tool::{ToolActivity, YoutubeToolAction};
+        let service = self.service.clone();
+        let rt = self.runtime.clone();
+        cx.spawn(async move |weak, cx| {
+            let mut action = action;
+            loop {
+                let service = service.clone();
+                let reply = rt
+                    .spawn(async move {
+                        service
+                            .execute(Command::YoutubeTool(action))
+                            .await?
+                            .into_youtube_tool()
+                    })
+                    .await;
+                let Ok(status) = joined(reply) else { break };
+                let running = status.activity == ToolActivity::Checking;
+                let shown = weak.update(cx, |view, cx| {
+                    view.youtube_tool = Some(status);
+                    cx.notify();
+                });
+                if shown.is_err() || !running {
+                    break;
+                }
+                action = YoutubeToolAction::State;
+                cx.background_executor()
+                    .timer(Duration::from_millis(500))
+                    .await;
+            }
+        })
+        .detach();
     }
 }
 /// Start another copy of the app on an existing library folder.
@@ -1321,6 +1369,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::ReadPixelArt(_)
         | Command::Thumbnail(_)
         | Command::AppUpdate(_)
+        | Command::YoutubeTool(_)
         | Command::JobsPage { .. } => return None,
         Command::InspectYoutube(_)
         | Command::NewPlaylist(_)

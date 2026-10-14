@@ -527,6 +527,20 @@ impl YoutubeTool {
             }
         });
     }
+    /// Answer a client: report the status, or start an update in the background.
+    pub fn request(self: &std::sync::Arc<Self>, action: YoutubeToolAction) -> YoutubeToolStatus {
+        match action {
+            YoutubeToolAction::State => {}
+            YoutubeToolAction::Update => {
+                self.set_activity(ToolActivity::Checking, false);
+                let tool = self.clone();
+                tokio::spawn(async move {
+                    tool.update(Trigger::Manual).await;
+                });
+            }
+        }
+        self.status()
+    }
     fn client(&self) -> std::result::Result<&reqwest::Client, ToolProblem> {
         if let Some(client) = self.client.get() {
             return Ok(client);

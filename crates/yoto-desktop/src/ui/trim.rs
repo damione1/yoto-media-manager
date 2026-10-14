@@ -416,6 +416,7 @@ impl TrimPanel {
                     }
                     Ok(Ok(
                         Reply::AppUpdate(_)
+                        | Reply::YoutubeTool(_)
                         | Reply::Updated
                         | Reply::Saved(_)
                         | Reply::OpenedPlaylist(_)

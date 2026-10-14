@@ -37,6 +37,8 @@ pub struct Snapshot {
 #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub enum Command {
     AppUpdate(yoto_updater::UpdateAction),
+    /// Report or update the YouTube tool used for imports.
+    YoutubeTool(crate::youtube_tool::YoutubeToolAction),
     Import(Vec<ImportSelection>),
     InspectYoutube(String),
     NewPlaylist(String),
@@ -233,6 +235,7 @@ pub enum ConflictChoice {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Reply {
     AppUpdate(std::sync::Arc<yoto_updater::UpdateState>),
+    YoutubeTool(crate::youtube_tool::YoutubeToolStatus),
     Updated,
     Saved(Revision),
     OpenedPlaylist(PlaylistId),
@@ -295,6 +298,13 @@ impl Reply {
             Err(Self::unexpected())
         }
     }
+    pub fn into_youtube_tool(self) -> Result<crate::youtube_tool::YoutubeToolStatus> {
+        if let Self::YoutubeTool(status) = self {
+            Ok(status)
+        } else {
+            Err(Self::unexpected())
+        }
+    }
     pub fn into_operation(self) -> Result<(PlaylistId, JobId)> {
         if let Self::PlaylistOperation { playlist, job } = self {
             Ok((playlist, job))
@@ -327,6 +337,8 @@ pub struct Service {
     login_session: Mutex<Arc<AccountSession>>,
     sessions: Mutex<BTreeMap<AccountId, Arc<AccountSession>>>,
     pub(crate) updater: Arc<yoto_updater::Updater>,
+    /// The YouTube tool imports run: the bundled copy or a newer verified download.
+    pub youtube: Arc<crate::youtube_tool::YoutubeTool>,
     players: PlayerOwners,
     update_gate: tokio::sync::RwLock<()>,
     update_shutdown: std::sync::atomic::AtomicBool,
@@ -454,6 +466,10 @@ impl Service {
     fn with_key(profile: PathBuf, tools: Tools, key: [u8; 32], lock: File) -> Result<Arc<Self>> {
         let db = Database::open(&profile.join("catalogue.db"), &key)?;
         let namespace = crate::profile_namespace(&profile);
+        let youtube = Arc::new(crate::youtube_tool::YoutubeTool::new(
+            profile.join("tools").join("yt-dlp"),
+            tools.youtube.clone(),
+        ));
         let store = AssetStore::new(profile, key)?;
         let (tx, rx) = std::sync::mpsc::channel();
         let playback = Arc::new(Mutex::new(PreviewStatus::Stopped));
@@ -496,6 +512,7 @@ impl Service {
             login_session: Mutex::new(Arc::new(AccountSession::new())),
             sessions: Mutex::new(BTreeMap::new()),
             updater: yoto_updater::Updater::new().map_err(storage)?,
+            youtube,
             players: tokio::sync::Mutex::new(BTreeMap::new()),
             update_gate: tokio::sync::RwLock::new(()),
             update_shutdown: false.into(),
@@ -743,6 +760,7 @@ impl Service {
                 JobRequest::Import { .. } | JobRequest::Encode { .. } => None,
             },
             Command::AppUpdate(_)
+            | Command::YoutubeTool(_)
             | Command::Import(_)
             | Command::InspectYoutube(_)
             | Command::NewPlaylist(_)
@@ -781,6 +799,9 @@ impl Service {
         if let Command::AppUpdate(action) = &command {
             self.updater.request(*action);
             return Ok(Reply::AppUpdate(self.updater.state()));
+        }
+        if let Command::YoutubeTool(action) = &command {
+            return Ok(Reply::YoutubeTool(self.youtube.request(*action)));
         }
         let _update_guard = self.update_gate.read().await;
         if self
@@ -888,7 +909,7 @@ impl Service {
             None
         };
         match command {
-            Command::AppUpdate(_) => {
+            Command::AppUpdate(_) | Command::YoutubeTool(_) => {
                 unreachable!("Updater command was handled before mutation admission")
             }
             Command::Connect => {
@@ -1516,7 +1537,7 @@ impl Service {
     }
     fn execute_local(&self, command: Command) -> Result<Reply> {
         let _assets = match &command {
-            Command::AppUpdate(_) => None,
+            Command::AppUpdate(_) | Command::YoutubeTool(_) => None,
             Command::SavePlaylist { .. }
             | Command::SaveCopy(_)
             | Command::Duplicate(_)
@@ -1579,7 +1600,7 @@ impl Service {
             | Command::UploadFamilyImage { .. } => None,
         };
         match command {
-            Command::AppUpdate(_) => Err(Failure::Validation(
+            Command::AppUpdate(_) | Command::YoutubeTool(_) => Err(Failure::Validation(
                 "Updater command requires the async service".into(),
             )),
             Command::Import(selections) => {
@@ -1589,7 +1610,7 @@ impl Service {
                 Ok(Reply::Updated)
             }
             Command::InspectYoutube(url) => Ok(Reply::Entries(crate::sources::inspect_youtube(
-                &self.tools,
+                &self.youtube_tools(),
                 &url,
             )?)),
             Command::NewPlaylist(title) => {
@@ -2306,25 +2327,24 @@ impl Service {
         match job.request.clone() {
             JobRequest::Import { selection } => {
                 self.phase(job, JobPhase::Acquiring)?;
-                let service = self.clone();
-                let worker_cancel = cancel.clone();
-                let frozen_job = job.clone();
-                let media = tokio::task::spawn_blocking(move || {
-                    let _guard = crate::process::OperationGuard::install(worker_cancel.clone());
-                    let _assets = service.protect_assets()?;
-                    let (media, asset, recipe, waveform) =
-                        crate::sources::import(&service.tools, &service.store, &selection)?;
-                    let _completion = service.jobs.lock().map_err(storage)?;
-                    if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                        return Err(Failure::Cancelled);
+                let tools = self.youtube_tools();
+                let media = match self.import(job, &selection, tools.clone(), &cancel).await {
+                    // YouTube changed: fetch a newer downloader when there is one, then try once more.
+                    Err(Failure::Media(message))
+                        if message == messages::YOUTUBE_OUTDATED
+                            && !cancel.load(std::sync::atomic::Ordering::SeqCst) =>
+                    {
+                        self.youtube
+                            .update(crate::youtube_tool::Trigger::Outdated)
+                            .await;
+                        let refreshed = self.youtube_tools();
+                        if refreshed.youtube == tools.youtube {
+                            return Err(Failure::Media(message));
+                        }
+                        self.import(job, &selection, refreshed, &cancel).await?
                     }
-                    service
-                        .db
-                        .finish_import(&frozen_job, &media, &asset, &recipe, &waveform)?;
-                    Ok(media)
-                })
-                .await
-                .map_err(storage)??;
+                    result => result?,
+                };
                 Ok(JobOutput::Imported { media: media.id })
             }
             JobRequest::Encode { recipe } => {
@@ -2578,6 +2598,41 @@ impl Service {
                 })
             }
         }
+    }
+    /// Acquire, analyse and record one import with the given tools.
+    async fn import(
+        self: &Arc<Self>,
+        job: &Job,
+        selection: &ImportSelection,
+        tools: Tools,
+        cancel: &Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<MediaItem> {
+        let service = self.clone();
+        let worker_cancel = cancel.clone();
+        let frozen_job = job.clone();
+        let selection = selection.clone();
+        tokio::task::spawn_blocking(move || {
+            let _guard = crate::process::OperationGuard::install(worker_cancel.clone());
+            let _assets = service.protect_assets()?;
+            let (media, asset, recipe, waveform) =
+                crate::sources::import(&tools, &service.store, &selection)?;
+            let _completion = service.jobs.lock().map_err(storage)?;
+            if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(Failure::Cancelled);
+            }
+            service
+                .db
+                .finish_import(&frozen_job, &media, &asset, &recipe, &waveform)?;
+            Ok(media)
+        })
+        .await
+        .map_err(storage)?
+    }
+    /// The bundled tools, with the YouTube downloader currently chosen for imports.
+    pub fn youtube_tools(&self) -> Tools {
+        let mut tools = self.tools.clone();
+        tools.youtube = self.youtube.path();
+        tools
     }
     /// Reserve an upload for a prepared track and send the file when Yoto does not have it.
     async fn send_audio(
