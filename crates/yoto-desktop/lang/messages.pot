@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 13:24-0400\n"
+"POT-Creation-Date: 2026-10-15 01:22-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: src/i18n.rs src/ui/imports.rs src/ui/pixelart.rs
+#: src/i18n.rs src/ui/chapters.rs src/ui/imports.rs src/ui/pixelart.rs
 #: src/ui/playlist_media_picker.rs src/ui/playlist_move_picker.rs
 #: src/ui/trim.rs src/ui/wording.rs
 msgid "Annuler"
@@ -218,6 +218,86 @@ msgid ""
 "pistes, plages aléatoires et flux audio dans les playlists ; valeurs Yoto, "
 "raccourcis et commandes techniques des lecteurs ; ouverture d’une autre "
 "médiathèque. Inutile au quotidien."
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid ""
+"Placez la lecture à un autre endroit : deux chapitres doivent être séparés "
+"d’au moins une seconde."
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Chapitres retirés."
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Chapitres enregistrés."
+msgstr ""
+
+#: src/ui/chapters.rs src/ui/imports.rs src/ui/library.rs src/ui/trim.rs
+msgid "Écouter"
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Retirer"
+msgstr ""
+
+#: src/ui/chapters.rs src/ui/group.rs src/ui/imports.rs src/ui/trim.rs
+#: src/ui/update.rs src/ui/wording.rs
+msgid "Fermer"
+msgstr ""
+
+#: src/ui/chapters.rs
+#, rust-format
+msgid "Chapitres de « {title} »"
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid ""
+"Écoutez, mettez en pause là où une nouvelle partie commence, puis ajoutez un "
+"chapitre à cet endroit."
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid ""
+"Ajouté à une playlist, cet audio arrivera en un seul chapitre, avec une "
+"piste par repère : les boutons du lecteur passent de l’une à l’autre."
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Les repères en dehors de la version découpée ne seront pas utilisés."
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Ajouter un chapitre ici"
+msgstr ""
+
+#: src/ui/chapters.rs src/ui/trim.rs
+msgid "Préparation de l’écoute…"
+msgstr ""
+
+#: src/ui/chapters.rs src/ui/device.rs src/ui/trim.rs src/ui/wording.rs
+msgid "Pause"
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Reculer d’une seconde"
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Avancer d’une seconde"
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Retirer tous les chapitres"
+msgstr ""
+
+#: src/ui/chapters.rs src/ui/group.rs src/ui/wording.rs
+msgid "Enregistrement…"
+msgstr ""
+
+#: src/ui/chapters.rs src/ui/trim.rs
+msgid "Enregistrer"
 msgstr ""
 
 #: src/ui/device.rs
@@ -429,10 +509,6 @@ msgstr ""
 msgid "Reprendre"
 msgstr ""
 
-#: src/ui/device.rs src/ui/wording.rs
-msgid "Pause"
-msgstr ""
-
 #: src/ui/device.rs src/ui/editor.rs
 msgid "Arrêter la lecture"
 msgstr ""
@@ -636,6 +712,10 @@ msgid ""
 msgstr ""
 
 #: src/ui/editor.rs
+msgid "Chapitre à part"
+msgstr ""
+
+#: src/ui/editor.rs
 msgid "Description"
 msgstr ""
 
@@ -713,6 +793,11 @@ msgid "Connectez le compte propriétaire de cette playlist."
 msgstr ""
 
 #: src/ui/editor.rs
+#, rust-format
+msgid "Ajouter des médias dans « {title} »"
+msgstr ""
+
+#: src/ui/editor.rs
 msgid "Ajouter des médias"
 msgstr ""
 
@@ -741,6 +826,16 @@ msgid "Choisir une icône"
 msgstr ""
 
 #: src/ui/editor.rs
+msgid ""
+"Glisser pour déplacer le chapitre, ou le déposer sur un autre pour les "
+"fusionner"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Ajouter au chapitre"
+msgstr ""
+
+#: src/ui/editor.rs
 msgid "Options du chapitre"
 msgstr ""
 
@@ -750,6 +845,18 @@ msgstr ""
 
 #: src/ui/editor.rs
 msgid "Descendre le chapitre"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Ajouter des médias dans ce chapitre…"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Fusionner avec le chapitre précédent"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Fusionner avec le chapitre suivant"
 msgstr ""
 
 #: src/ui/editor.rs
@@ -785,6 +892,22 @@ msgid "Déplacer / regrouper…"
 msgstr ""
 
 #: src/ui/editor.rs
+msgid "Regrouper avec la piste du dessus"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Regrouper avec la piste du dessous"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Sortir du chapitre"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Couper le chapitre avant cette piste"
+msgstr ""
+
+#: src/ui/editor.rs
 msgid "Remonter"
 msgstr ""
 
@@ -798,6 +921,22 @@ msgstr ""
 
 #: src/ui/editor.rs
 msgid "Retirer de la playlist"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid ""
+"Glisser pour déplacer la piste, ou la déposer sur une autre pour les "
+"regrouper"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid ""
+"Glisser pour déplacer la piste, ou la déposer entre deux chapitres pour la "
+"sortir du sien"
+msgstr ""
+
+#: src/ui/editor.rs
+msgid "Regrouper"
 msgstr ""
 
 #: src/ui/editor.rs
@@ -1180,11 +1319,6 @@ msgstr ""
 msgid "Fermer l’éditeur de groupe"
 msgstr ""
 
-#: src/ui/group.rs src/ui/imports.rs src/ui/trim.rs src/ui/update.rs
-#: src/ui/wording.rs
-msgid "Fermer"
-msgstr ""
-
 #: src/ui/group.rs
 #, rust-format
 msgid "Monter « {title} »"
@@ -1232,10 +1366,6 @@ msgstr ""
 
 #: src/ui/group.rs
 msgid "Image du groupe"
-msgstr ""
-
-#: src/ui/group.rs src/ui/wording.rs
-msgid "Enregistrement…"
 msgstr ""
 
 #: src/ui/group.rs
@@ -1398,10 +1528,6 @@ msgstr ""
 msgid "Média retiré de votre médiathèque"
 msgstr ""
 
-#: src/ui/imports.rs src/ui/library.rs src/ui/trim.rs
-msgid "Écouter"
-msgstr ""
-
 #: src/ui/imports.rs
 msgid "Version préparée"
 msgstr ""
@@ -1514,6 +1640,13 @@ msgstr ""
 #: src/ui/library.rs src/ui/trim.rs
 msgid "Original"
 msgstr ""
+
+#: src/ui/library.rs src/ui/trim.rs
+#, rust-format
+msgid "{count} chapitre"
+msgid_plural "{count} chapitres"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/ui/library.rs
 msgid "Ouvrir et écouter"
@@ -2053,13 +2186,36 @@ msgid ""
 msgstr ""
 
 #: src/ui/playlist_move_picker.rs
+#, rust-format
+msgid "Chapitre {n} · {title} · {count} piste"
+msgid_plural "Chapitre {n} · {title} · {count} pistes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/playlist_move_picker.rs
+msgid "Nouveau chapitre"
+msgstr ""
+
+#: src/ui/playlist_move_picker.rs
+msgid "Au début"
+msgstr ""
+
+#: src/ui/playlist_move_picker.rs
+msgid "À la fin"
+msgstr ""
+
+#: src/ui/playlist_move_picker.rs
 msgid "Déplacer"
 msgstr ""
 
 #: src/ui/playlist_move_picker.rs
 msgid ""
-"Choisissez le chapitre dans lequel ajouter cette piste. Son titre et ses "
-"références sont conservés."
+"Choisissez le chapitre dans lequel placer cette piste, ou créez un nouveau "
+"chapitre. Son titre et ses références sont conservés."
+msgstr ""
+
+#: src/ui/playlist_move_picker.rs
+msgid "Place dans le chapitre"
 msgstr ""
 
 #: src/ui/trim.rs
@@ -2118,10 +2274,6 @@ msgid "Étiquettes"
 msgstr ""
 
 #: src/ui/trim.rs
-msgid "Enregistrer"
-msgstr ""
-
-#: src/ui/trim.rs
 msgid "Analyse de la forme d’onde…"
 msgstr ""
 
@@ -2148,14 +2300,6 @@ msgstr ""
 
 #: src/ui/trim.rs
 msgid "Durée gardée"
-msgstr ""
-
-#: src/ui/trim.rs
-msgid "Écouter la fin de la sélection"
-msgstr ""
-
-#: src/ui/trim.rs
-msgid "Préparation de l’écoute…"
 msgstr ""
 
 #: src/ui/trim.rs
@@ -2230,6 +2374,10 @@ msgstr ""
 
 #: src/ui/trim.rs
 msgid "Découper l’audio"
+msgstr ""
+
+#: src/ui/trim.rs
+msgid "Marquer des chapitres"
 msgstr ""
 
 #. TRANSLATORS: a time with tenths of a second, such as 1:05,4; keep the
@@ -2415,6 +2563,11 @@ msgstr ""
 
 #: src/ui/wording.rs
 #, rust-format
+msgid "Envoi à Yoto : {done}/{total} pistes · {percent} %"
+msgstr ""
+
+#: src/ui/wording.rs
+#, rust-format
 msgid "Traitement par Yoto ({percent} %)"
 msgstr ""
 
@@ -2581,10 +2734,36 @@ msgstr ""
 
 #: src/ui/wording.rs
 #, rust-format
+msgid "Partie {part}"
+msgstr ""
+
+#: src/ui/wording.rs
+#, rust-format
 msgid ""
 "Trop long pour une seule piste Yoto (1 h au plus) : ajouté à une playlist, "
 "il sera découpé en {parts} parties."
 msgstr ""
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"Ajouté à une playlist, cet audio deviendra un chapitre de {count} piste."
+msgid_plural ""
+"Ajouté à une playlist, cet audio deviendra un chapitre de {count} pistes, "
+"une par chapitre marqué."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/wording.rs
+#, rust-format
+msgid ""
+"{count} chapitre est trop long pour une seule piste Yoto : il sera aussi "
+"découpé en parties."
+msgid_plural ""
+"{count} chapitres sont trop longs pour une seule piste Yoto : ils seront "
+"aussi découpés en parties."
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/ui/wording.rs
 msgid "Non enregistré"
@@ -3368,6 +3547,11 @@ msgstr ""
 msgid ""
 "Le début doit précéder la fin, et les deux doivent rester dans la durée de "
 "l’audio."
+msgstr ""
+
+#: src/ui/wording.rs
+msgid ""
+"Les repères de chapitre doivent se suivre et rester dans la durée de l’audio."
 msgstr ""
 
 #: src/ui/wording.rs

@@ -109,9 +109,24 @@ fn transcode_text(track: &str, problem: TranscodeProblem, percent: Option<u8>) -
     }
 }
 
-/// What a running job is doing, with Yoto's conversion progress when it reports one.
+/// What a running job is doing, with Yoto's conversion progress when it reports one. A
+/// publication sending several tracks (a media cut into parts) shows one count and one
+/// percentage over all of them, whichever track is moving.
 pub fn phase_text(phase: &JobPhase) -> String {
     match phase {
+        JobPhase::Uploading {
+            progress: Some(progress),
+            ..
+        }
+        | JobPhase::Ingesting {
+            progress: Some(progress),
+            ..
+        } if progress.total > 1 => tr!(
+            "Envoi à Yoto : {done}/{total} pistes · {percent} %",
+            done = progress.done,
+            total = progress.total,
+            percent = progress.percent
+        ),
         JobPhase::Ingesting {
             percent: Some(percent),
             ..
@@ -212,11 +227,36 @@ pub fn part_title_template() -> &'static str {
     tr!("{title} — partie {part}/{parts}")
 }
 
+/// Title of the track a chapter mark left unnamed becomes, under the chapter named like
+/// the media; `{part}` and `{parts}` are replaced by the service.
+pub fn mark_title_template() -> &'static str {
+    tr!("Partie {part}")
+}
+
 /// Under a media too long for one Yoto track: what happens when it joins a playlist.
 pub fn split_note(parts: usize) -> String {
     tr!(
         "Trop long pour une seule piste Yoto (1 h au plus) : ajouté à une playlist, il sera découpé en {parts} parties.",
         parts = parts
+    )
+}
+
+/// Under a media with chapter marks: the chapter it becomes in a playlist, and how
+/// many tracks it holds.
+pub fn chapters_note(chapters: usize) -> String {
+    trn!(
+        "Ajouté à une playlist, cet audio deviendra un chapitre de {count} piste.",
+        "Ajouté à une playlist, cet audio deviendra un chapitre de {count} pistes, une par chapitre marqué.",
+        chapters
+    )
+}
+
+/// Under a media with chapter marks, when some chapters are too long for one Yoto track.
+pub fn chapters_split_note(long: usize) -> String {
+    trn!(
+        "{count} chapitre est trop long pour une seule piste Yoto : il sera aussi découpé en parties.",
+        "{count} chapitres sont trop longs pour une seule piste Yoto : ils seront aussi découpés en parties.",
+        long
     )
 }
 
@@ -832,6 +872,9 @@ fn known_message(message: &str) -> Option<&'static str> {
                 "Le début doit précéder la fin, et les deux doivent rester dans la durée de l’audio."
             )
         }
+        m::CHAPTER_MARKS_INVALID => {
+            tr!("Les repères de chapitre doivent se suivre et rester dans la durée de l’audio.")
+        }
         m::TIME_FORMAT => tr!("Indiquez une heure au format HH:MM, par exemple 07:30."),
         m::COLOUR_FORMAT => tr!("Indiquez une couleur au format #RRGGBB, par exemple #FF8800."),
         m::LIMITS_NONNEGATIVE => {
@@ -1032,6 +1075,60 @@ mod tests {
         assert_eq!(
             yoto_domain::part_title_with(english, "Lullabies", 2, 3),
             "Lullabies — part 2 of 3"
+        );
+        assert_eq!(
+            with_language(Language::French, mark_title_template),
+            yoto_domain::MARK_TITLE
+        );
+        let english = with_language(Language::English, mark_title_template);
+        assert_eq!(yoto_domain::mark_title_with(english, 2, 8), "Part 2");
+    }
+    #[core::prelude::v1::test]
+    fn a_publication_of_several_tracks_shows_one_progress() {
+        let recipe = RecipeId::new();
+        let upload = UploadId::new("upload-1").unwrap();
+        let progress = |done, total, percent| {
+            Some(SendProgress {
+                done,
+                total,
+                percent,
+            })
+        };
+        // One track reads as before: what Yoto is doing with it.
+        assert_eq!(
+            phase_text(&JobPhase::Ingesting {
+                recipe,
+                upload: upload.clone(),
+                percent: Some(40),
+                progress: progress(0, 1, 64),
+            }),
+            "Traitement par Yoto (40 %)"
+        );
+        assert_eq!(
+            phase_text(&JobPhase::Uploading {
+                recipe,
+                upload: None,
+                progress: None,
+            }),
+            "Envoi de l’audio à Yoto"
+        );
+        // Several tracks: one count and one percentage, whatever each track is doing.
+        assert_eq!(
+            phase_text(&JobPhase::Uploading {
+                recipe,
+                upload: None,
+                progress: progress(2, 8, 31),
+            }),
+            "Envoi à Yoto : 2/8 pistes · 31 %"
+        );
+        assert_eq!(
+            phase_text(&JobPhase::Ingesting {
+                recipe,
+                upload,
+                percent: Some(100),
+                progress: progress(7, 8, 96),
+            }),
+            "Envoi à Yoto : 7/8 pistes · 96 %"
         );
     }
     #[core::prelude::v1::test]

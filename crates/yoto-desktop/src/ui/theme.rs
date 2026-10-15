@@ -354,8 +354,14 @@ pub fn header_row(title: impl IntoElement, actions: Vec<AnyElement>) -> Div {
 /// wrapper fills whatever holds it (`size_full`): dropped straight into a row it
 /// claims the whole width and squeezes its siblings, so it is boxed at the
 /// button's own size.
-pub fn dialog_close(trigger: impl IntoElement) -> impl IntoElement {
+///
+/// `id` keeps the close controls of one dialog apart. The kit's wrapper carries a
+/// fixed element id, so two of them under the same ancestors (a « × » in the header
+/// and « Annuler » in the footer) would share their element state: the first one
+/// drawn then discards every press on the second before its click fires.
+pub fn dialog_close(id: impl Into<ElementId>, trigger: impl IntoElement) -> impl IntoElement {
     div()
+        .id(id)
         .flex_none()
         .child(gpui_kit::component::dialog::DialogClose::new().child(trigger))
 }

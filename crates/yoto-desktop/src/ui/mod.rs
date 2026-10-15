@@ -1,5 +1,6 @@
 mod account;
 mod autosave;
+mod chapters;
 mod device;
 mod editor;
 mod group;
@@ -1609,6 +1610,8 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         Command::Waveform(_)
         | Command::StopPreview
         | Command::PreviewStatus
+        | Command::PausePreview
+        | Command::PreparePreview(_)
         | Command::Preview(_)
         | Command::PreviewTrim { .. }
         | Command::ReleaseAsset(_)
@@ -1630,6 +1633,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::DeleteRecipe { .. }
         | Command::UpdateMedia { .. }
         | Command::SetMediaIcon { .. }
+        | Command::SetMediaChapters { .. }
         | Command::Prepare { .. }
         | Command::Export { .. }
         | Command::UpdateYotoPlaylist { .. }

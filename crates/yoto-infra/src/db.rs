@@ -727,6 +727,33 @@ impl Database {
         self.changed();
         Ok(())
     }
+    /// Record the chapters marked on a media; the caller validated them against its audio.
+    pub fn update_media_chapters(&self, id: MediaId, chapters: Vec<MediaChapter>) -> Result<()> {
+        let mut c = self.lock()?;
+        let tx = c.transaction().map_err(storage)?;
+        let json: String = tx
+            .query_row(
+                "SELECT payload FROM media_items WHERE id=?1",
+                [id.to_string()],
+                |r| r.get(0),
+            )
+            .map_err(storage)?;
+        let mut media: MediaItem = decode(&json)?;
+        media.chapters = chapters;
+        let json = serde_json::to_string(&Envelope {
+            version: 1,
+            value: media,
+        })
+        .map_err(storage)?;
+        tx.execute(
+            "UPDATE media_items SET payload=?2 WHERE id=?1",
+            params![id.to_string(), json],
+        )
+        .map_err(storage)?;
+        tx.commit().map_err(storage)?;
+        self.changed();
+        Ok(())
+    }
     pub fn add_recipe(&self, recipe: &MediaRecipe) -> Result<()> {
         let mut c = self.lock()?;
         let tx = c.transaction().map_err(storage)?;

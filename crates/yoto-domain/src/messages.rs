@@ -31,6 +31,8 @@ pub const TRACK_BOUNDARY: &str = "Track boundary";
 pub const TRACK_KEY_COLLISION: &str =
     "These tracks share a Yoto key. Move them to separate chapters to keep their references.";
 pub const TRIM_RANGE_INVALID: &str = "Choose 0 ≤ start < end ≤ source duration.";
+pub const CHAPTER_MARKS_INVALID: &str =
+    "Chapter marks must start at zero, increase, and stay inside the audio.";
 pub const DEVICE_NAME_EMPTY: &str = "Device name cannot be empty";
 pub const TIME_FORMAT: &str = "Time must be HH:MM";
 pub const COLOUR_FORMAT: &str = "Colour must be #RRGGBB";
@@ -181,6 +183,7 @@ pub const ALL: &[&str] = &[
     TRACK_BOUNDARY,
     TRACK_KEY_COLLISION,
     TRIM_RANGE_INVALID,
+    CHAPTER_MARKS_INVALID,
     DEVICE_NAME_EMPTY,
     TIME_FORMAT,
     COLOUR_FORMAT,

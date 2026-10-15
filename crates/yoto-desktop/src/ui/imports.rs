@@ -1084,18 +1084,16 @@ fn details_content(view: &mut AppView, job: &Job, cx: &mut Context<AppView>) -> 
         | JobState::WaitingForAuthentication
         | JobState::Cancelled => {}
     }
-    body.child(
-        div()
-            .flex()
-            .justify_end()
-            .child(theme::dialog_close(theme::pill(
-                Button::new(element_id("close-job-details", id)).label(tr!("Fermer")),
-                Look::Outline,
-                Height::Medium,
-                false,
-                cx,
-            ))),
-    )
+    body.child(div().flex().justify_end().child(theme::dialog_close(
+        element_id("close-job-details-footer", id),
+        theme::pill(
+            Button::new(element_id("close-job-details", id)).label(tr!("Fermer")),
+            Look::Outline,
+            Height::Medium,
+            false,
+            cx,
+        ),
+    )))
     .into_any_element()
 }
 
