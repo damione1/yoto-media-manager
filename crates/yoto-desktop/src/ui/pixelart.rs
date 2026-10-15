@@ -590,13 +590,16 @@ impl Render for IconPicker {
                     .border_color(theme::c(theme::BOX_BORDER)),
                 )
                 .child(div().flex_1())
-                .child(theme::dialog_close(theme::pill(
-                    Button::new("cancel-icon").label(tr!("Annuler")),
-                    Look::Ghost,
-                    Height::Medium,
-                    busy || self.uploading,
-                    cx,
-                )))
+                .child(theme::dialog_close(
+                    "cancel-icon-footer",
+                    theme::pill(
+                        Button::new("cancel-icon").label(tr!("Annuler")),
+                        Look::Ghost,
+                        Height::Medium,
+                        busy || self.uploading,
+                        cx,
+                    ),
+                ))
                 .child(theme::pill(
                     Button::new("apply-icon")
                         .label(tr!("Utiliser cette icône"))

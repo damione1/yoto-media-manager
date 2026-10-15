@@ -167,13 +167,16 @@ impl Render for MovePicker {
             .gap_2()
             .items_center()
             .child(div().flex_1())
-            .child(theme::dialog_close(theme::pill(
-                Button::new("cancel-move").label(tr!("Annuler")),
-                Look::Ghost,
-                Height::Medium,
-                busy,
-                cx,
-            )))
+            .child(theme::dialog_close(
+                "cancel-move-footer",
+                theme::pill(
+                    Button::new("cancel-move").label(tr!("Annuler")),
+                    Look::Ghost,
+                    Height::Medium,
+                    busy,
+                    cx,
+                ),
+            ))
             .child(theme::pill(
                 Button::new("confirm-move")
                     .label(tr!("Déplacer"))

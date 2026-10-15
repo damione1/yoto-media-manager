@@ -911,13 +911,16 @@ impl TrimPanel {
                     .flex()
                     .gap(px(8.))
                     .justify_end()
-                    .child(theme::dialog_close(theme::pill(
-                        Button::new("cancel-metadata").label(tr!("Annuler")),
-                        Look::Outline,
-                        Height::Medium,
-                        false,
-                        cx,
-                    )))
+                    .child(theme::dialog_close(
+                        "cancel-metadata-footer",
+                        theme::pill(
+                            Button::new("cancel-metadata").label(tr!("Annuler")),
+                            Look::Outline,
+                            Height::Medium,
+                            false,
+                            cx,
+                        ),
+                    ))
                     .child(theme::pill(
                         Button::new("save-media")
                             .label(tr!("Enregistrer"))
@@ -1111,15 +1114,18 @@ impl TrimPanel {
                 .text_size(px(17.))
                 .font_weight(FontWeight::EXTRA_BOLD)
         };
-        let close = theme::dialog_close(theme::round(
-            Button::new("close-trim")
-                .icon(IconName::X)
-                .accessibility_label(tr!("Fermer")),
-            Look::Soft(&theme::LIGHT_SAND),
-            40.,
-            busy,
-            cx,
-        ));
+        let close = theme::dialog_close(
+            "close-trim-corner",
+            theme::round(
+                Button::new("close-trim")
+                    .icon(IconName::X)
+                    .accessibility_label(tr!("Fermer")),
+                Look::Soft(&theme::LIGHT_SAND),
+                40.,
+                busy,
+                cx,
+            ),
+        );
         div()
             .flex()
             .flex_col()
@@ -1301,8 +1307,10 @@ impl TrimPanel {
                                 self.status.clone()
                             }),
                     )
-                    .child(theme::dialog_close(theme::pill(
-                        Button::new("cancel-trim").label(if ready { tr!("Fermer") } else { tr!("Annuler") }),
+                    .child(theme::dialog_close(
+                        "cancel-trim-footer",
+                        theme::pill(
+                            Button::new("cancel-trim").label(if ready { tr!("Fermer") } else { tr!("Annuler") }),
                         Look::Outline,
                         Height::Large,
                         busy,

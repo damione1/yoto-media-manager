@@ -421,15 +421,18 @@ impl TrimPanel {
         let untitled = vec![String::new(); starts.len()];
         let marks = build_chapters(&starts, &untitled).unwrap_or_default();
         let notes = playlist_notes(&plan_chapters(self.playlist_range(), &marks));
-        let close = theme::dialog_close(theme::round(
-            Button::new("close-chapters")
-                .icon(IconName::X)
-                .accessibility_label(tr!("Fermer")),
-            Look::Soft(&theme::LIGHT_SAND),
-            40.,
-            saving,
-            cx,
-        ));
+        let close = theme::dialog_close(
+            "close-chapters-corner",
+            theme::round(
+                Button::new("close-chapters")
+                    .icon(IconName::X)
+                    .accessibility_label(tr!("Fermer")),
+                Look::Soft(&theme::LIGHT_SAND),
+                40.,
+                saving,
+                cx,
+            ),
+        );
         div()
             .flex()
             .flex_col()
@@ -587,8 +590,10 @@ impl TrimPanel {
                             cx,
                         )
                     }))
-                    .child(theme::dialog_close(theme::pill(
-                        Button::new("cancel-chapters").label(tr!("Annuler")),
+                    .child(theme::dialog_close(
+                        "cancel-chapters-footer",
+                        theme::pill(
+                            Button::new("cancel-chapters").label(tr!("Annuler")),
                         Look::Outline,
                         Height::Large,
                         saving,
