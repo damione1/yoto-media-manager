@@ -14,6 +14,12 @@ export default {
   repo,
   releases: `${repo}/releases`,
   latest: `${repo}/releases/latest`,
+  // Every release also publishes its installers under these fixed names.
+  download: {
+    mac: `${repo}/releases/latest/download/YotoMediaManager-macOS-AppleSilicon.dmg`,
+    macIntel: `${repo}/releases/latest/download/YotoMediaManager-macOS-Intel.dmg`,
+    windows: `${repo}/releases/latest/download/YotoMediaManager-Windows-setup.exe`,
+  },
   issues: `${repo}/issues`,
   notices: `${repo}/blob/master/distribution/THIRD-PARTY-NOTICES.md`,
   author: "Damien Goehrig",

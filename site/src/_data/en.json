@@ -98,9 +98,9 @@
   "cta": {
     "title": "Fill their Yoto with their favourite songs.",
     "mac": "Download for macOS",
-    "win": "For Windows",
-    "note": "Downloads are on the GitHub releases page."
+    "win": "For Windows"
   },
+  "dl": { "intel": "Mac with an Intel processor?", "intelLink": "Intel version", "all": "All versions" },
   "footer": {
     "label": "Footer",
     "guide": "User guide",
