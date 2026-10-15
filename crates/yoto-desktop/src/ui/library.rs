@@ -71,9 +71,12 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                     let selected = view.selected_media_set.contains(&id);
                     let open = view.selected_media == Some(id);
                     let trimmed = has_finished_cut(&view.snapshot, media);
+                    // The whole row opens the audio in the side panel; the checkbox and
+                    // the play button keep their own job and do not open it as well.
                     rows.push(
                         div().h(px(76.)).pb(px(8.)).child(
                             div()
+                                .id(element_id("media-row", id))
                                 .h_full()
                                 .px(px(12.))
                                 .rounded(px(18.))
@@ -85,6 +88,15 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                     theme::SURFACE
                                 }))
                                 .when(!open, |row| row.shadow(theme::step(theme::BORDER, 2.)))
+                                .when(!open, |row| {
+                                    row.hover(|row| row.border_color(theme::c(theme::PEACH.soft)))
+                                })
+                                .cursor_pointer()
+                                .on_click(cx.listener(move |v, _, window, cx| {
+                                    if v.selected_media != Some(id) {
+                                        v.open_media(id, false, window, cx);
+                                    }
+                                }))
                                 .flex()
                                 .gap(px(14.))
                                 .items_center()
@@ -101,6 +113,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                     .checked(selected)
                                     .on_click(cx.listener(
                                         move |v, checked, _, cx| {
+                                            cx.stop_propagation();
                                             if *checked {
                                                 v.selected_media_set.insert(id);
                                             } else {
@@ -150,6 +163,7 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                             tr!("Ouvrir et écouter")
                                         })
                                         .on_click(cx.listener(move |v, _, window, cx| {
+                                            cx.stop_propagation();
                                             if v.selected_media != Some(id) {
                                                 v.open_media(id, true, window, cx);
                                             } else if let Some(panel) = v.trims.get(&id).cloned() {
