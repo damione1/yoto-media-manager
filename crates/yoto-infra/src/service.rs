@@ -3748,8 +3748,10 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/content"))
             .respond_with(
+                // Long enough that the cancellation below always lands while Yoto's
+                // answer is still on its way, even on a slow Windows runner.
                 ResponseTemplate::new(200)
-                    .set_delay(std::time::Duration::from_millis(200))
+                    .set_delay(std::time::Duration::from_secs(2))
                     .set_body_json(serde_json::json!({"card":{"cardId":"created-card"}})),
             )
             .expect(1)
