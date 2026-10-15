@@ -423,6 +423,43 @@ struct Wording<'a> {
     /// See [`Command::AddYotoMedia::mark_title`].
     mark: Option<&'a str>,
 }
+/// Where every track of a publication stands, as points from 0 (not sent yet) to
+/// [`SENT`] (converted by Yoto), to show one progress over all of them on the job.
+struct SendTracker {
+    job: JobCell,
+    points: Mutex<BTreeMap<RecipeId, u8>>,
+}
+/// Points of a track whose upload is reserved and whose file is on its way.
+const RESERVED: u8 = 10;
+/// Points of a track Yoto has received and has not started converting.
+const UPLOADED: u8 = 40;
+/// Points of a track Yoto has converted.
+const SENT: u8 = 100;
+impl SendTracker {
+    fn new(job: JobCell, recipes: impl IntoIterator<Item = RecipeId>) -> Self {
+        Self {
+            job,
+            points: Mutex::new(recipes.into_iter().map(|r| (r, 0)).collect()),
+        }
+    }
+    /// Points of a track Yoto is converting, `percent` of the way.
+    fn converting(percent: Option<u8>) -> u8 {
+        let percent = u32::from(percent.unwrap_or(0).min(100));
+        UPLOADED + (u32::from(SENT - UPLOADED) * percent / 100) as u8
+    }
+    /// Note where a track stands, and tell where the publication stands.
+    fn set(&self, recipe: RecipeId, points: u8) -> SendProgress {
+        let mut tracks = self.points.lock().unwrap_or_else(|e| e.into_inner());
+        tracks.insert(recipe, points.min(SENT));
+        let total = tracks.len().max(1) as u32;
+        let sum: u32 = tracks.values().map(|p| u32::from(*p)).sum();
+        SendProgress {
+            done: tracks.values().filter(|p| **p == SENT).count() as u32,
+            total,
+            percent: (sum / total).min(100) as u8,
+        }
+    }
+}
 /// A prepared track on its way to Yoto, with the mapping of an earlier upload if any.
 struct Outgoing {
     recipe: RecipeId,
@@ -3095,6 +3132,10 @@ impl Service {
             })
             .collect();
         let cell: JobCell = Arc::new(Mutex::new(job.clone()));
+        let tracker = Arc::new(SendTracker::new(
+            cell.clone(),
+            tracks.iter().map(|(recipe, _)| *recipe),
+        ));
         let prepare = {
             let service = self.clone();
             let account = account.clone();
@@ -3121,11 +3162,13 @@ impl Service {
         let send = {
             let service = self.clone();
             let account = account.clone();
-            let cell = cell.clone();
+            let tracker = tracker.clone();
             move |track: Outgoing, _halt: Halt| {
-                let (service, account, cell) = (service.clone(), account.clone(), cell.clone());
+                let (service, account, tracker) =
+                    (service.clone(), account.clone(), tracker.clone());
                 async move {
                     if let Some(mapping) = track.known {
+                        tracker.set(track.recipe, SENT);
                         return Ok(Sent::Known(mapping));
                     }
                     let token = service
@@ -3133,7 +3176,7 @@ impl Service {
                         .access(&account, Scope::UserContentManage)
                         .await?;
                     let upload = service
-                        .send_audio(&cell, &token, track.recipe, &track.asset, &track.title)
+                        .send_audio(&tracker, &token, track.recipe, &track.asset, &track.title)
                         .await?;
                     Ok(Sent::Uploaded { track, upload })
                 }
@@ -3142,9 +3185,10 @@ impl Service {
         let finish = {
             let service = self.clone();
             let account = account.clone();
-            let cell = cell.clone();
+            let tracker = tracker.clone();
             move |sent: Sent, gates: Gates| {
-                let (service, account, cell) = (service.clone(), account.clone(), cell.clone());
+                let (service, account, tracker) =
+                    (service.clone(), account.clone(), tracker.clone());
                 async move {
                     let (track, mut upload) = match sent {
                         Sent::Known(mapping) => return Ok(mapping),
@@ -3159,7 +3203,7 @@ impl Service {
                     let ingested = loop {
                         let (end, percent) = service
                             .await_transcode(
-                                &cell,
+                                &tracker,
                                 &account,
                                 track.recipe,
                                 &upload,
@@ -3168,7 +3212,18 @@ impl Service {
                             )
                             .await?;
                         let problem = match end {
-                            TranscodeEnd::Ready(ingested) => break ingested,
+                            TranscodeEnd::Ready(ingested) => {
+                                service.shared_phase(
+                                    &tracker.job,
+                                    JobPhase::Ingesting {
+                                        recipe: track.recipe,
+                                        upload: upload.clone(),
+                                        percent: Some(100),
+                                        progress: Some(tracker.set(track.recipe, SENT)),
+                                    },
+                                )?;
+                                break ingested;
+                            }
                             TranscodeEnd::Stalled if !sent_again => {
                                 sent_again = true;
                                 let _slot = gates.upload().await?;
@@ -3178,7 +3233,7 @@ impl Service {
                                     .await?;
                                 upload = service
                                     .send_audio(
-                                        &cell,
+                                        &tracker,
                                         &token,
                                         track.recipe,
                                         &track.asset,
@@ -3225,25 +3280,27 @@ impl Service {
     /// Reserve an upload for a prepared track and send the file when Yoto does not have it.
     async fn send_audio(
         self: &Arc<Self>,
-        job: &JobCell,
+        tracker: &SendTracker,
         token: &str,
         recipe: RecipeId,
         asset: &Asset,
         title: &str,
     ) -> Result<UploadId> {
         self.shared_phase(
-            job,
+            &tracker.job,
             JobPhase::Uploading {
                 recipe,
                 upload: None,
+                progress: Some(tracker.set(recipe, RESERVED)),
             },
         )?;
         let reservation = self.api.reserve(token, &asset.sha256, title).await?;
         self.shared_phase(
-            job,
+            &tracker.job,
             JobPhase::Uploading {
                 recipe,
                 upload: Some(reservation.id.clone()),
+                progress: Some(tracker.set(recipe, RESERVED)),
             },
         )?;
         if let Some(url) = reservation.url {
@@ -3260,7 +3317,7 @@ impl Service {
     /// Returns how the wait ended and the last percentage Yoto reported.
     async fn await_transcode(
         self: &Arc<Self>,
-        job: &JobCell,
+        tracker: &SendTracker,
         account: &AccountId,
         recipe: RecipeId,
         upload: &UploadId,
@@ -3275,8 +3332,9 @@ impl Service {
             recipe,
             upload: upload.clone(),
             percent,
+            progress: Some(tracker.set(recipe, SendTracker::converting(percent))),
         };
-        self.shared_phase(job, ingesting(None))?;
+        self.shared_phase(&tracker.job, ingesting(None))?;
         let started = std::time::Instant::now();
         let mut watch = Watch::new(budget);
         loop {
@@ -3296,7 +3354,7 @@ impl Service {
             let shown = watch.percent();
             let verdict = watch.observe(started.elapsed(), &progress);
             if watch.percent() != shown {
-                self.shared_phase(job, ingesting(watch.percent()))?;
+                self.shared_phase(&tracker.job, ingesting(watch.percent()))?;
             }
             match verdict {
                 Verdict::Wait => {}
@@ -3832,6 +3890,54 @@ fn db_account(db: &Database) -> Result<Option<AccountId>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_publication_counts_its_tracks_as_one_progress() {
+        let recipes: Vec<RecipeId> = (0..4).map(|_| RecipeId::new()).collect();
+        let job = Job {
+            id: JobId::new(),
+            request: JobRequest::Encode { recipe: recipes[0] },
+            state: JobState::Queued,
+            attempts: 0,
+            created: 0,
+            checkpoint: None,
+            dismissed: false,
+        };
+        let tracker = SendTracker::new(Arc::new(Mutex::new(job)), recipes.iter().copied());
+        // Yoto already had the first track; the second is reserved.
+        assert_eq!(
+            tracker.set(recipes[0], SENT),
+            SendProgress {
+                done: 1,
+                total: 4,
+                percent: 25
+            }
+        );
+        let progress = tracker.set(recipes[1], RESERVED);
+        assert_eq!(
+            (progress.done, progress.total, progress.percent),
+            (1, 4, 27)
+        );
+        // A conversion moves a track from uploaded to sent; 100 % reads as sent.
+        assert_eq!(SendTracker::converting(None), UPLOADED);
+        assert_eq!(SendTracker::converting(Some(50)), 70);
+        assert_eq!(SendTracker::converting(Some(100)), SENT);
+        let progress = tracker.set(recipes[1], SendTracker::converting(Some(50)));
+        assert_eq!((progress.done, progress.percent), (1, 42));
+        // A track sent again after a stall goes back, the others keep their points.
+        let progress = tracker.set(recipes[1], RESERVED);
+        assert_eq!((progress.done, progress.percent), (1, 27));
+        for recipe in &recipes {
+            tracker.set(*recipe, SENT);
+        }
+        assert_eq!(
+            tracker.set(recipes[3], SENT),
+            SendProgress {
+                done: 4,
+                total: 4,
+                percent: 100
+            }
+        );
+    }
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
     #[test]
     fn readback_accepts_added_fields_and_whole_numbers_but_reports_changes() {

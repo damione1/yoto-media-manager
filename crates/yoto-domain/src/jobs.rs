@@ -34,6 +34,9 @@ pub enum JobPhase {
     Uploading {
         recipe: RecipeId,
         upload: Option<UploadId>,
+        /// How far the whole publication has come, over every track it sends.
+        #[serde(default)]
+        progress: Option<SendProgress>,
     },
     Ingesting {
         recipe: RecipeId,
@@ -41,11 +44,27 @@ pub enum JobPhase {
         /// Conversion progress Yoto reports for this track, from 0 to 100.
         #[serde(default)]
         percent: Option<u8>,
+        /// How far the whole publication has come, over every track it sends.
+        #[serde(default)]
+        progress: Option<SendProgress>,
     },
     Committing,
     Verifying {
         card: CardId,
     },
+}
+/// Where a publication stands over all the tracks it sends to Yoto: a media cut into
+/// parts sends one track per part, and the parts upload and convert at the same time, so
+/// a parent sees one count and one percentage rather than each part starting over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct SendProgress {
+    /// Tracks Yoto has received and converted.
+    pub done: u32,
+    /// Tracks the publication sends, those Yoto already had included.
+    pub total: u32,
+    /// Overall progress from 0 to 100: every track weighs the same, and each one moves
+    /// from its upload through Yoto's conversion.
+    pub percent: u8,
 }
 impl JobPhase {
     pub fn label(&self) -> &'static str {

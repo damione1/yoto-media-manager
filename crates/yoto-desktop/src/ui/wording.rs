@@ -109,9 +109,24 @@ fn transcode_text(track: &str, problem: TranscodeProblem, percent: Option<u8>) -
     }
 }
 
-/// What a running job is doing, with Yoto's conversion progress when it reports one.
+/// What a running job is doing, with Yoto's conversion progress when it reports one. A
+/// publication sending several tracks (a media cut into parts) shows one count and one
+/// percentage over all of them, whichever track is moving.
 pub fn phase_text(phase: &JobPhase) -> String {
     match phase {
+        JobPhase::Uploading {
+            progress: Some(progress),
+            ..
+        }
+        | JobPhase::Ingesting {
+            progress: Some(progress),
+            ..
+        } if progress.total > 1 => tr!(
+            "Envoi à Yoto : {done}/{total} pistes · {percent} %",
+            done = progress.done,
+            total = progress.total,
+            percent = progress.percent
+        ),
         JobPhase::Ingesting {
             percent: Some(percent),
             ..
@@ -1067,6 +1082,54 @@ mod tests {
         );
         let english = with_language(Language::English, mark_title_template);
         assert_eq!(yoto_domain::mark_title_with(english, 2, 8), "Part 2");
+    }
+    #[core::prelude::v1::test]
+    fn a_publication_of_several_tracks_shows_one_progress() {
+        let recipe = RecipeId::new();
+        let upload = UploadId::new("upload-1").unwrap();
+        let progress = |done, total, percent| {
+            Some(SendProgress {
+                done,
+                total,
+                percent,
+            })
+        };
+        // One track reads as before: what Yoto is doing with it.
+        assert_eq!(
+            phase_text(&JobPhase::Ingesting {
+                recipe,
+                upload: upload.clone(),
+                percent: Some(40),
+                progress: progress(0, 1, 64),
+            }),
+            "Traitement par Yoto (40 %)"
+        );
+        assert_eq!(
+            phase_text(&JobPhase::Uploading {
+                recipe,
+                upload: None,
+                progress: None,
+            }),
+            "Envoi de l’audio à Yoto"
+        );
+        // Several tracks: one count and one percentage, whatever each track is doing.
+        assert_eq!(
+            phase_text(&JobPhase::Uploading {
+                recipe,
+                upload: None,
+                progress: progress(2, 8, 31),
+            }),
+            "Envoi à Yoto : 2/8 pistes · 31 %"
+        );
+        assert_eq!(
+            phase_text(&JobPhase::Ingesting {
+                recipe,
+                upload,
+                percent: Some(100),
+                progress: progress(7, 8, 96),
+            }),
+            "Envoi à Yoto : 7/8 pistes · 96 %"
+        );
     }
     #[core::prelude::v1::test]
     fn failures_and_durations_read_in_english() {
