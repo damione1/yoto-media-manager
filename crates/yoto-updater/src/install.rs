@@ -954,6 +954,8 @@ mod migration_tests {
     }
     #[test]
     fn archives_with_the_current_or_legacy_root_are_accepted() {
+        // The macOS bundle carries a symlink, which only Unix installs extract.
+        #[cfg(unix)]
         for root in ["YotoMediaManager.app", "Yoto.app"] {
             let directory = tempfile::tempdir().unwrap();
             let roots = archive_roots(Platform::MacArm);
