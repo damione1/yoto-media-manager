@@ -100,7 +100,7 @@
     "mac": "Download for macOS",
     "win": "For Windows"
   },
-  "dl": { "intel": "Mac with an Intel processor?", "intelLink": "Intel version", "all": "All versions" },
+  "dl": { "intel": "Mac with an Intel processor?", "intelLink": "Intel version", "all": "All versions", "signing": "Windows: free code signing provided by", "signingBy": ", certificate by" },
   "footer": {
     "label": "Footer",
     "guide": "User guide",
