@@ -381,7 +381,7 @@ impl TokenBroker {
 const PROFILE_SCOPES: &[&str] = &["openid", "profile"];
 /// Name shown for an account whose name Yoto did not give.
 pub fn fallback_label(id: &AccountId) -> String {
-    format!("Yoto {}", &id.as_str()[..8])
+    format!("Yoto {}", id.as_str().chars().take(8).collect::<String>())
 }
 /// The claims of a JWT, decoded without checking its signature: used for display only.
 fn jwt_claims(token: &str) -> Option<serde_json::Value> {

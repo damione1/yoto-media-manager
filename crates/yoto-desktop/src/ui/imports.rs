@@ -327,10 +327,7 @@ pub fn render(view: &mut AppView, _: &mut Window, cx: &mut Context<AppView>) -> 
                 )
                 .child(choices)
                 .child(
-                    div()
-                        .flex()
-                        .justify_end()
-                        .gap(px(8.))
+                    theme::dialog_actions()
                         .child(theme::pill(
                             Button::new("cancel-youtube-selection")
                                 .label(tr!("Annuler"))

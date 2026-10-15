@@ -77,6 +77,7 @@ impl Service {
         for _ in 0..5 {
             let versions = self.interface_revisions()?;
             let changed = |table: Table| since.get(table as usize) != versions.get(table as usize);
+            let remote_changed = since.get(Table::ALL.len()) != versions.get(Table::ALL.len());
             let mut parts = vec![];
             if changed(Table::Media) {
                 parts.push(InterfacePart::Media(self.db.list(Table::Media)?));
@@ -90,8 +91,9 @@ impl Service {
             if changed(Table::Job) {
                 parts.push(InterfacePart::Jobs(self.db.jobs_page(0, 200)?));
             }
-            if changed(Table::Account) {
-                parts.push(InterfacePart::Accounts(self.db.list(Table::Account)?));
+            if changed(Table::Account) || remote_changed {
+                let remote = self.remote.lock().map_err(storage)?;
+                parts.push(InterfacePart::Accounts(self.displayed_accounts(&remote)?));
             }
             if changed(Table::Mapping) {
                 parts.push(InterfacePart::Mappings(self.db.list(Table::Mapping)?));
@@ -99,7 +101,6 @@ impl Service {
             if changed(Table::Binding) {
                 parts.push(InterfacePart::Bindings(self.db.list(Table::Binding)?));
             }
-            let remote_changed = since.get(Table::ALL.len()) != versions.get(Table::ALL.len());
             if remote_changed {
                 let remote = self.remote.lock().map_err(storage)?;
                 let current = remote

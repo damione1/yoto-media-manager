@@ -1651,6 +1651,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::FamilyImage { .. }
         | Command::UploadFamilyImage { .. }
         | Command::SavePixelArt(_)
+        | Command::StoreIconCover { .. }
         | Command::StoreImage { .. }
         | Command::ImportIcon { .. }
         | Command::SetCover { .. } => (tr!("Traitement en cours…"), tr!("Terminé.")),

@@ -3,7 +3,8 @@ use std::{
     fs,
     io::{Cursor, Read},
     path::{Component, Path, PathBuf},
-    process::Command,
+    process::{Child, Command, Stdio},
+    time::{Duration, Instant},
 };
 #[derive(Debug)]
 pub struct PreparedUpdate {
@@ -24,20 +25,34 @@ struct InstallPlan {
     version: Version,
 }
 impl PreparedUpdate {
-    /// Start a copy of the current executable outside the installation directory.
+    /// Start the verified helper and wait until it can safely take over.
     /// The helper waits for the GUI/IPC owner to exit before replacing any files.
     pub fn launch_helper(&self) -> Result<(), UpdateError> {
-        let helper = self.scratch.path().join(helper_name());
+        let helper = helper_path(self.scratch.path(), &self.plan);
         let plan = self.scratch.path().join("install.json");
         fs::write(&plan, serde_json::to_vec(&self.plan).map_err(error)?).map_err(error)?;
+        let ready = self.scratch.path().join("helper-ready");
+        if ready.exists() {
+            fs::remove_file(&ready).map_err(error)?;
+        }
+        let log = fs::File::create(self.scratch.path().join("helper.log")).map_err(error)?;
+        let stderr = log.try_clone().map_err(error)?;
         // Arm cleanup protection before spawn, never leave a hidden armed helper on failure.
         let marker = self.scratch.path().join("helper-started");
         fs::write(&marker, b"1").map_err(error)?;
-        if let Err(failure) = Command::new(helper).arg("--apply-update").arg(plan).spawn() {
+        let result = Command::new(helper)
+            .arg("--apply-update")
+            .arg(plan)
+            .stdin(Stdio::null())
+            .stdout(log)
+            .stderr(stderr)
+            .spawn()
+            .map_err(error)
+            .and_then(|mut child| wait_for_helper(&mut child, &ready, Duration::from_secs(15)));
+        if result.is_err() {
             let _ = fs::remove_file(marker);
-            return Err(error(failure));
         }
-        Ok(())
+        result
     }
 }
 impl Drop for PreparedUpdate {
@@ -54,6 +69,44 @@ fn helper_name() -> &'static str {
     } else {
         "yoto-update-helper"
     }
+}
+fn helper_path(scratch: &Path, plan: &InstallPlan) -> PathBuf {
+    match plan.platform {
+        // A signed macOS executable must stay inside its signed bundle. Copying it
+        // out loses Info.plist and macOS kills it after spawn has already succeeded.
+        // The verified payload can be renamed while its helper is running on Unix.
+        Platform::MacArm | Platform::MacIntel => plan.payload.join("Contents/MacOS/yoto-desktop"),
+        // Windows locks running executables, so its helper stays outside the payload.
+        Platform::Windows => scratch.join(helper_name()),
+    }
+}
+fn wait_for_helper(child: &mut Child, ready: &Path, timeout: Duration) -> Result<(), UpdateError> {
+    let deadline = Instant::now() + timeout;
+    let result = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                break Err(error(format!(
+                    "Update helper exited before it was ready ({status})"
+                )));
+            }
+            Err(failure) => break Err(error(failure)),
+            Ok(None) => {}
+        }
+        if ready.is_file() {
+            break Ok(());
+        }
+        if Instant::now() >= deadline {
+            break Err(error(
+                "Update helper did not become ready; the application was left running",
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    if result.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    result
 }
 fn error(e: impl std::fmt::Display) -> UpdateError {
     UpdateError::Install(e.to_string())
@@ -153,8 +206,10 @@ pub(super) fn prepare(
             return Err(error("Apple signing identity changed"));
         }
     }
-    let helper = scratch.path().join(helper_name());
-    fs::copy(std::env::current_exe().map_err(error)?, helper).map_err(error)?;
+    if platform == Platform::Windows {
+        let helper = scratch.path().join(helper_name());
+        fs::copy(std::env::current_exe().map_err(error)?, helper).map_err(error)?;
+    }
     let backup = parent.join(format!(
         ".yoto-backup-{}{}",
         uuid::Uuid::new_v4(),
@@ -392,7 +447,7 @@ fn extract_zip<'a>(
     }
     chosen.ok_or_else(|| archive_error("Empty archive"))
 }
-/// Called before GPUI/profile initialization, only by the staged helper executable.
+/// Called before GPUI/profile initialization, only by the verified staged helper.
 /// Returns true when the helper command was handled.
 pub fn apply_pending_update() -> Result<bool, UpdateError> {
     let mut args = std::env::args_os().skip(1);
@@ -412,8 +467,6 @@ pub fn apply_pending_update() -> Result<bool, UpdateError> {
     if scratch
         .file_name()
         .is_none_or(|n| !n.to_string_lossy().starts_with(".yoto-update-"))
-        || fs::canonicalize(std::env::current_exe().map_err(error)?).map_err(error)?
-            != scratch.join(helper_name())
     {
         return Err(error(
             "Update helper must run from its private staging directory",
@@ -435,7 +488,20 @@ pub fn apply_pending_update() -> Result<bool, UpdateError> {
     if !valid_paths(&plan, &scratch, parent) {
         return Err(error("Invalid replacement paths"));
     }
+    if fs::canonicalize(std::env::current_exe().map_err(error)?).map_err(error)?
+        != helper_path(&scratch, &plan)
+    {
+        return Err(error(
+            "Update helper must run from its verified staging location",
+        ));
+    }
     validate_payload(&plan.payload, plan.platform)?;
+    if plan.parent_pid == 0 || plan.parent_pid == std::process::id() {
+        return Err(error("Invalid parent process"));
+    }
+    // spawn() alone does not prove macOS allowed the signed process to start.
+    // Acknowledge only after validating the plan, before waiting for the GUI to quit.
+    fs::write(scratch.join("helper-ready"), b"1").map_err(error)?;
     wait_for_exit(plan.parent_pid)?;
     if let Err(failure) = replace(&plan) {
         // The GUI has exited: restore/reopen the previous app even on a first rename failure.
@@ -518,6 +584,8 @@ fn launch_application(directory: &Path, platform: Platform) -> Result<(), Update
     match platform {
         Platform::MacArm | Platform::MacIntel => {
             let status = Command::new("/usr/bin/open")
+                // The helper itself runs from the new bundle: force a new GUI process.
+                .arg("-n")
                 .arg(directory)
                 .status()
                 .map_err(error)?;
@@ -691,6 +759,97 @@ fn wait_for_exit(pid: u32) -> Result<(), UpdateError> {
         }
     }
     Ok(())
+}
+#[cfg(test)]
+mod handshake_tests {
+    use super::*;
+
+    fn plan(root: &Path, platform: Platform) -> InstallPlan {
+        InstallPlan {
+            parent_pid: std::process::id(),
+            source: root.join("YotoMediaManager.app"),
+            destination: root.join("YotoMediaManager.app"),
+            payload: root.join(".yoto-update-test/YotoMediaManager.app"),
+            backup: root.join(".yoto-backup-test.app"),
+            platform,
+            version: Version::parse("0.3.0").unwrap(),
+        }
+    }
+
+    #[test]
+    fn mac_helper_stays_in_the_verified_bundle_and_windows_stays_outside_it() {
+        let root = tempfile::tempdir().unwrap();
+        let scratch = root.path().join(".yoto-update-test");
+        for platform in [Platform::MacArm, Platform::MacIntel] {
+            let plan = plan(root.path(), platform);
+            assert_eq!(
+                helper_path(&scratch, &plan),
+                plan.payload.join("Contents/MacOS/yoto-desktop")
+            );
+        }
+        assert_eq!(
+            helper_path(&scratch, &plan(root.path(), Platform::Windows)),
+            scratch.join(helper_name())
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_helper_does_not_authorize_quitting_or_preserve_an_armed_marker() {
+        use std::os::unix::fs::PermissionsExt;
+        let scratch = tempfile::Builder::new()
+            .prefix(".yoto-update-test-")
+            .tempdir()
+            .unwrap();
+        let mut plan = plan(scratch.path().parent().unwrap(), Platform::MacArm);
+        plan.payload = scratch.path().join("YotoMediaManager.app");
+        let helper = helper_path(scratch.path(), &plan);
+        fs::create_dir_all(helper.parent().unwrap()).unwrap();
+        fs::write(&helper, "#!/bin/sh\nexit 1\n").unwrap();
+        fs::set_permissions(helper, fs::Permissions::from_mode(0o755)).unwrap();
+        let prepared = PreparedUpdate { scratch, plan };
+        assert!(prepared.launch_helper().is_err());
+        assert!(!prepared.scratch.path().join("helper-started").exists());
+        assert!(!prepared.scratch.path().join("helper-ready").exists());
+        assert!(prepared.scratch.path().join("helper.log").is_file());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn startup_timeout_terminates_and_reaps_the_helper() {
+        let root = tempfile::tempdir().unwrap();
+        let mut child = Command::new("/bin/sleep").arg("30").spawn().unwrap();
+        assert!(
+            wait_for_helper(
+                &mut child,
+                &root.path().join("helper-ready"),
+                Duration::from_millis(50)
+            )
+            .is_err()
+        );
+        assert!(child.try_wait().unwrap().is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn helper_must_acknowledge_readiness_while_still_running() {
+        let root = tempfile::tempdir().unwrap();
+        let ready = root.path().join("helper-ready");
+        let mut child = Command::new("/bin/sh")
+            .args([
+                "-c",
+                "sleep 0.1; printf 1 > \"$1\"; exec sleep 30",
+                "helper",
+            ])
+            .arg(&ready)
+            .spawn()
+            .unwrap();
+        wait_for_helper(&mut child, &ready, Duration::from_secs(5)).unwrap();
+        assert_eq!(fs::read(&ready).unwrap(), b"1");
+        assert!(child.try_wait().unwrap().is_none());
+        child.kill().unwrap();
+        child.wait().unwrap();
+    }
 }
 #[cfg(test)]
 mod tests {

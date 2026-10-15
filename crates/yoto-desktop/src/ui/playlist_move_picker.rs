@@ -162,11 +162,7 @@ impl Render for MovePicker {
                 cx,
             )
         });
-        let actions = div()
-            .flex()
-            .gap_2()
-            .items_center()
-            .child(div().flex_1())
+        let actions = theme::dialog_actions()
             .child(theme::dialog_close(
                 "cancel-move-footer",
                 theme::pill(

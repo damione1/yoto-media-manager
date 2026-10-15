@@ -9,6 +9,8 @@ use yoto_domain::*;
 #[derive(Clone)]
 pub struct YotoGateway {
     http: reqwest::Client,
+    /// Independent of authenticated API calls: image CDNs may redirect.
+    image_http: reqwest::Client,
     pub host: String,
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -25,7 +27,9 @@ pub struct Icon {
     pub url: Option<String>,
     pub collection: IconCollection,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
 pub enum IconCollection {
     Public,
     User,
@@ -87,6 +91,17 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const UPLOAD_SLOWEST_BYTES_PER_SECOND: u64 = 50_000;
 const UPLOAD_TIMEOUT_MIN: Duration = Duration::from_secs(5 * 60);
 const UPLOAD_TIMEOUT_MAX: Duration = Duration::from_secs(45 * 60);
+fn image_url_allowed(url: &reqwest::Url) -> bool {
+    url.scheme() == "https"
+        || (cfg!(test)
+            && url.scheme() == "http"
+            && url.host_str().is_some_and(|host| {
+                host == "localhost"
+                    || host
+                        .parse::<std::net::IpAddr>()
+                        .is_ok_and(|ip| ip.is_loopback())
+            }))
+}
 /// Whole-request limit for sending a file of `bytes` to signed storage.
 ///
 /// The shared 30-second API limit covers the whole request, which a long story on a slow
@@ -104,8 +119,73 @@ impl YotoGateway {
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
                 .map_err(storage)?,
+            image_http: reqwest::Client::builder()
+                .user_agent("yoto-media-manager")
+                .timeout(Duration::from_secs(30))
+                .connect_timeout(CONNECT_TIMEOUT)
+                .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                    if attempt.previous().len() >= 5 {
+                        return attempt.error("Too many image redirects");
+                    }
+                    if !image_url_allowed(attempt.url())
+                        || (attempt.url().scheme() != "https"
+                            && attempt.previous().iter().any(|url| url.scheme() == "https"))
+                    {
+                        return attempt.error("Image redirect must use HTTPS");
+                    }
+                    attempt.follow()
+                }))
+                .build()
+                .map_err(storage)?,
             host: "https://api.yotoplay.com".into(),
         })
+    }
+    /// Catalogue image fetches carry no API token and have a strict byte limit.
+    pub(crate) async fn icon_image(&self, url: &str) -> Result<Vec<u8>> {
+        let failed = || Failure::Validation(messages::IMAGE_DOWNLOAD_FAILED.into());
+        let url = reqwest::Url::parse(url).map_err(|_| failed())?;
+        if !image_url_allowed(&url) {
+            return Err(Failure::Validation("Icon image must use HTTPS".into()));
+        }
+        let mut response = self
+            .image_http
+            .get(url.clone())
+            .send()
+            .await
+            .map_err(|error| {
+                eprintln!(
+                    "Yoto image download from {} failed: {}",
+                    url.host_str().unwrap_or("unknown"),
+                    error.without_url()
+                );
+                failed()
+            })?;
+        if !response.status().is_success() {
+            eprintln!(
+                "Yoto image download from {}{} returned HTTP {}",
+                url.host_str().unwrap_or("unknown"),
+                url.path(),
+                response.status().as_u16()
+            );
+            return Err(Failure::Validation(messages::image_download_rejected(
+                response.status().as_u16(),
+            )));
+        }
+        const MAX_BYTES: usize = 8_000_000;
+        if response
+            .content_length()
+            .is_some_and(|bytes| bytes > MAX_BYTES as u64)
+        {
+            return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|_| failed())? {
+            if bytes.len().saturating_add(chunk.len()) > MAX_BYTES {
+                return Err(Failure::Validation(messages::IMAGE_TOO_LARGE.into()));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(bytes)
     }
     pub fn configuration(&self, token: &str) -> Configuration {
         Configuration {

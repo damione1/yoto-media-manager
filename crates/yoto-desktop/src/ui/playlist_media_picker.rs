@@ -273,10 +273,7 @@ impl Render for MediaPicker {
         } else {
             rows.into_any_element()
         };
-        let actions = div()
-            .flex()
-            .gap_2()
-            .items_center()
+        let actions = theme::dialog_actions()
             .child(theme::pill(
                 Button::new("picker-import-media")
                     .label(tr!("Importer de l’audio"))
