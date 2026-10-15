@@ -7,7 +7,7 @@ order: 2
 
 ## Installer l’application
 
-Téléchargez la dernière version pour votre ordinateur : [Mac avec puce Apple](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-AppleSilicon.dmg) (M1 et suivants), [Mac avec processeur Intel](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-Intel.dmg) ou [Windows](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-Windows-setup.exe). Toutes les versions sont aussi sur les [versions publiées sur GitHub](https://github.com/damione1/yoto-media-manager/releases). La signature de code gratuite de la version Windows est fournie par [SignPath.io](https://signpath.io), avec un certificat de la [SignPath Foundation](https://signpath.org).
+Téléchargez la dernière version pour votre ordinateur : [Mac avec puce Apple](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-AppleSilicon.dmg) (M1 et suivants), [Mac avec processeur Intel](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-Intel.dmg) ou [Windows](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-Windows-setup.exe). Toutes les versions sont aussi sur les [versions publiées sur GitHub](https://github.com/damione1/yoto-media-manager/releases).
 
 Sur macOS, ouvrez le disque d’installation et glissez **YotoMediaManager** dans **Applications**. Sur Windows, lancez l’installateur et suivez ses étapes. Ouvrez ensuite l’application depuis Applications ou le menu Démarrer.
 
