@@ -191,18 +191,6 @@ impl TrimRange {
             end: self.end,
         }
     }
-    /// The last `length` of this range, or all of it when it is shorter.
-    pub fn ending(self, length: MediaTime) -> Self {
-        let start = self
-            .end
-            .micros()
-            .saturating_sub(length.micros())
-            .max(self.start.micros());
-        Self {
-            start: MediaTime::try_from(start).expect("inside the range"),
-            end: self.end,
-        }
-    }
     const SHORTEST_PREVIEW_MICROS: u64 = 1_000_000;
 }
 impl TryFrom<(MediaTime, MediaTime)> for TrimRange {

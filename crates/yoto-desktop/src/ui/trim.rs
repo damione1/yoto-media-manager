@@ -51,8 +51,6 @@ impl Render for WaveDrag {
 }
 /// How far from a selection handle drawn on the waveform a press still grabs it, in pixels.
 const HANDLE_REACH: f32 = 12.;
-/// « Écouter la fin de la sélection » starts this many seconds before the end.
-const ENDING_SECONDS: u64 = 5;
 /// How far the arrow keys move the playhead, in seconds.
 const NUDGE_SECONDS: f64 = 5.;
 struct TrimDraft {
@@ -625,21 +623,6 @@ impl TrimPanel {
         }
         cx.notify();
     }
-    /// Play the last seconds of the selection, to check where it ends.
-    fn play_ending(&mut self, cx: &mut Context<Self>) {
-        let trim = self
-            .selection
-            .ending(MediaTime::try_from(ENDING_SECONDS * 1_000_000).expect("a few seconds"));
-        self.generation = self.generation.wrapping_add(1);
-        self.cursor_seconds = trim.start().seconds();
-        self.send(
-            Command::PreviewTrim {
-                media: self.media.id,
-                trim,
-            },
-            cx,
-        );
-    }
     /// The pointer pressed the trim waveform: a selection handle within reach is grabbed,
     /// anywhere else moves the playhead.
     fn wave_press(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
@@ -1151,16 +1134,6 @@ impl TrimPanel {
                     .items_center()
                     .justify_end()
                     .gap(px(10.))
-                    .child(theme::pill(
-                        Button::new("preview-trim-ending")
-                            .icon(IconName::ArrowRightToLine)
-                            .label(tr!("Écouter la fin de la sélection"))
-                            .on_click(cx.listener(|v, _, _, cx| v.play_ending(cx))),
-                        Look::Soft(&theme::MINT),
-                        Height::Hero,
-                        busy || self.preview_pending.is_some(),
-                        cx,
-                    ))
                     .child(theme::pill(
                         Button::new("preview-trim")
                             .icon(if self.playing {

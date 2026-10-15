@@ -431,19 +431,6 @@ fn playback_starts_where_asked_inside_the_range_and_never_too_close_to_its_end()
     let short = TrimRange::new(at(10.), at(10.5), at(60.)).unwrap();
     assert_eq!(short.played_from(at(10.3)), short);
 }
-#[test]
-fn the_end_of_a_selection_is_its_last_seconds_or_all_of_a_short_one() {
-    let at = |s: f64| MediaTime::from_seconds(s).unwrap();
-    let range = TrimRange::new(at(10.), at(40.), at(60.)).unwrap();
-    assert_eq!(
-        range.ending(at(5.)),
-        TrimRange::new(at(35.), at(40.), at(60.)).unwrap()
-    );
-    let short = TrimRange::new(at(10.), at(13.), at(60.)).unwrap();
-    assert_eq!(short.ending(at(5.)), short);
-    let exact = TrimRange::new(at(0.), at(5.), at(5.)).unwrap();
-    assert_eq!(exact.ending(at(5.)), exact);
-}
 
 /// A playlist of stream tracks, one chapter per name holding the tracks listed after it.
 fn structured(chapters: &[(&str, &[&str])]) -> Playlist {

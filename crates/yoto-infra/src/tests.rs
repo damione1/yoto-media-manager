@@ -174,14 +174,8 @@ fn whole_webm_opus_preview_accepts_the_shorter_decoded_tail() {
     let decoded = tools.preview(&input, lease.path(), whole).unwrap();
     assert!(decoded.duration <= source.duration);
     assert!(source.duration.seconds() - decoded.duration.seconds() < 0.1);
-    // « Écouter la fin de la sélection » and a playhead dropped near the end both decode
-    // a range running to the source's end, which may also end early.
-    let five = MediaTime::from_seconds(5.).unwrap();
-    let ending = tools
-        .preview(&input, lease.path(), whole.ending(five))
-        .unwrap();
-    assert!(ending.duration <= five);
-    assert!(five.seconds() - ending.duration.seconds() < 0.1);
+    // A playhead dropped near the end decodes a range running to the source's end, which
+    // may also end early.
     let near_end = MediaTime::from_seconds(source.duration.seconds() - 0.1).unwrap();
     let last = tools
         .preview(&input, lease.path(), whole.played_from(near_end))
