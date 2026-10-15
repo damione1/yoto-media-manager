@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-<title>Yoto Media Manager</title>
+<title>YotoMediaManager</title>
 <defs>
 <path id="tile-shape" d="M928 516C928 334.7 933.4 222.3 871 160.5C808.6 98.7 695 104 512 104C329 104 215.4 98.7 153 160.5C90.6 222.3 96 334.7 96 516C96 697.3 90.6 809.7 153 871.5C215.4 933.3 329 928 512 928C695 928 808.6 933.3 871 871.5C933.4 809.7 928 697.3 928 516Z"/>
 <clipPath id="tile-clip"><use href="#tile-shape"/></clipPath>

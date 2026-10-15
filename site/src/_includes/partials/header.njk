@@ -16,7 +16,7 @@
         <a href="{{ page.url | localeUrl(alt.code) if not is404 else '/' + alt.dir }}" hreflang="{{ alt.htmlLang }}" lang="{{ alt.htmlLang }}"{% if alt.code == loc.code %} aria-current="true"{% endif %}><abbr title="{{ alt.name }}">{{ alt.label }}</abbr></a>
         {%- endfor %}
       </div>
-      <a class="btn btn-ink btn-sm hide-xs" href="{{ '#download' if onHome else site.latest }}">{{ t.nav.download }}</a>
+      <a class="btn btn-ink btn-sm hide-xs" href="{{ '#download' if onHome else home + '#download' }}">{{ t.nav.download }}</a>
     </nav>
   </div>
 </header>
