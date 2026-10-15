@@ -40,8 +40,11 @@ for framework in out.rglob('Python.framework'):
         alias.symlink_to('Versions/Current/'+name)
 magic={b'\xfe\xed\xfa\xce',b'\xce\xfa\xed\xfe',b'\xfe\xed\xfa\xcf',b'\xcf\xfa\xed\xfe',b'\xca\xfe\xba\xbe',b'\xbe\xba\xfe\xca',b'\xca\xfe\xba\xbf',b'\xbf\xba\xfe\xca'}
 # Sign each embedded Mach-O (.so, Python, framework copies and dylibs included), innermost first.
+# The main executable is left to the bundle signature below: signing it alone makes codesign
+# check its sibling yoto-mcp, which fails whenever the directory lists yoto-desktop first.
+main=mac/info['CFBundleExecutable']
 for f in sorted(out.rglob('*'),key=lambda p:len(p.parts),reverse=True):
-    if f.is_file() and not f.is_symlink():
+    if f.is_file() and not f.is_symlink() and f!=main:
         with open(f,'rb') as r:header=r.read(4)
         if header in magic:
             args=['codesign','--force','--timestamp','--options','runtime','--sign',a.identity]
