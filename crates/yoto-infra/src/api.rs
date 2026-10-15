@@ -872,7 +872,7 @@ pub fn read_playlist(document: &Value, account: &AccountId) -> Result<Playlist> 
             title: c.title.clone(),
             icon: read_icon(c.display.as_deref(), account)?,
             tracks: vec![],
-            extra: unmanaged(c, &["key", "title", "tracks"])?,
+            extra: unmanaged(c, &["key", "title", "tracks", "duration", "fileSize"])?,
         };
         for t in &c.tracks {
             let media = match t.r#type {
@@ -921,6 +921,136 @@ pub fn read_playlist(document: &Value, account: &AccountId) -> Result<Playlist> 
     p.validate_draft()?;
     Ok(p)
 }
+/// Where a chapter or track stood in the card document as read, and the label it carried.
+struct BaseSlot {
+    positions: Vec<usize>,
+    label: Option<String>,
+}
+/// Overlay labels of the card document as read, to tell labels that merely numbered an
+/// element ("positional") from labels someone wrote.
+///
+/// A label is positional when it equals the 1-based position its element had: for a chapter its
+/// number; for a track its chapter's number (the contract's convention) or its index in the
+/// chapter. The playlist is numbered when it has labels and all of them are positional,
+/// judged separately for chapters and tracks.
+struct BaseLabels {
+    chapters: BTreeMap<String, BaseSlot>,
+    /// Tracks by chapter key, then track key.
+    tracks: BTreeMap<(String, String), BaseSlot>,
+    numbered_chapters: bool,
+    numbered_tracks: bool,
+}
+impl BaseLabels {
+    fn read(document: &Value) -> Self {
+        let label = |v: &Value| {
+            v.get("overlayLabel")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        };
+        let key = |v: &Value| {
+            v.get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let mut base = Self {
+            chapters: BTreeMap::new(),
+            tracks: BTreeMap::new(),
+            numbered_chapters: true,
+            numbered_tracks: true,
+        };
+        let (mut chapter_labels, mut track_labels) = (0, 0);
+        let chapters = document["content"]["chapters"].as_array();
+        for (ci, chapter) in chapters.into_iter().flatten().enumerate() {
+            let slot = BaseSlot {
+                positions: vec![ci + 1],
+                label: label(chapter),
+            };
+            if let Some(l) = &slot.label {
+                chapter_labels += 1;
+                base.numbered_chapters &= *l == (ci + 1).to_string();
+            }
+            let chapter_key = key(chapter);
+            for (ti, track) in chapter["tracks"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .enumerate()
+            {
+                let slot = BaseSlot {
+                    positions: vec![ci + 1, ti + 1],
+                    label: label(track),
+                };
+                if let Some(l) = &slot.label {
+                    track_labels += 1;
+                    base.numbered_tracks &= slot.positions.iter().any(|n| *l == n.to_string());
+                }
+                base.tracks.insert((chapter_key.clone(), key(track)), slot);
+            }
+            base.chapters.insert(chapter_key, slot);
+        }
+        base.numbered_chapters &= chapter_labels > 0;
+        base.numbered_tracks &= track_labels > 0;
+        base
+    }
+    fn chapter(&self, key: &ChapterKey, number: usize, held: Option<String>) -> Option<String> {
+        let slot = self.chapters.get(fit_wire_key(key.as_str()));
+        relabel(held, slot, &[number], self.numbered_chapters)
+    }
+    /// A track absent from its chapter in the base is looked up in the other chapters, so a
+    /// track moved between chapters is renumbered from where it came from. Yoto reuses
+    /// track keys from one chapter to the next, so among the chapters holding that key the
+    /// one whose position the held label names is taken as the origin.
+    fn track(
+        &self,
+        chapter: &ChapterKey,
+        track: &TrackKey,
+        positions: &[usize],
+        held: Option<String>,
+    ) -> Option<String> {
+        let (chapter, track) = (fit_wire_key(chapter.as_str()), fit_wire_key(track.as_str()));
+        let positional = |slot: &&BaseSlot| {
+            held.as_ref()
+                .is_some_and(|label| slot.positions.iter().any(|n| *label == n.to_string()))
+        };
+        let slot = self
+            .tracks
+            .get(&(chapter.to_owned(), track.to_owned()))
+            .or_else(|| {
+                let mut elsewhere = self
+                    .tracks
+                    .iter()
+                    .filter(|((_, k), _)| k == track)
+                    .map(|(_, s)| s);
+                elsewhere
+                    .clone()
+                    .find(positional)
+                    .or_else(|| elsewhere.next())
+            });
+        relabel(held, slot, positions, self.numbered_tracks)
+    }
+}
+/// Decide the label an element is written with. `new` lists its positions in the order of
+/// `BaseSlot::positions`; the first is the one given to a label-less element of a numbered
+/// playlist. A positional label follows the element to its new position, a label of any other
+/// kind and the label of an element that was unlabelled stay as they are, and an element
+/// unknown to the base is labelled only when the playlist is numbered.
+fn relabel(
+    held: Option<String>,
+    base: Option<&BaseSlot>,
+    new: &[usize],
+    numbered: bool,
+) -> Option<String> {
+    match (held, base) {
+        (Some(label), Some(slot)) => {
+            let convention = slot.positions.iter().position(|n| label == n.to_string());
+            Some(convention.map_or(label, |i| new[i].to_string()))
+        }
+        (None, Some(_)) => None,
+        (Some(label), None) => Some(label),
+        (None, None) => numbered.then(|| new[0].to_string()),
+    }
+}
 pub fn write_playlist(
     p: &Playlist,
     account: &AccountId,
@@ -929,12 +1059,17 @@ pub fn write_playlist(
     cover: Option<&str>,
 ) -> Result<Value> {
     p.validate_remote_write()?;
+    let labels = match &p.origin {
+        DraftOrigin::New => None,
+        DraftOrigin::Existing { base } => Some(BaseLabels::read(&base.document)),
+    };
     let mut chapters = vec![];
     let mut bytes = 0u64;
     let mut duration = 0u64;
-    for c in &p.chapters {
+    for (ci, c) in p.chapters.iter().enumerate() {
         let mut tracks = vec![];
-        for t in &c.tracks {
+        let (mut chapter_duration, mut chapter_bytes) = (0., 0i64);
+        for (ti, t) in c.tracks.iter().enumerate() {
             let (url, info, kind, format) = match &t.media {
                 TrackMedia::Local { recipe, .. } => {
                     let m = mappings
@@ -1021,6 +1156,16 @@ pub fn write_playlist(
                 &t.extra,
             )?;
             track.channels = channels;
+            if let Some(labels) = &labels {
+                track.overlay_label = labels.track(
+                    &c.key,
+                    &t.key,
+                    &[ci + 1, ti + 1],
+                    track.overlay_label.take(),
+                );
+            }
+            chapter_duration += track_duration;
+            chapter_bytes += track_bytes;
             if let Some(events) = &t.events {
                 track.events = Some(Box::new(events.clone()));
             }
@@ -1031,6 +1176,11 @@ pub fn write_playlist(
             wire::Chapter::new(c.key.to_string(), c.title.clone(), tracks),
             &c.extra,
         )?;
+        chapter.duration = Some(chapter_duration);
+        chapter.file_size = Some(chapter_bytes);
+        if let Some(labels) = &labels {
+            chapter.overlay_label = labels.chapter(&c.key, ci + 1, chapter.overlay_label.take());
+        }
         apply_icon(&mut chapter.display, &c.icon, account, icons)?;
         chapters.push(chapter);
     }
