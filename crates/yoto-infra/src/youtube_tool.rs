@@ -209,6 +209,7 @@ pub fn load_managed(
 }
 
 /// Make a verified download runnable: executable bit and, on macOS, no quarantine flag.
+#[cfg_attr(windows, allow(unused_variables))]
 fn make_runnable(path: &std::path::Path) -> std::io::Result<()> {
     #[cfg(unix)]
     {
