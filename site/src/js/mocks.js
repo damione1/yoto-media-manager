@@ -89,6 +89,8 @@
     if (p) this.place(p.x, p.y, instant);
     return !!p;
   };
+  /* Held down while it drags something, released after. */
+  Cursor.prototype.hold = function (on) { if (this.el) this.el.classList.toggle("is-held", on); };
   Cursor.prototype.click = function (target, run) {
     var el = this.el;
     if (el) { el.classList.remove("is-click"); void el.offsetWidth; el.classList.add("is-click"); }
@@ -337,8 +339,14 @@
     this.box.classList.toggle("is-open", open);
     this.root.classList.toggle("has-dialog", open);
   };
+  Trim.prototype.letGo = function () {
+    this.cursor.hold(false);
+    this.ha.classList.remove("is-grabbed");
+    this.hb.classList.remove("is-grabbed");
+  };
   Trim.prototype.reset = function () {
     this.root.classList.remove("is-cut");
+    this.letGo();
     this.dialog(false);
     this.a = 0; this.b = 1; this.p = 0;
     this.render();
@@ -349,14 +357,24 @@
   };
   Trim.prototype.sequence = function () {
     var self = this, run = this.run;
-    // Each handle is grabbed on the waveform and dragged.
+    // Each handle is grabbed on the waveform, dragged, then let go.
     var drag = function (handle, from, to, set, ms, then) {
       self.cursor.to(handle, 0.5, 0.5);
       run.after(750, function () {
-        run.tween(ms, function (t) {
-          set(from + (to - from) * t); self.render();
-          self.cursor.to(handle, 0.5, 0.5, true);
-        }, then);
+        self.cursor.hold(true);
+        handle.classList.add("is-grabbed");
+        run.after(180, function () {
+          run.tween(ms, function (t) {
+            set(from + (to - from) * t); self.render();
+            self.cursor.to(handle, 0.5, 0.5, true);
+          }, function () {
+            run.after(120, function () {
+              self.cursor.hold(false);
+              handle.classList.remove("is-grabbed");
+              run.after(250, then);
+            });
+          });
+        });
       });
     };
     run.after(400, function () {
@@ -418,6 +436,7 @@
   /* The finished frame is the dialog with the cut chosen, before Apply. */
   Trim.prototype.finish = function () {
     this.root.classList.remove("is-cut");
+    this.letGo();
     this.dialog(true);
     this.a = CUT_A; this.b = CUT_B; this.p = SEEK;
     this.render();

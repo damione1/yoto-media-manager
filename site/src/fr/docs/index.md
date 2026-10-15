@@ -32,9 +32,3 @@ Le [guide de démarrage](getting-started.md) vous accompagne jusqu’à votre pr
 | `Imports` | Ajouter un lien YouTube et suivre les imports, les préparations et les envois. |
 | `Lecteurs` | Actualiser les données Yoto, choisir un lecteur et gérer les groupes. |
 | `Compte` | Connecter ou déconnecter Yoto et activer le `Mode avancé`. |
-
-## Disponibilité actuelle
-
-L’application est encore en cours de validation. Les imports audio, la préparation et les interactions natives ont été éprouvés sur macOS avec puce Apple. Les opérations Yoto sont aussi testées avec une API simulée. Restent à faire : la validation complète avec de vrais lecteurs Yoto, la notarisation Apple, et les essais sur Windows et sur les Mac Intel. L’application vous explique quand une fonction n’est pas disponible.
-
-Le catalogue de playlists contient vos créations « Make Your Own ». Le catalogue général des cartes commerciales de la boutique Yoto n’est pas disponible dans cette version.

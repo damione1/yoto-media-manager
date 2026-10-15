@@ -48,7 +48,6 @@
   },
   "see": {
     "title": "See it work",
-    "sub": "These are not videos: they are small reproductions of the app’s screens, playing out the same steps.",
     "pause": "Pause animation",
     "play": "Play animation",
     "scenes": {
@@ -92,7 +91,8 @@
       { "q": "Where are my files stored?", "a": "Your library stays on your computer. Only the audio you add to a playlist is sent to your Yoto account." },
       { "q": "Do I need a Yoto account?", "a": "Not to import and trim audio. To create playlists and play them on a player, yes." },
       { "q": "Are my originals changed when I trim?", "a": "Never. Trimming creates a version next to the original, which you can export at any time." },
-      { "q": "Is the app finished?", "a": "It is still being validated: some combinations of players and computers remain to be tested. The app tells you when a feature is not available, and offers new versions as soon as they are published." }
+      { "q": "Is the app finished?", "a": "It is still being validated: some combinations of players and computers remain to be tested. The app tells you when a feature is not available, and offers new versions as soon as they are published." },
+      { "q": "Is it good?", "a": "Yes." }
     ]
   },
   "cta": {

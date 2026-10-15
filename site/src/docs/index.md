@@ -9,7 +9,7 @@ YotoMediaManager helps you collect audio, prepare excerpts, and manage playlists
 
 Import an audio file or a publicly accessible YouTube video, remove an introduction or credits, rename the content, and choose a small illustration for each chapter.
 
-The app is available in English and French. It follows your computer's language, and you can change it under `Compte` (`Account`) → `Langue / Language`. This guide shows the French labels in `code`; in English the same controls sit in the same places.
+The app is available in English and French. It follows your computer's language, and you can change it under `Account` → `Langue / Language`, by choosing `English` or `Français`. This guide uses the English labels; in French the same controls sit in the same places.
 
 ## A five-step workflow
 
@@ -27,14 +27,8 @@ The [getting started guide](getting-started.md) walks you through your first pla
 
 | App screen | What you can do |
 | --- | --- |
-| `Médiathèque` | Find, sort, and select media; listen to and prepare audio; export or import the whole library. |
+| `Library` | Find, sort, and select media; listen to and prepare audio; export or import the whole library. |
 | `Playlists` | Create, illustrate, and edit your playlists. |
 | `Imports` | Add a YouTube link and follow imports, processing, and uploads. |
-| `Lecteurs` | Refresh Yoto data, select a player, and manage groups. |
-| `Compte` | Connect or disconnect Yoto and turn on `Mode avancé`. |
-
-## Current availability
-
-The app is still being validated. Audio imports, preparation, and native interactions have been exercised on Apple Silicon macOS. Yoto operations are also tested against a simulated API. Full validation with real Yoto players, Apple notarization, and Windows and Intel Mac testing remain to be completed. The app explains when a feature is unavailable.
-
-The playlist catalog contains your **Make Your Own** creations. The general catalog of commercial Yoto store cards is not available in this version.
+| `Players` | Refresh Yoto data, select a player, and manage groups. |
+| `Account` | Connect or disconnect Yoto and turn on `Advanced mode`. |

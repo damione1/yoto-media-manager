@@ -231,6 +231,8 @@
 .m-sel { position: absolute; top: 0; bottom: 0; left: var(--a); right: calc(100% - var(--b)); border-block: 3px solid var(--sky); background: rgba(76, 141, 240, 0.06); }
 .m-handle { position: absolute; top: 0; bottom: 0; width: 14px; margin-left: -7px; border-radius: 8px; background: var(--sky); display: flex; align-items: center; justify-content: center; }
 .m-handle::after { content: ""; width: 3px; height: 22px; border-radius: 3px; background: #fff; }
+.m-handle { transition: box-shadow 0.15s ease, background-color 0.15s ease; }
+.m-handle.is-grabbed { background: var(--sky-ink); box-shadow: 0 0 0 4px rgba(76, 141, 240, 0.28); }
 .m-handle-a { left: var(--a); }
 .m-handle-b { left: var(--b); }
 /* The playhead shows only inside the selection, as in the app. */
@@ -326,11 +328,13 @@
 .m-cursor {
   position: absolute; z-index: 6; left: 0; top: 0; pointer-events: none;
   transform: translate(var(--cx, 50%), var(--cy, 50%));
-  opacity: 0; transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1), opacity 0.3s ease;
+  opacity: 0; transition: transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1), opacity 0.3s ease, scale 0.15s ease;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25));
 }
 .mock.has-cursor .m-cursor { opacity: 1; }
 .m-cursor.is-click { animation: m-click 0.3s ease; }
+/* While it drags, the pointer sticks to what it holds instead of easing after it. */
+.m-cursor.is-held { scale: 0.82; transition: opacity 0.3s ease, scale 0.15s ease; }
 
 @keyframes m-spin { to { transform: rotate(360deg); } }
 @keyframes m-blink { 50% { opacity: 0; } }
