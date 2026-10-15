@@ -5,6 +5,9 @@ use gpui_kit::component::{WindowExt, spinner::Spinner};
 
 /// The least a chapter may last, in seconds: marks closer than this are refused.
 const MIN_CHAPTER_SECONDS: f64 = 1.;
+/// How far the two small buttons move the playhead, in seconds, to settle on the exact
+/// spot before marking it.
+const NUDGE_FINE_SECONDS: f64 = 1.;
 
 /// The chapter marks of a media while their dialog is open.
 pub(super) struct ChapterDraft {
@@ -136,12 +139,12 @@ impl TrimPanel {
         self.label_chapters(window, cx);
         cx.notify();
     }
-    /// Play from `seconds` right away, whether or not something is playing.
+    /// Play from `seconds` right away, whether something is playing, paused or not: one
+    /// playback replaces the other in a single step.
     fn listen_from(&mut self, seconds: f64, cx: &mut Context<Self>) {
-        self.seek(seconds, cx);
-        if !self.playing && self.preview_pending.is_none() {
-            self.play_from_cursor(cx);
-        }
+        let range = self.playback_range();
+        self.cursor_seconds = seconds.clamp(range.start().seconds(), range.end().seconds());
+        self.play_from_cursor(cx);
     }
     /// The pointer pressed the waveform: a mark within reach is grabbed, anywhere else
     /// moves the playhead.
@@ -311,7 +314,7 @@ impl TrimPanel {
             )
             .on_key_down(cx.listener(|v, event: &KeyDownEvent, _, cx| v.wave_key(event, cx)))
             .on_prepaint(move |bounds, _, cx| {
-                panel.update(cx, |v, _| v.wave_bounds = bounds);
+                panel.update(cx, |v, cx| v.wave_painted(bounds, cx));
             });
         if version.is_some() {
             overlay = overlay.child(
@@ -458,7 +461,7 @@ impl TrimPanel {
                                 div()
                                     .text_size(px(15.))
                                     .text_color(theme::c(theme::MUTED))
-                                    .child(div().child(tr!("Écoutez, puis ajoutez un chapitre à chaque endroit où une nouvelle partie commence.")))
+                                    .child(div().child(tr!("Écoutez, mettez en pause là où une nouvelle partie commence, puis ajoutez un chapitre à cet endroit.")))
                                     .child(div().child(tr!("Ajouté à une playlist, cet audio y arrivera déjà découpé, un chapitre par repère."))),
                             ),
                     )
@@ -502,13 +505,13 @@ impl TrimPanel {
                             .label(if self.preview_pending.is_some() {
                                 tr!("Préparation de l’écoute…")
                             } else if self.playing {
-                                tr!("Arrêter l’écoute")
+                                tr!("Pause")
                             } else {
                                 tr!("Écouter")
                             })
                             .on_click(cx.listener(|v, _, _, cx| {
                                 if v.playing {
-                                    v.stop(cx);
+                                    v.pause(cx);
                                 } else {
                                     v.play_from_cursor(cx);
                                 }
@@ -516,6 +519,30 @@ impl TrimPanel {
                         Look::Solid(&theme::MINT),
                         Height::Large,
                         saving || self.preview_pending.is_some(),
+                        cx,
+                    ))
+                    .child(theme::round(
+                        Button::new("nudge-back")
+                            .icon(IconName::ChevronLeft)
+                            .accessibility_label(tr!("Reculer d’une seconde"))
+                            .on_click(cx.listener(|v, _, _, cx| {
+                                v.seek(v.cursor_seconds - NUDGE_FINE_SECONDS, cx)
+                            })),
+                        Look::Soft(&theme::LIGHT_SAND),
+                        40.,
+                        saving,
+                        cx,
+                    ))
+                    .child(theme::round(
+                        Button::new("nudge-forward")
+                            .icon(IconName::ChevronRight)
+                            .accessibility_label(tr!("Avancer d’une seconde"))
+                            .on_click(cx.listener(|v, _, _, cx| {
+                                v.seek(v.cursor_seconds + NUDGE_FINE_SECONDS, cx)
+                            })),
+                        Look::Soft(&theme::LIGHT_SAND),
+                        40.,
+                        saving,
                         cx,
                     ))
                     .child(theme::meta(format!(

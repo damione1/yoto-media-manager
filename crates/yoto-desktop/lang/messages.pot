@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-14 22:56-0400\n"
+"POT-Creation-Date: 2026-10-15 00:03-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -254,8 +254,8 @@ msgstr ""
 
 #: src/ui/chapters.rs
 msgid ""
-"Écoutez, puis ajoutez un chapitre à chaque endroit où une nouvelle partie "
-"commence."
+"Écoutez, mettez en pause là où une nouvelle partie commence, puis ajoutez un "
+"chapitre à cet endroit."
 msgstr ""
 
 #: src/ui/chapters.rs
@@ -276,8 +276,16 @@ msgstr ""
 msgid "Préparation de l’écoute…"
 msgstr ""
 
-#: src/ui/chapters.rs src/ui/editor.rs src/ui/trim.rs
-msgid "Arrêter l’écoute"
+#: src/ui/chapters.rs src/ui/device.rs src/ui/trim.rs src/ui/wording.rs
+msgid "Pause"
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Reculer d’une seconde"
+msgstr ""
+
+#: src/ui/chapters.rs
+msgid "Avancer d’une seconde"
 msgstr ""
 
 #: src/ui/chapters.rs
@@ -499,10 +507,6 @@ msgstr ""
 
 #: src/ui/device.rs src/ui/wording.rs
 msgid "Reprendre"
-msgstr ""
-
-#: src/ui/device.rs src/ui/wording.rs
-msgid "Pause"
 msgstr ""
 
 #: src/ui/device.rs src/ui/editor.rs
@@ -921,6 +925,10 @@ msgstr ""
 #: src/ui/editor.rs src/ui/library.rs
 #, rust-format
 msgid "Écouter {title}"
+msgstr ""
+
+#: src/ui/editor.rs src/ui/trim.rs
+msgid "Arrêter l’écoute"
 msgstr ""
 
 #: src/ui/editor.rs

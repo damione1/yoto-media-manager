@@ -1610,6 +1610,8 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         Command::Waveform(_)
         | Command::StopPreview
         | Command::PreviewStatus
+        | Command::PausePreview
+        | Command::PreparePreview(_)
         | Command::Preview(_)
         | Command::PreviewTrim { .. }
         | Command::ReleaseAsset(_)

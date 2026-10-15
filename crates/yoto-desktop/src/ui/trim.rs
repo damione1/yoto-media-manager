@@ -54,6 +54,24 @@ impl Render for WaveDrag {
 pub(super) const HANDLE_REACH: f32 = 12.;
 /// How far the arrow keys move the playhead, in seconds.
 const NUDGE_SECONDS: f64 = 5.;
+/// Pixels of waveform per bar, gap included: fine enough for a pause between two songs
+/// to show as a dip on a file of a quarter of an hour.
+const WAVE_BAR_PITCH: f32 = 3.;
+const WAVE_BAR_GAP: f32 = 1.;
+/// The height of the loudest bar, in pixels, and of a bar over silence.
+const WAVE_HEIGHT: f32 = 118.;
+const WAVE_FLOOR: f32 = 2.;
+/// How many bars a waveform gets before it has been painted and measured.
+const WAVE_COLUMNS_UNMEASURED: usize = 260;
+
+/// What the player's report means for a panel's playhead (see [`playhead_after`]).
+#[derive(Debug, PartialEq)]
+pub(super) struct Playhead {
+    pub(super) playing: bool,
+    pub(super) paused: bool,
+    /// Where to put the playhead, when the report moves it.
+    pub(super) cursor: Option<f64>,
+}
 struct TrimDraft {
     before: TrimRange,
     normalization: Normalization,
@@ -80,6 +98,8 @@ pub struct TrimPanel {
     pub(super) wave_bounds: Bounds<Pixels>,
     pub(super) wave_focus: FocusHandle,
     pub(super) playing: bool,
+    /// The sound is held where the playhead stands, to go on from there.
+    pub(super) paused: bool,
     pub(super) preview_pending: Option<u64>,
     generation: u64,
     normalization: Normalization,
@@ -186,12 +206,11 @@ impl TrimPanel {
                 gpui_kit::component::slider::SliderEvent::Release(value) => {
                     // Releasing the cursor only moves it; playback continues from there
                     // when it was already playing, and « Écouter » starts it otherwise.
-                    v.cursor_seconds = v.playback_range().start().seconds()
-                        + value.start() as f64 * v.playback_range().duration().seconds();
-                    if v.playing {
-                        v.play_from_cursor(cx);
-                    }
-                    cx.notify();
+                    let range = v.playback_range();
+                    v.seek(
+                        range.start().seconds() + value.start() as f64 * range.duration().seconds(),
+                        cx,
+                    );
                 }
                 gpui_kit::component::slider::SliderEvent::Change(value) => {
                     v.cursor_seconds = v.playback_range().start().seconds()
@@ -207,6 +226,7 @@ impl TrimPanel {
             wave_bounds: Bounds::default(),
             wave_focus: cx.focus_handle(),
             playing: false,
+            paused: false,
             preview_pending: None,
             generation: 0,
             selection,
@@ -244,11 +264,11 @@ impl TrimPanel {
                 cx.background_executor()
                     .timer(Duration::from_millis(250))
                     .await;
-                match weak.read_with(cx, |v, _| v.active) {
-                    Ok(true) => {}
-                    Ok(false) => continue,
+                let generation = match weak.read_with(cx, |v, _| v.active.then_some(v.generation)) {
+                    Ok(Some(generation)) => generation,
+                    Ok(None) => continue,
                     Err(_) => break,
-                }
+                };
                 let service = service.clone();
                 let result = rt
                     .spawn(async move { service.execute(Command::PreviewStatus).await })
@@ -256,47 +276,34 @@ impl TrimPanel {
                 if let Ok(Ok(Reply::Data(data))) = result {
                     if let Ok(status) = serde_json::from_value::<PreviewStatus>(data) {
                         let update = weak.update(cx, |v, cx| {
-                            match status {
-                                PreviewStatus::Playing {
-                                    media: id,
-                                    position,
-                                } if id == media => {
-                                    v.playing = true;
-                                    // The playhead held by the pointer, or moved while the
-                                    // next playback is being decoded, stays where it was put.
-                                    if v.wave_grab.is_some() || v.preview_pending.is_some() {
-                                        cx.notify();
-                                        return;
-                                    }
-                                    v.cursor_seconds = position.seconds();
-                                    let input = v.cursor.clone();
-                                    let range = v.playback_range();
-                                    let value = ((position.seconds() - range.start().seconds())
-                                        / range.duration().seconds())
-                                    .clamp(0., 1.)
-                                        as f32;
-                                    if let Some(window) = cx.windows().first().copied() {
-                                        let _ = cx.update_window(window, move |_, window, cx| {
-                                            input.update(cx, |s, cx| s.set_value(value, window, cx))
-                                        });
-                                    }
-                                }
-                                PreviewStatus::Playing { .. } | PreviewStatus::Stopped => {
-                                    // Playback that ran to its end brings the playhead back
-                                    // to the start, ready for the next listen.
-                                    if v.playing && v.preview_pending.is_none() {
-                                        v.cursor_seconds = v.playback_range().start().seconds();
-                                        let input = v.cursor.clone();
-                                        if let Some(window) = cx.windows().first().copied() {
-                                            let _ =
-                                                cx.update_window(window, move |_, window, cx| {
-                                                    input.update(cx, |s, cx| {
-                                                        s.set_value(0., window, cx)
-                                                    })
-                                                });
-                                        }
-                                    }
-                                    v.playing = false
+                            // A report asked for before the player was told to stop, pause
+                            // or move describes a sound this panel no longer follows.
+                            if v.generation != generation {
+                                return;
+                            }
+                            // The playhead held by the pointer, or moved while the next
+                            // playback starts, stays where it was put.
+                            let held = v.wave_grab.is_some() || v.preview_pending.is_some();
+                            let range = v.playback_range();
+                            let playhead = playhead_after(
+                                &status,
+                                media,
+                                v.playing,
+                                held,
+                                range.start().seconds(),
+                            );
+                            v.playing = playhead.playing;
+                            v.paused = playhead.paused;
+                            if let Some(seconds) = playhead.cursor {
+                                v.cursor_seconds = seconds;
+                                let value = ((seconds - range.start().seconds())
+                                    / range.duration().seconds())
+                                .clamp(0., 1.) as f32;
+                                let input = v.cursor.clone();
+                                if let Some(window) = cx.windows().first().copied() {
+                                    let _ = cx.update_window(window, move |_, window, cx| {
+                                        input.update(cx, |s, cx| s.set_value(value, window, cx))
+                                    });
                                 }
                             }
                             cx.notify();
@@ -465,6 +472,7 @@ impl TrimPanel {
             cx.notify();
         }
         let chapters = matches!(&command, Command::SetMediaChapters { .. });
+        let warmup = matches!(&command, Command::PreparePreview(_));
         let metadata = if let Command::UpdateMedia { metadata, .. } = &command {
             Some(metadata.clone())
         } else {
@@ -480,6 +488,16 @@ impl TrimPanel {
                 }
                 if preview {
                     view.preview_pending = None;
+                }
+                if warmup {
+                    // Decoding ahead of the first listen is a convenience: when it fails,
+                    // the first listen decodes and reports on its own.
+                    match &r {
+                        Ok(Err(e)) => eprintln!("Preview warm-up failed: {e:?}"),
+                        Err(e) => eprintln!("Preview warm-up failed: {e}"),
+                        Ok(Ok(_)) => {}
+                    }
+                    return;
                 }
                 let chapters_saved = chapters.then_some(matches!(&r, Ok(Ok(_))));
                 match r {
@@ -549,8 +567,18 @@ impl TrimPanel {
     pub(super) fn stop(&mut self, cx: &mut Context<Self>) {
         self.generation = self.generation.wrapping_add(1);
         self.playing = false;
+        self.paused = false;
         self.preview_pending = None;
         self.send(Command::StopPreview, cx);
+    }
+    /// Hold the sound where it stands: « Écouter » resumes from the playhead, which can be
+    /// moved meanwhile.
+    pub(super) fn pause(&mut self, cx: &mut Context<Self>) {
+        self.generation = self.generation.wrapping_add(1);
+        self.playing = false;
+        self.paused = true;
+        self.preview_pending = None;
+        self.send(Command::PausePreview, cx);
     }
     /// Called when the open media changes: a panel that is not shown stops asking the
     /// player for its position, and forgets a playback it no longer follows.
@@ -567,6 +595,7 @@ impl TrimPanel {
             self.active = active;
             if !active {
                 self.playing = false;
+                self.paused = false;
                 self.preview_pending = None;
             }
             cx.notify();
@@ -623,6 +652,9 @@ impl TrimPanel {
         let trim = range
             .played_from(MediaTime::from_seconds(self.cursor_seconds).unwrap_or(range.start()));
         self.cursor_seconds = trim.start().seconds();
+        // Reports of the sound being replaced, paused or not, are not for this playback.
+        self.generation = self.generation.wrapping_add(1);
+        self.paused = false;
         self.send(
             Command::PreviewTrim {
                 media: self.media.id,
@@ -636,10 +668,14 @@ impl TrimPanel {
     pub(super) fn seek(&mut self, seconds: f64, cx: &mut Context<Self>) {
         let range = self.playback_range();
         self.cursor_seconds = seconds.clamp(range.start().seconds(), range.end().seconds());
+        // Reports asked for before the move still describe the old position.
+        self.generation = self.generation.wrapping_add(1);
         if self.playing || self.preview_pending.is_some() {
-            // The playback being replaced must not report back as a failure.
-            self.generation = self.generation.wrapping_add(1);
             self.play_from_cursor(cx);
+        } else if self.paused {
+            // The pause no longer holds a place: the next listen starts at the playhead.
+            self.paused = false;
+            self.send(Command::StopPreview, cx);
         }
         cx.notify();
     }
@@ -713,6 +749,17 @@ impl TrimPanel {
             self.wave_bounds.size.width.as_f32(),
         )
     }
+    /// The waveform was laid out at `bounds`: a new width is painted again with the number
+    /// of bars that fits it.
+    pub(super) fn wave_painted(&mut self, bounds: Bounds<Pixels>, cx: &mut Context<Self>) {
+        if self.wave_bounds != bounds {
+            let repaint = self.wave_bounds.size.width != bounds.size.width;
+            self.wave_bounds = bounds;
+            if repaint {
+                cx.notify();
+            }
+        }
+    }
     fn prepare(&mut self, cx: &mut Context<Self>) {
         if self.editing.as_ref().is_some_and(|d| d.preparation.busy()) {
             return;
@@ -745,6 +792,11 @@ impl TrimPanel {
         self.stop(cx);
         self.editor_window = Some(window.window_handle());
         self.status.clear();
+        // Both listening dialogs play the original: decoding it now makes the first
+        // « Écouter » start at once.
+        if matches!(kind, AudioEditor::Trim | AudioEditor::Chapters) {
+            self.send(Command::PreparePreview(self.media.id), cx);
+        }
         match kind {
             AudioEditor::Trim => {
                 let initial = self.playback_range();
@@ -899,29 +951,32 @@ impl TrimPanel {
             )
             .into_any_element()
     }
-    /// The waveform of the whole original as bars, each coloured by `color_at` from its
-    /// position (a fraction of the media); a spinner while it is still being analysed.
+    /// The waveform of the whole original as bars, one per few pixels of the width it was
+    /// last painted at, each coloured by `color_at` from its position (a fraction of the
+    /// media); a spinner while it is still being analysed.
     pub(super) fn wave_bars(&self, color_at: impl Fn(f32) -> u32) -> Div {
-        let mut bars = div().size_full().flex().items_center().gap(px(2.));
+        let mut bars = div()
+            .size_full()
+            .flex()
+            .items_center()
+            .gap(px(WAVE_BAR_GAP));
         if let Some(w) = &self.waveform {
-            if let Some(peaks) = w
-                .levels
-                .iter()
-                .find(|v| v.len() <= 120)
-                .or_else(|| w.levels.last())
-            {
-                let count = peaks.len().max(1) as f32;
-                for (index, (lo, hi)) in peaks.iter().enumerate() {
-                    let position = (index as f32 + 0.5) / count;
-                    bars = bars.child(
-                        div()
-                            .flex_1()
-                            .min_w(px(1.))
-                            .rounded(px(4.))
-                            .h(px(((hi - lo).abs() * 60.).clamp(4., 118.)))
-                            .bg(theme::c(color_at(position))),
-                    );
-                }
+            let finest = w.levels.first().map_or(&[][..], Vec::as_slice);
+            let heights = wave_columns(
+                finest,
+                wave_column_count(self.wave_bounds.size.width.as_f32()),
+            );
+            let count = heights.len().max(1) as f32;
+            for (index, height) in heights.iter().enumerate() {
+                let position = (index as f32 + 0.5) / count;
+                bars = bars.child(
+                    div()
+                        .flex_1()
+                        .min_w(px(1.))
+                        .rounded(px(1.))
+                        .h(px((height * WAVE_HEIGHT).max(WAVE_FLOOR)))
+                        .bg(theme::c(color_at(position))),
+                );
             }
         } else {
             bars = bars.justify_center().child(
@@ -1000,7 +1055,7 @@ impl TrimPanel {
             )
             .on_key_down(cx.listener(|v, event: &KeyDownEvent, _, cx| v.wave_key(event, cx)))
             .on_prepaint(move |bounds, _, cx| {
-                panel.update(cx, |v, _| v.wave_bounds = bounds);
+                panel.update(cx, |v, cx| v.wave_painted(bounds, cx));
             })
             .child(
                 div()
@@ -1161,13 +1216,13 @@ impl TrimPanel {
                             .label(if self.preview_pending.is_some() {
                                 tr!("Préparation de l’écoute…")
                             } else if self.playing {
-                                tr!("Arrêter l’écoute")
+                                tr!("Pause")
                             } else {
                                 tr!("Écouter la sélection")
                             })
                             .on_click(cx.listener(|v, _, _, cx| {
                                 if v.playing {
-                                    v.stop(cx);
+                                    v.pause(cx);
                                 } else {
                                     // From the playhead, which a click on the waveform moves.
                                     v.play_from_cursor(cx);
@@ -1858,6 +1913,81 @@ pub(super) fn wave_time(x: f32, width: f32, duration: MediaTime) -> f64 {
     }
     f64::from((x / width).clamp(0., 1.)) * duration.seconds()
 }
+/// The playhead after the player reported `status` to the panel of `media`, which was
+/// `playing` or not, and whose playhead is `held` by the pointer or by a playback about to
+/// start: it follows a sound that plays, stays where a pause left it, returns to `start`
+/// once the sound it followed ran to its end, and is left alone otherwise.
+pub(super) fn playhead_after(
+    status: &PreviewStatus,
+    media: MediaId,
+    playing: bool,
+    held: bool,
+    start: f64,
+) -> Playhead {
+    match status {
+        PreviewStatus::Playing {
+            media: id,
+            position,
+        } if *id == media => Playhead {
+            playing: true,
+            paused: false,
+            cursor: (!held).then(|| position.seconds()),
+        },
+        PreviewStatus::Paused {
+            media: id,
+            position,
+        } if *id == media => Playhead {
+            playing: false,
+            paused: true,
+            cursor: (!held).then(|| position.seconds()),
+        },
+        PreviewStatus::Playing { .. } | PreviewStatus::Paused { .. } | PreviewStatus::Stopped => {
+            Playhead {
+                playing: false,
+                paused: false,
+                cursor: (playing && !held).then_some(start),
+            }
+        }
+    }
+}
+/// How many bars a waveform `width` pixels wide gets, before it is measured as well.
+fn wave_column_count(width: f32) -> usize {
+    if width <= 0. {
+        return WAVE_COLUMNS_UNMEASURED;
+    }
+    ((width / WAVE_BAR_PITCH).floor() as usize).max(1)
+}
+/// The height of each of `columns` bars, from 0 for silence to 1 for the loudest, out of the
+/// finest `peaks` of a waveform (the lowest and highest sample of each stretch). A bar
+/// averages the swing of the stretches it covers, so a pause inside it still lowers it
+/// instead of hiding behind the loudest moment. The bars are then scaled to the loudest
+/// one, so a quiet recording still fills the height; a file with nothing louder than
+/// [`WAVE_QUIETEST`] is left flat rather than blown up.
+pub(super) fn wave_columns(peaks: &[(f32, f32)], columns: usize) -> Vec<f32> {
+    if peaks.is_empty() || columns == 0 {
+        return vec![];
+    }
+    let count = peaks.len();
+    let mut heights: Vec<f32> = (0..columns)
+        .map(|column| {
+            let from = column * count / columns;
+            let to = ((column + 1) * count / columns).clamp(from + 1, count);
+            let swing: f32 = peaks[from..to]
+                .iter()
+                .map(|(lo, hi)| (hi - lo).max(0.) / 2.)
+                .sum();
+            swing / (to - from) as f32
+        })
+        .collect();
+    let loudest = heights.iter().copied().fold(WAVE_QUIETEST, f32::max);
+    for height in &mut heights {
+        *height /= loudest;
+    }
+    heights
+}
+/// The swing (half the distance between the lowest and highest sample, averaged over a
+/// bar) under which a whole file counts as silent: about −26 dBFS.
+const WAVE_QUIETEST: f32 = 0.05;
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1886,6 +2016,125 @@ mod tests {
         assert_eq!(wave_time(-40., 600., duration), 0.);
         assert_eq!(wave_time(900., 600., duration), 120.);
         assert_eq!(wave_time(10., 0., duration), 0.);
+    }
+    #[core::prelude::v1::test]
+    fn silence_between_songs_shows_as_low_bars() {
+        // Ten stretches: a loud song, two of silence, a quieter song, a last loud moment.
+        let loud = (-0.8, 0.8);
+        let quiet = (-0.2, 0.2);
+        let silent = (-0.001, 0.001);
+        let peaks = [
+            loud, loud, loud, silent, silent, quiet, quiet, quiet, quiet, loud,
+        ];
+        let bars = wave_columns(&peaks, 10);
+        assert_eq!(bars.len(), 10);
+        assert!((bars[0] - 1.).abs() < 1e-6 && (bars[9] - 1.).abs() < 1e-6);
+        assert!(bars[3] < 0.01 && bars[4] < 0.01, "{bars:?}");
+        assert!((bars[5] - 0.25).abs() < 1e-6, "{bars:?}");
+        // Fewer bars than stretches: a bar over a song and a pause dips, and never
+        // hides the pause behind the song's loudest moment.
+        let five = wave_columns(&peaks, 5);
+        assert_eq!(five.len(), 5);
+        assert!((five[0] - 1.).abs() < 1e-6, "{five:?}");
+        assert!(five[1] > 0.4 && five[1] < 0.6, "{five:?}");
+        assert!(five[2] < 0.3, "{five:?}");
+        // More bars than stretches: each stretch is repeated, nothing is skipped.
+        let twenty = wave_columns(&peaks, 20);
+        assert_eq!(twenty.len(), 20);
+        assert!(
+            twenty[6] < 0.01 && twenty[7] < 0.01 && twenty[8] < 0.01,
+            "{twenty:?}"
+        );
+        // A file of silence stays flat rather than being blown up to full height.
+        assert!(wave_columns(&[silent; 4], 4).iter().all(|h| *h < 0.05));
+        assert!(wave_columns(&[(0., 0.); 4], 4).iter().all(|h| *h == 0.));
+        assert!(wave_columns(&[], 4).is_empty());
+        assert!(wave_columns(&peaks, 0).is_empty());
+    }
+    #[core::prelude::v1::test]
+    fn the_number_of_bars_follows_the_painted_width() {
+        assert_eq!(wave_column_count(0.), WAVE_COLUMNS_UNMEASURED);
+        assert_eq!(wave_column_count(792.), 264);
+        assert_eq!(wave_column_count(2.), 1);
+    }
+    #[core::prelude::v1::test]
+    fn the_playhead_follows_pauses_and_returns_to_the_start_when_the_sound_ends() {
+        let media = MediaId::new();
+        let other = MediaId::new();
+        let at = |seconds: f64| MediaTime::from_seconds(seconds).unwrap();
+        let playing = PreviewStatus::Playing {
+            media,
+            position: at(42.5),
+        };
+        assert_eq!(
+            playhead_after(&playing, media, false, false, 10.),
+            Playhead {
+                playing: true,
+                paused: false,
+                cursor: Some(42.5)
+            }
+        );
+        // Held by the pointer: the sound is followed, the playhead is not moved.
+        assert_eq!(
+            playhead_after(&playing, media, true, true, 10.),
+            Playhead {
+                playing: true,
+                paused: false,
+                cursor: None
+            }
+        );
+        // A pause keeps its place, so that a chapter can be marked right there.
+        let paused = PreviewStatus::Paused {
+            media,
+            position: at(42.5),
+        };
+        assert_eq!(
+            playhead_after(&paused, media, true, false, 10.),
+            Playhead {
+                playing: false,
+                paused: true,
+                cursor: Some(42.5)
+            }
+        );
+        assert_eq!(
+            playhead_after(&paused, media, false, true, 10.),
+            Playhead {
+                playing: false,
+                paused: true,
+                cursor: None
+            }
+        );
+        // The sound ran to its end: back to the start, ready for the next listen.
+        assert_eq!(
+            playhead_after(&PreviewStatus::Stopped, media, true, false, 10.),
+            Playhead {
+                playing: false,
+                paused: false,
+                cursor: Some(10.)
+            }
+        );
+        // Nothing was playing here: a stop elsewhere leaves the playhead alone.
+        assert_eq!(
+            playhead_after(&PreviewStatus::Stopped, media, false, false, 10.),
+            Playhead {
+                playing: false,
+                paused: false,
+                cursor: None
+            }
+        );
+        // Another media playing is no concern of this panel.
+        let elsewhere = PreviewStatus::Playing {
+            media: other,
+            position: at(3.),
+        };
+        assert_eq!(
+            playhead_after(&elsewhere, media, false, false, 10.),
+            Playhead {
+                playing: false,
+                paused: false,
+                cursor: None
+            }
+        );
     }
     #[core::prelude::v1::test]
     fn float_slider_end_does_not_exceed_probed_duration() {
