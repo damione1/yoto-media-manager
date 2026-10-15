@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse,pathlib,plistlib,shutil,subprocess
+import argparse,json,pathlib,plistlib,shutil,subprocess
 from distribution_utils import app_version,write_manifest,stage_dmg
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('--target',required=True);p.add_argument('--identity',required=True);p.add_argument('--dev',action='store_true');p.add_argument('--notarize-profile');p.add_argument('--output-dir',type=pathlib.Path,help='Directory for this build, leaving another running bundle untouched');a=p.parse_args()
@@ -22,6 +22,13 @@ shutil.copy2(ROOT/'assets/branding/app-icon.icns',resources/'app-icon.icns')
 info={'CFBundleName':name,'CFBundleDisplayName':name,'CFBundleIdentifier':'dev.yoto.desktop'+('.dev' if a.dev else ''),'CFBundleExecutable':'yoto-desktop','CFBundlePackageType':'APPL','CFBundleShortVersionString':bundle_version,'CFBundleVersion':bundle_version,'CFBundleIconFile':'app-icon.icns','LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True,'NSMicrophoneUsageDescription':'Audio output and local preview.'}
 with open(out/'Contents/Info.plist','wb') as f:plistlib.dump(info,f)
 def run(args):subprocess.run([str(v) for v in args],check=True)
+def notarize(path):
+    # Print Apple's own log when a submission is refused, so a failed release says why.
+    result=subprocess.run(['xcrun','notarytool','submit',str(path),'--keychain-profile',a.notarize_profile,'--wait','--output-format','json'],capture_output=True,text=True);print(result.stdout,result.stderr)
+    submission=json.loads(result.stdout or '{}')
+    if result.returncode or submission.get('status')!='Accepted':
+        if submission.get('id'):run(['xcrun','notarytool','log',submission['id'],'--keychain-profile',a.notarize_profile])
+        raise SystemExit('Notarization was not accepted')
 # The upstream ZIP flattened framework symlinks into copies. Restore the canonical
 # layout before signing; otherwise Apple detects an ambiguous app/framework bundle.
 for framework in out.rglob('Python.framework'):
@@ -46,7 +53,7 @@ tools=resources/'tools';write_manifest(tools,a.target)
 run(['codesign','--force','--timestamp','--options','runtime','--sign',a.identity,out]);run(['codesign','--verify','--deep','--strict','--verbose=2',out])
 run([mac/'yoto-mcp','--self-test'])
 if not a.dev:
-    archive=out.parent/'notarize.zip';run(['ditto','-c','-k','--keepParent',out,archive]);run(['xcrun','notarytool','submit',archive,'--keychain-profile',a.notarize_profile,'--wait']);run(['xcrun','stapler','staple',out]);run(['xcrun','stapler','validate',out]);run(['spctl','--assess','--type','execute','--verbose=4',out])
+    archive=out.parent/'notarize.zip';run(['ditto','-c','-k','--keepParent',out,archive]);notarize(archive);run(['xcrun','stapler','staple',out]);run(['xcrun','stapler','validate',out]);run(['spctl','--assess','--type','execute','--verbose=4',out])
     staging=stage_dmg(out,out.parent);stage=pathlib.Path(staging.name)
-    dmg=out.parent/f'YotoMediaManager-{version}-{a.target}.dmg';run(['hdiutil','create','-volname','YotoMediaManager','-srcfolder',stage,'-ov','-format','UDZO',dmg]);run(['codesign','--timestamp','--sign',a.identity,dmg]);run(['xcrun','notarytool','submit',dmg,'--keychain-profile',a.notarize_profile,'--wait']);run(['xcrun','stapler','staple',dmg]);run(['xcrun','stapler','validate',dmg]);staging.cleanup()
+    dmg=out.parent/f'YotoMediaManager-{version}-{a.target}.dmg';run(['hdiutil','create','-volname','YotoMediaManager','-srcfolder',stage,'-ov','-format','UDZO',dmg]);run(['codesign','--timestamp','--sign',a.identity,dmg]);notarize(dmg);run(['xcrun','stapler','staple',dmg]);run(['xcrun','stapler','validate',dmg]);staging.cleanup()
 print(out)
