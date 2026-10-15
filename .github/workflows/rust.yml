@@ -3,8 +3,14 @@ name: Rust
 # Work happens on develop; these checks run on pull requests into master, and
 # a release only builds and signs a master commit whose pull request passed
 # here (see release.yml).
+#
+# Caches written by master are the only ones every pull request and release
+# tag can read, so after each merge `warm` compiles (without testing) what the
+# checks and the release build need, and saves it.
 on:
   pull_request:
+    branches: [master]
+  push:
     branches: [master]
   workflow_dispatch:
 concurrency:
@@ -16,6 +22,7 @@ env:
   YOTO_CLIENT_ID: ${{ secrets.YOTO_CLIENT_ID }}
 jobs:
   fmt:
+    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,6 +31,7 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
   checks:
+    if: github.event_name != 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -41,12 +49,13 @@ jobs:
         with:
           targets: ${{ matrix.target }}
           components: clippy
-      # Cached per pull request, so a fix pushed to it rebuilds only what changed.
+      # Starts from master's cache; also saved for this pull request, even
+      # when a check fails, so the fix pushed next rebuilds only what changed.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           shared-key: ${{ matrix.target }}
-      # The sidecars (FFmpeg is compiled on macOS) only change with their pins;
-      # sidecars.yml keeps them cached on master, where every run can read them.
+          cache-on-failure: true
+      # The sidecars (FFmpeg is compiled on macOS) only change with their pins.
       - id: tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -68,3 +77,39 @@ jobs:
         run: |
           cargo build -p yoto-mcp --locked --target ${{ matrix.target }}
           python3 tests/mcp_smoke.py --executable target/${{ matrix.target }}/debug/yoto-mcp${{ runner.os == 'Windows' && '.exe' || '' }} --tools tools/${{ matrix.target }}
+  warm:
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          shared-key: ${{ matrix.target }}
+      - id: tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tools/${{ matrix.target }}
+          key: tools-${{ matrix.target }}-${{ hashFiles('distribution/**', 'scripts/prepare_tools.py', 'scripts/distribution_utils.py', 'LICENSE') }}
+      - if: runner.os == 'macOS'
+        run: brew install nasm
+      - if: runner.os == 'Windows'
+        run: choco install strawberryperl nasm -y --no-progress
+      - if: steps.tools.outputs.cache-hit != 'true'
+        run: python3 scripts/prepare_tools.py --target ${{ matrix.target }}
+      - run: cargo clippy -p yoto-domain -p yoto-infra -p yoto-desktop -p yoto-mcp -p yoto-updater --all-targets --no-deps --locked --target ${{ matrix.target }}
+      - run: cargo test --workspace --locked --target ${{ matrix.target }} --no-run
+      - run: cargo build --workspace --release --locked --target ${{ matrix.target }}
