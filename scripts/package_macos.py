@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse,json,pathlib,plistlib,shutil,subprocess
+import argparse,json,pathlib,plistlib,shutil,subprocess,time
 from distribution_utils import app_version,write_manifest,stage_dmg
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('--target',required=True);p.add_argument('--identity',required=True);p.add_argument('--dev',action='store_true');p.add_argument('--notarize-profile');p.add_argument('--output-dir',type=pathlib.Path,help='Directory for this build, leaving another running bundle untouched');a=p.parse_args()
@@ -29,6 +29,14 @@ def notarize(path):
     if result.returncode or submission.get('status')!='Accepted':
         if submission.get('id'):run(['xcrun','notarytool','log',submission['id'],'--keychain-profile',a.notarize_profile])
         raise SystemExit('Notarization was not accepted')
+def staple(path):
+    # stapler fetches the ticket from Apple and validates it in the same call ("The staple and
+    # validate action worked!"). It is retried because the runners sometimes lose that connection;
+    # a separate `stapler validate` made a second lookup that failed the same way on Intel.
+    for attempt in range(5):
+        if subprocess.run(['xcrun','stapler','staple',str(path)]).returncode==0:return
+        time.sleep(30*(attempt+1))
+    raise SystemExit(f'Could not staple the notarization ticket to {path.name}')
 # The upstream ZIP flattened framework symlinks into copies. Restore the canonical
 # layout before signing; otherwise Apple detects an ambiguous app/framework bundle.
 for framework in out.rglob('Python.framework'):
@@ -56,7 +64,7 @@ tools=resources/'tools';write_manifest(tools,a.target)
 run(['codesign','--force','--timestamp','--options','runtime','--sign',a.identity,out]);run(['codesign','--verify','--deep','--strict','--verbose=2',out])
 run([mac/'yoto-mcp','--self-test'])
 if not a.dev:
-    archive=out.parent/'notarize.zip';run(['ditto','-c','-k','--keepParent',out,archive]);notarize(archive);run(['xcrun','stapler','staple',out]);run(['xcrun','stapler','validate',out]);run(['spctl','--assess','--type','execute','--verbose=4',out])
+    archive=out.parent/'notarize.zip';run(['ditto','-c','-k','--keepParent',out,archive]);notarize(archive);staple(out);run(['spctl','--assess','--type','execute','--verbose=4',out])
     staging=stage_dmg(out,out.parent);stage=pathlib.Path(staging.name)
-    dmg=out.parent/f'YotoMediaManager-{version}-{a.target}.dmg';run(['hdiutil','create','-volname','YotoMediaManager','-srcfolder',stage,'-ov','-format','UDZO',dmg]);run(['codesign','--timestamp','--sign',a.identity,dmg]);notarize(dmg);run(['xcrun','stapler','staple',dmg]);run(['xcrun','stapler','validate',dmg]);staging.cleanup()
+    dmg=out.parent/f'YotoMediaManager-{version}-{a.target}.dmg';run(['hdiutil','create','-volname','YotoMediaManager','-srcfolder',stage,'-ov','-format','UDZO',dmg]);run(['codesign','--timestamp','--sign',a.identity,dmg]);notarize(dmg);staple(dmg);run(['spctl','--assess','--type','open','--context','context:primary-signature','--verbose=4',dmg]);staging.cleanup()
 print(out)
