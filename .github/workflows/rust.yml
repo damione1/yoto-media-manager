@@ -1,0 +1,84 @@
+name: Rust
+# Formatting, lints, tests and the MCP smoke test on every platform we ship.
+# Runs on pull requests that touch the app and on every push to master; a
+# release only builds and signs a commit that passed here (see release.yml).
+on:
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain*'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'distribution/**'
+      - '.github/workflows/rust.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+env:
+  YOTO_CLIENT_ID: ${{ secrets.YOTO_CLIENT_ID }}
+jobs:
+  fmt:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy
+      # One cache per target, written only by master so pull requests and
+      # release tags (which can read master's caches) start warm.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          shared-key: ${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+      # The sidecars (FFmpeg is compiled on macOS) only change with their pins.
+      - id: tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tools/${{ matrix.target }}
+          key: tools-${{ matrix.target }}-${{ hashFiles('distribution/**', 'scripts/prepare_tools.py', 'scripts/distribution_utils.py', 'LICENSE') }}
+      # nasm builds FFmpeg and aws-lc; Strawberry Perl builds aws-lc on Windows.
+      - if: runner.os == 'macOS'
+        run: brew install nasm
+      - if: runner.os == 'Windows'
+        run: choco install strawberryperl nasm -y --no-progress
+      - if: steps.tools.outputs.cache-hit != 'true'
+        run: python3 scripts/prepare_tools.py --target ${{ matrix.target }}
+      - run: cargo clippy -p yoto-domain -p yoto-infra -p yoto-desktop -p yoto-mcp -p yoto-updater --all-targets --no-deps --locked --target ${{ matrix.target }} -- -D warnings -D clippy::wildcard_enum_match_arm
+      - run: cargo test --workspace --locked --target ${{ matrix.target }}
+        env:
+          YOTO_TEST_TOOLS: ${{ github.workspace }}/tools/${{ matrix.target }}
+      - name: Validate MCP protocol with isolated debug catalogue
+        shell: bash
+        run: |
+          cargo build -p yoto-mcp --locked --target ${{ matrix.target }}
+          python3 tests/mcp_smoke.py --executable target/${{ matrix.target }}/debug/yoto-mcp${{ runner.os == 'Windows' && '.exe' || '' }} --tools tools/${{ matrix.target }}
+      # Keeps master's cache holding release artifacts too, so a release tag
+      # only recompiles the workspace crates.
+      - if: github.ref == 'refs/heads/master'
+        run: cargo build --workspace --release --locked --target ${{ matrix.target }}

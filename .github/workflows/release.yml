@@ -7,6 +7,7 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: read
+  actions: read
 env:
   YOTO_CLIENT_ID: ${{ secrets.YOTO_CLIENT_ID }}
 jobs:
@@ -19,6 +20,17 @@ jobs:
       - name: Derive the version from the release tag
         id: version
         run: python3 scripts/release_version.py >> "$GITHUB_OUTPUT"
+      # Formatting, lints and tests ran in rust.yml on master; the release only
+      # builds, signs and publishes a commit that passed them.
+      - name: Require passing Rust checks for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rust.yml/runs?head_sha=$GITHUB_SHA&status=success&event=push" --jq .total_count)
+          if [ "$passed" = 0 ]; then
+            echo "::error::The Rust checks have not passed on master for $GITHUB_SHA. Wait for them, or fix them, then push the tag again."
+            exit 1
+          fi
   apple:
     needs: version
     strategy:
@@ -52,8 +64,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
         with:
           targets: ${{ matrix.target }}
-          components: rustfmt, clippy
+      # Reads the cache master's Rust checks keep warm; tags never write it.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          shared-key: ${{ matrix.target }}
+          save-if: false
+      - id: tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tools/${{ matrix.target }}
+          key: tools-${{ matrix.target }}-${{ hashFiles('distribution/**', 'scripts/prepare_tools.py', 'scripts/distribution_utils.py', 'LICENSE') }}
       - name: Import identity into temporary keychain
         shell: bash
         run: |
@@ -71,16 +91,8 @@ jobs:
           rm "$RUNNER_TEMP/yoto-certificate.p12"
       - name: Install release tools
         run: brew install minisign nasm
-      - run: python3 scripts/prepare_tools.py --target ${{ matrix.target }}
-      - run: cargo fmt --all --check
-      - run: cargo clippy -p yoto-domain -p yoto-infra -p yoto-desktop -p yoto-mcp -p yoto-updater --all-targets --no-deps --locked --target ${{ matrix.target }} -- -D warnings -D clippy::wildcard_enum_match_arm
-      - run: cargo test --workspace --locked --target ${{ matrix.target }}
-        env:
-          YOTO_TEST_TOOLS: ${{ github.workspace }}/tools/${{ matrix.target }}
-      - name: Validate MCP protocol with isolated debug catalogue
-        run: |
-          cargo build -p yoto-mcp --locked --target ${{ matrix.target }}
-          python3 tests/mcp_smoke.py --executable target/${{ matrix.target }}/debug/yoto-mcp --tools tools/${{ matrix.target }}
+      - if: steps.tools.outputs.cache-hit != 'true'
+        run: python3 scripts/prepare_tools.py --target ${{ matrix.target }}
       - run: cargo build --workspace --release --locked --target ${{ matrix.target }}
       - name: Sign every sidecar, notarize, staple and validate
         run: python3 scripts/package_macos.py --target ${{ matrix.target }} --identity "$APPLE_SIGNING_IDENTITY" --notarize-profile yoto-release
@@ -117,22 +129,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
         with:
           targets: x86_64-pc-windows-msvc
-          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          shared-key: x86_64-pc-windows-msvc
+          save-if: false
+      - id: tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tools/x86_64-pc-windows-msvc
+          key: tools-x86_64-pc-windows-msvc-${{ hashFiles('distribution/**', 'scripts/prepare_tools.py', 'scripts/distribution_utils.py', 'LICENSE') }}
       - run: choco install strawberryperl nasm innosetup minisign -y --no-progress
-      - run: python3 scripts/prepare_tools.py --target x86_64-pc-windows-msvc
-      - run: cargo fmt --all --check
-      - run: cargo clippy -p yoto-domain -p yoto-infra -p yoto-desktop -p yoto-mcp -p yoto-updater --all-targets --no-deps --locked --target x86_64-pc-windows-msvc -- -D warnings -D clippy::wildcard_enum_match_arm
-      - run: cargo test --workspace --locked --target x86_64-pc-windows-msvc
-        env:
-          YOTO_TEST_TOOLS: ${{ github.workspace }}/tools/x86_64-pc-windows-msvc
-      - name: Validate MCP protocol with isolated debug catalogue
-        shell: pwsh
-        run: |
-          cargo build -p yoto-mcp --locked --target x86_64-pc-windows-msvc
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python3 tests/mcp_smoke.py --executable target/x86_64-pc-windows-msvc/debug/yoto-mcp.exe --tools tools/x86_64-pc-windows-msvc
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - if: steps.tools.outputs.cache-hit != 'true'
+        run: python3 scripts/prepare_tools.py --target x86_64-pc-windows-msvc
       - run: cargo build --workspace --release --locked --target x86_64-pc-windows-msvc
       - name: Validate packaged sidecars
         shell: pwsh

@@ -1,0 +1,2 @@
+# Signed and checksummed fixtures must keep their exact bytes on Windows checkouts.
+tests/fixtures/** -text
