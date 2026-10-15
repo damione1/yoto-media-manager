@@ -20,15 +20,20 @@ jobs:
       - name: Derive the version from the release tag
         id: version
         run: python3 scripts/release_version.py >> "$GITHUB_OUTPUT"
-      # Formatting, lints and tests ran in rust.yml on master; the release only
-      # builds, signs and publishes a commit that passed them.
+      # Formatting, lints and tests ran in rust.yml on the pull request that
+      # brought this commit into master; the release only builds, signs and
+      # publishes. A manual rust.yml run on the commit itself also counts.
       - name: Require passing Rust checks for this commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/rust.yml/runs?head_sha=$GITHUB_SHA&status=success&event=push" --jq .total_count)
+          runs="repos/$GITHUB_REPOSITORY/actions/workflows/rust.yml/runs?status=success"
+          head=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[] | select(.base.ref == "master" and .merged_at != null)][0].head.sha // empty')
+          passed=0
+          if [ -n "$head" ]; then passed=$(gh api "$runs&event=pull_request&head_sha=$head" --jq .total_count); fi
+          if [ "$passed" = 0 ]; then passed=$(gh api "$runs&event=workflow_dispatch&head_sha=$GITHUB_SHA" --jq .total_count); fi
           if [ "$passed" = 0 ]; then
-            echo "::error::The Rust checks have not passed on master for $GITHUB_SHA. Wait for them, or fix them, then push the tag again."
+            echo "::error::No passing Rust checks for $GITHUB_SHA: tag a master commit merged from a pull request whose checks passed, or run rust.yml on it."
             exit 1
           fi
   apple:
@@ -64,7 +69,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@a2627de80e5819949c7e1c83ed99b29085fc9bc4
         with:
           targets: ${{ matrix.target }}
-      # Reads the cache master's Rust checks keep warm; tags never write it.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           shared-key: ${{ matrix.target }}

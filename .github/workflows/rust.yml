@@ -1,19 +1,10 @@
 name: Rust
 # Formatting, lints, tests and the MCP smoke test on every platform we ship.
-# Runs on pull requests that touch the app and on every push to master; a
-# release only builds and signs a commit that passed here (see release.yml).
+# Work happens on develop; these checks run on pull requests into master, and
+# a release only builds and signs a master commit whose pull request passed
+# here (see release.yml).
 on:
   pull_request:
-    paths:
-      - 'crates/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'rust-toolchain*'
-      - 'scripts/**'
-      - 'tests/**'
-      - 'distribution/**'
-      - '.github/workflows/rust.yml'
-  push:
     branches: [master]
   workflow_dispatch:
 concurrency:
@@ -50,13 +41,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
           components: clippy
-      # One cache per target, written only by master so pull requests and
-      # release tags (which can read master's caches) start warm.
+      # Cached per pull request, so a fix pushed to it rebuilds only what changed.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           shared-key: ${{ matrix.target }}
-          save-if: ${{ github.ref == 'refs/heads/master' }}
-      # The sidecars (FFmpeg is compiled on macOS) only change with their pins.
+      # The sidecars (FFmpeg is compiled on macOS) only change with their pins;
+      # sidecars.yml keeps them cached on master, where every run can read them.
       - id: tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -78,7 +68,3 @@ jobs:
         run: |
           cargo build -p yoto-mcp --locked --target ${{ matrix.target }}
           python3 tests/mcp_smoke.py --executable target/${{ matrix.target }}/debug/yoto-mcp${{ runner.os == 'Windows' && '.exe' || '' }} --tools tools/${{ matrix.target }}
-      # Keeps master's cache holding release artifacts too, so a release tag
-      # only recompiles the workspace crates.
-      - if: github.ref == 'refs/heads/master'
-        run: cargo build --workspace --release --locked --target ${{ matrix.target }}
