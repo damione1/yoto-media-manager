@@ -284,6 +284,21 @@ fn part_titles_follow_the_client_wording() {
     );
 }
 #[test]
+fn unnamed_marks_are_numbered_shortly_in_the_client_wording() {
+    assert_eq!(mark_title_with(MARK_TITLE, 2, 8), "Partie 2");
+    assert_eq!(
+        mark_title_with("Part {part} of {parts}", 2, 8),
+        "Part 2 of 8"
+    );
+    // A template that would lose the numbering is not used.
+    assert_eq!(mark_title_with("Chapitre", 3, 8), "Partie 3");
+    let long = format!("{} {{part}}", "x".repeat(200));
+    assert_eq!(
+        mark_title_with(&long, 1, 2).chars().count(),
+        Rules::TITLE_MAX
+    );
+}
+#[test]
 fn a_long_media_becomes_one_chapter_of_ordered_parts() {
     let media = MediaItem {
         id: MediaId::new(),

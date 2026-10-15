@@ -70,9 +70,10 @@ pub struct MediaItem {
     pub chapters: Vec<MediaChapter>,
 }
 /// A chapter marked on a media of the library: where it starts in the original audio and
-/// its title, empty for the default wording (« <title> — part n/N »). Marks cover the
-/// whole original: the first chapter starts at zero and each one ends where the next
-/// begins, or at the end of the audio. See [`MediaItem::set_chapters`].
+/// its title, empty for the default wording (« Partie n », see [`MARK_TITLE`]). Marks
+/// cover the whole original: the first chapter starts at zero and each one ends where the
+/// next begins, or at the end of the audio. Added to a playlist, the media becomes one
+/// chapter holding one track per mark. See [`MediaItem::set_chapters`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct MediaChapter {
     pub start: MediaTime,
@@ -110,17 +111,18 @@ pub fn validate_chapters(chapters: &[MediaChapter], duration: MediaTime) -> Resu
     }
     Ok(())
 }
-/// A chapter a version of a media becomes in a playlist: its title when the mark has
-/// one, and the ranges of the original to prepare, one per Yoto track (see [`plan_parts`]).
+/// A span of a version of a media, as cut by its chapter marks: the title of the mark
+/// when it has one, and the ranges of the original to prepare, one per Yoto track (see
+/// [`plan_parts`]). In a playlist, every span is a track of the media's chapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlannedChapter {
     pub title: Option<String>,
     pub ranges: Vec<TrimRange>,
 }
-/// Cut the version `trim` of a media along its `chapters`: one planned chapter per mark
-/// whose span overlaps the kept range, in order, holding the part of the span that is
-/// kept. Marks outside the kept range are left out. A media without marks is one unnamed
-/// chapter. Every range is further cut by [`plan_parts`] when too long for one track.
+/// Cut the version `trim` of a media along its `chapters`: one planned span per mark
+/// that overlaps the kept range, in order, holding the part of the mark that is kept.
+/// Marks outside the kept range are left out. A media without marks is one unnamed span.
+/// Every range is further cut by [`plan_parts`] when too long for one track.
 pub fn plan_chapters(trim: TrimRange, chapters: &[MediaChapter]) -> Vec<PlannedChapter> {
     if chapters.len() < 2 {
         return vec![PlannedChapter {
@@ -255,6 +257,26 @@ pub fn plan_parts(range: TrimRange) -> Vec<TrimRange> {
         .map(|k| {
             TrimRange::new(bound(k), bound(k + 1), range.end()).expect("non-empty ordered part")
         })
+        .collect()
+}
+/// Title of the track an unnamed chapter mark becomes (see [`MediaChapter`]): short, since
+/// it sits under the chapter named like the media; `{part}` and `{parts}` are replaced.
+/// Clients may pass their own wording of it (see [`mark_title_with`]).
+pub const MARK_TITLE: &str = "Partie {part}";
+/// Title for the unnamed mark `part` of `parts` from `template`, cut to
+/// [`Rules::TITLE_MAX`]. A template without `{part}` falls back to [`MARK_TITLE`], so a
+/// mark is always numbered.
+pub fn mark_title_with(template: &str, part: usize, parts: usize) -> String {
+    let template = if template.contains("{part}") {
+        template
+    } else {
+        MARK_TITLE
+    };
+    template
+        .replace("{parts}", &parts.to_string())
+        .replace("{part}", &part.to_string())
+        .chars()
+        .take(Rules::TITLE_MAX)
         .collect()
 }
 /// Title of each part of a long audio; `{title}`, `{part}` and `{parts}` are replaced.

@@ -29,10 +29,10 @@ Un livre audio ou un long enregistrement peut arriver dans une playlist déjà d
 
 1. Choisissez `Marquer des chapitres` sous `Découper l’audio`. Le dialogue montre la forme d’onde de tout l’original.
 2. Écoutez, cliquez sur la forme d’onde pour placer la tête de lecture là où une nouvelle partie commence, puis choisissez `Ajouter un chapitre ici`. Un repère apparaît sur la forme d’onde ; faites-le glisser pour l’ajuster, et les flèches du clavier déplacent la tête de lecture de quelques secondes.
-3. Chaque chapitre obtenu est listé avec son début, sa fin et sa durée. Saisissez-lui un titre, ou laissez le champ vide pour obtenir « <titre> — partie 1/3 », « partie 2/3 »… `Écouter` joue depuis le début du chapitre ; `Retirer` supprime un repère.
+3. Chaque chapitre obtenu est listé avec son début, sa fin et sa durée. Saisissez-lui un titre, ou laissez le champ vide pour obtenir « Partie 1 », « Partie 2 »… `Écouter` joue depuis le début du chapitre ; `Retirer` supprime un repère.
 4. Choisissez `Enregistrer`. La ligne de la médiathèque et le panneau latéral indiquent alors combien de chapitres l’audio contient.
 
-Les repères sont enregistrés avec l’audio sur votre ordinateur ; l’original reste intact. Quand vous ajoutez l’audio à une playlist, chaque chapitre devient un chapitre de la playlist, avec son titre et l’icône du média ; un chapitre de plus de 55 minutes est aussi découpé en parties. Les repères vivent sur l’original : avec une version découpée, seuls les repères à l’intérieur de la plage gardée sont utilisés, et le dialogue grise le reste pour le montrer. `Retirer tous les chapitres` revient à une seule piste. Les playlists qui contiennent déjà l’audio ne sont pas modifiées.
+Les repères sont enregistrés avec l’audio sur votre ordinateur ; l’original reste intact. Quand vous ajoutez l’audio à une playlist, il arrive en un seul chapitre, nommé comme l’audio et portant son icône, avec une piste par repère au titre que vous lui avez donné : l’éditeur de playlist le montre regroupé sous son en-tête, et les boutons du lecteur passent d’une piste à la suivante. Un repère de plus de 55 minutes est aussi découpé en parties. Les repères vivent sur l’original : avec une version découpée, seuls les repères à l’intérieur de la plage gardée sont utilisés, et le dialogue grise le reste pour le montrer. `Retirer tous les chapitres` revient à une seule piste. Les playlists qui contiennent déjà l’audio ne sont pas modifiées.
 
 ## Rendre le volume plus régulier
 

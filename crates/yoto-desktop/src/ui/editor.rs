@@ -1149,6 +1149,7 @@ impl PlaylistEditor {
                 card,
                 media: batch.media,
                 part_title: Some(wording::part_title_template().into()),
+                mark_title: Some(wording::mark_title_template().into()),
                 chapter: batch.chapter,
             },
             CommitTarget::MediaPicker,

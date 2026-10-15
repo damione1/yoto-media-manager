@@ -88,6 +88,7 @@ pub async fn smoke(tools: Tools) -> Result<()> {
             playlist: p,
             media: vec![(media.id, recipe)],
             part_title: None,
+            mark_title: None,
             chapter: None,
         })
         .await?;

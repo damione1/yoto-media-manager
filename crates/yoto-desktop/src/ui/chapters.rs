@@ -94,12 +94,8 @@ impl TrimPanel {
         };
         let count = draft.titles.len();
         for (index, input) in draft.titles.iter().enumerate() {
-            let title = yoto_domain::part_title_with(
-                wording::part_title_template(),
-                &self.media.title,
-                index + 1,
-                count,
-            );
+            let title =
+                yoto_domain::mark_title_with(wording::mark_title_template(), index + 1, count);
             input.update(cx, |s, cx| s.set_placeholder(title, window, cx));
         }
     }
@@ -462,7 +458,7 @@ impl TrimPanel {
                                     .text_size(px(15.))
                                     .text_color(theme::c(theme::MUTED))
                                     .child(div().child(tr!("Écoutez, mettez en pause là où une nouvelle partie commence, puis ajoutez un chapitre à cet endroit.")))
-                                    .child(div().child(tr!("Ajouté à une playlist, cet audio y arrivera déjà découpé, un chapitre par repère."))),
+                                    .child(div().child(tr!("Ajouté à une playlist, cet audio arrivera en un seul chapitre, avec une piste par repère : les boutons du lecteur passent de l’une à l’autre."))),
                             ),
                     )
                     .child(close),

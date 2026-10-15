@@ -212,6 +212,12 @@ pub fn part_title_template() -> &'static str {
     tr!("{title} — partie {part}/{parts}")
 }
 
+/// Title of the track a chapter mark left unnamed becomes, under the chapter named like
+/// the media; `{part}` and `{parts}` are replaced by the service.
+pub fn mark_title_template() -> &'static str {
+    tr!("Partie {part}")
+}
+
 /// Under a media too long for one Yoto track: what happens when it joins a playlist.
 pub fn split_note(parts: usize) -> String {
     tr!(
@@ -220,11 +226,12 @@ pub fn split_note(parts: usize) -> String {
     )
 }
 
-/// Under a media with chapter marks: how many chapters it becomes in a playlist.
+/// Under a media with chapter marks: the chapter it becomes in a playlist, and how
+/// many tracks it holds.
 pub fn chapters_note(chapters: usize) -> String {
     trn!(
-        "Ajouté à une playlist, cet audio deviendra {count} chapitre.",
-        "Ajouté à une playlist, cet audio deviendra {count} chapitres.",
+        "Ajouté à une playlist, cet audio deviendra un chapitre de {count} piste.",
+        "Ajouté à une playlist, cet audio deviendra un chapitre de {count} pistes, une par chapitre marqué.",
         chapters
     )
 }
@@ -1054,6 +1061,12 @@ mod tests {
             yoto_domain::part_title_with(english, "Lullabies", 2, 3),
             "Lullabies — part 2 of 3"
         );
+        assert_eq!(
+            with_language(Language::French, mark_title_template),
+            yoto_domain::MARK_TITLE
+        );
+        let english = with_language(Language::English, mark_title_template);
+        assert_eq!(yoto_domain::mark_title_with(english, 2, 8), "Part 2");
     }
     #[core::prelude::v1::test]
     fn failures_and_durations_read_in_english() {

@@ -57,6 +57,9 @@ pub enum Command {
         part_title: Option<String>,
         /// As in [`Command::AddYotoMedia`].
         #[serde(default)]
+        mark_title: Option<String>,
+        /// As in [`Command::AddYotoMedia`].
+        #[serde(default)]
         chapter: Option<ChapterKey>,
     },
     DeleteMedia {
@@ -155,8 +158,13 @@ pub enum Command {
         /// `{title}`, `{part}` and `{parts}` are replaced. `None` uses [`PART_TITLE`].
         #[serde(default)]
         part_title: Option<String>,
+        /// Title of the track an unnamed chapter mark becomes, in the client's language;
+        /// `{part}` and `{parts}` are replaced. `None` uses [`MARK_TITLE`].
+        #[serde(default)]
+        mark_title: Option<String>,
         /// The chapter of the playlist to append the tracks to, by its Yoto key. `None`
-        /// adds each media as a chapter of its own (or one per chapter marked on it).
+        /// adds each media as a chapter of its own, holding one track per chapter marked
+        /// on it.
         #[serde(default)]
         chapter: Option<ChapterKey>,
     },
@@ -406,6 +414,15 @@ pub struct Service {
 }
 /// A publication job shared by the stages of its upload pipeline.
 type JobCell = Arc<Mutex<Job>>;
+/// The client's wording of the titles given to the tracks a media becomes, `None` for
+/// the domain's French defaults.
+#[derive(Clone, Copy)]
+struct Wording<'a> {
+    /// See [`Command::AddYotoMedia::part_title`].
+    part: Option<&'a str>,
+    /// See [`Command::AddYotoMedia::mark_title`].
+    mark: Option<&'a str>,
+}
 /// A prepared track on its way to Yoto, with the mapping of an earlier upload if any.
 struct Outgoing {
     recipe: RecipeId,
@@ -1236,6 +1253,7 @@ impl Service {
                 card,
                 media,
                 part_title,
+                mark_title,
                 chapter,
             } => {
                 if media.is_empty() {
@@ -1250,7 +1268,16 @@ impl Service {
                     if !media.recipes.contains(&recipe) {
                         return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    self.add_to_playlist(&mut draft, &media, recipe, part_title.as_deref(), into)?;
+                    self.add_to_playlist(
+                        &mut draft,
+                        &media,
+                        recipe,
+                        Wording {
+                            part: part_title.as_deref(),
+                            mark: mark_title.as_deref(),
+                        },
+                        into,
+                    )?;
                 }
                 self.auth.access(&account, Scope::UserContentManage).await?;
                 self.enqueue_cloud(account, draft, CloudPlaylistWrite::Update { expected })
@@ -1831,6 +1858,7 @@ impl Service {
                 playlist,
                 media,
                 part_title,
+                mark_title,
                 chapter,
             } => {
                 let mut p = self.playlist(playlist)?;
@@ -1841,7 +1869,16 @@ impl Service {
                     if !m.recipes.contains(&recipe) {
                         return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    self.add_to_playlist(&mut p, &m, recipe, part_title.as_deref(), into)?;
+                    self.add_to_playlist(
+                        &mut p,
+                        &m,
+                        recipe,
+                        Wording {
+                            part: part_title.as_deref(),
+                            mark: mark_title.as_deref(),
+                        },
+                        into,
+                    )?;
                 }
                 self.db.save_playlist_cas(&p, base)?;
                 Ok(Reply::Updated)
@@ -2882,16 +2919,19 @@ impl Service {
         })
         .transpose()
     }
-    /// Add a media version to a playlist: one chapter, or one per chapter marked on the
-    /// media (see [`plan_chapters`]), each appended to chapter `into` instead when one is
-    /// named. A chapter too long for one Yoto track becomes one track per part; parts
-    /// already cut earlier are reused, so their prepared audio and Yoto uploads are too.
+    /// Add a media version to a playlist as one chapter titled like the media, appended
+    /// to chapter `into` instead when one is named. A media without marks is one track,
+    /// or one per part when too long for one Yoto track; a media with chapter marks (see
+    /// [`plan_chapters`]) holds one track per mark, titled as the mark is or numbered
+    /// with [`Wording::mark`], and a mark too long for one track becomes one track per
+    /// part. Parts already cut earlier are reused, so their prepared audio and Yoto
+    /// uploads are too.
     fn add_to_playlist(
         &self,
         playlist: &mut Playlist,
         media: &MediaItem,
         recipe: RecipeId,
-        part_title: Option<&str>,
+        wording: Wording<'_>,
         into: Option<ChapterId>,
     ) -> Result<()> {
         // A Yoto icon only works on a card of the account it belongs to.
@@ -2909,10 +2949,11 @@ impl Service {
             Some(IconReference::Yoto { .. } | IconReference::Local { .. }) | None => media.clone(),
         };
         let version = self.recipe(recipe)?;
-        let template = part_title.unwrap_or(PART_TITLE);
-        let chapters = plan_chapters(version.trim, &media.chapters);
-        let ranges: Vec<TrimRange> = chapters.iter().flat_map(|c| c.ranges.clone()).collect();
-        if ranges.len() == 1 && into.is_none() && chapters[0].title.is_none() {
+        let part_template = wording.part.unwrap_or(PART_TITLE);
+        let mark_template = wording.mark.unwrap_or(MARK_TITLE);
+        let spans = plan_chapters(version.trim, &media.chapters);
+        let ranges: Vec<TrimRange> = spans.iter().flat_map(|c| c.ranges.clone()).collect();
+        if ranges.len() == 1 && into.is_none() {
             return playlist.add_media(media, recipe);
         }
         // The whole version is its own recipe; anything shorter is a part of it.
@@ -2922,33 +2963,24 @@ impl Service {
             self.part_recipes(media, &version, &ranges)?
         };
         let mut recipes = recipes.into_iter();
-        let mut groups = Vec::with_capacity(chapters.len());
-        for (index, chapter) in chapters.iter().enumerate() {
-            // A marked chapter has the title it was given, or is numbered like a part.
-            let title = match (&chapter.title, chapters.len()) {
+        let mut tracks = Vec::with_capacity(ranges.len());
+        for (index, span) in spans.iter().enumerate() {
+            // A span is the whole media, or a mark: named as given, else numbered.
+            let title = match (&span.title, spans.len()) {
                 (Some(title), _) => title.clone(),
                 (None, 1) => media.title.clone(),
-                (None, count) => part_title_with(template, &media.title, index + 1, count),
+                (None, count) => mark_title_with(mark_template, index + 1, count),
             };
-            let tracks: Vec<MediaTrack> = chapter
-                .ranges
-                .iter()
-                .enumerate()
-                .map(|(part, _)| MediaTrack {
-                    recipe: recipes.next().expect("one recipe per planned range"),
-                    title: if chapter.ranges.len() == 1 {
-                        title.clone()
-                    } else {
-                        part_title_with(template, &title, part + 1, chapter.ranges.len())
-                    },
-                })
-                .collect();
-            groups.push((title, tracks));
+            tracks.extend(span.ranges.iter().enumerate().map(|(part, _)| MediaTrack {
+                recipe: recipes.next().expect("one recipe per planned range"),
+                title: if span.ranges.len() == 1 {
+                    title.clone()
+                } else {
+                    part_title_with(part_template, &title, part + 1, span.ranges.len())
+                },
+            }));
         }
-        for (title, tracks) in groups {
-            playlist.add_media_tracks(media, &title, tracks, into)?;
-        }
-        Ok(())
+        playlist.add_media_tracks(media, &media.title, tracks, into)
     }
     /// The recipe of each part of `version` cut at `ranges`, in order: the ones already cut
     /// earlier are reused, the others are recorded now and prepared when published.

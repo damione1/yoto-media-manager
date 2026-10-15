@@ -1611,6 +1611,7 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
                 playlist: playlist.id,
                 media: vec![(media.id, version.id)],
                 part_title: None,
+                mark_title: None,
                 chapter: None,
             })
             .await
@@ -1661,7 +1662,7 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
     assert!(first.iter().all(|id| service.recipe(*id).is_err()));
 }
 #[tokio::test]
-async fn marked_chapters_are_added_as_chapters_cut_at_the_marks_or_into_a_chapter() {
+async fn marked_chapters_become_one_chapter_of_tracks_cut_at_the_marks() {
     let root = tempfile::tempdir().unwrap();
     let service = Service::isolated(root.path().join("profile"), tools(), [14; 32]).unwrap();
     let input = root.path().join("audio");
@@ -1721,26 +1722,26 @@ async fn marked_chapters_are_added_as_chapters_cut_at_the_marks_or_into_a_chapte
             playlist: playlist.id,
             media: vec![(media.id, original.id)],
             part_title: None,
+            mark_title: None,
             chapter: None,
         })
         .await
         .unwrap();
+    // One chapter named like the media, one track per mark: named as given or numbered.
     let saved = service.playlist(playlist.id).unwrap();
-    let titles: Vec<_> = saved.chapters.iter().map(|c| c.title.as_str()).collect();
-    assert_eq!(
-        titles,
-        [
-            "Histoire — partie 1/3",
-            "Le milieu",
-            "Histoire — partie 3/3"
-        ]
-    );
-    assert!(saved.chapters.iter().all(|c| c.tracks.len() == 1));
+    assert_eq!(saved.chapters.len(), 1);
+    assert_eq!(saved.chapters[0].title, "Histoire");
+    let titles: Vec<_> = saved.chapters[0]
+        .tracks
+        .iter()
+        .map(|t| t.title.as_str())
+        .collect();
+    assert_eq!(titles, ["Partie 1", "Le milieu", "Partie 3"]);
     let recipe = |track: &Track| match track.media {
         TrackMedia::Local { recipe, .. } => service.recipe(recipe).unwrap(),
         TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => panic!("local"),
     };
-    let middle = recipe(&saved.chapters[1].tracks[0]);
+    let middle = recipe(&saved.chapters[0].tracks[1]);
     assert_eq!(
         (middle.trim.start(), middle.trim.end()),
         (at(200.), at(400.))
@@ -1758,26 +1759,55 @@ async fn marked_chapters_are_added_as_chapters_cut_at_the_marks_or_into_a_chapte
     else {
         panic!("a prepared version");
     };
-    let target = saved.chapters[1].key.clone();
+    let target = saved.chapters[0].key.clone();
     service
         .execute(Command::AddMedia {
             playlist: playlist.id,
             media: vec![(media.id, cut)],
             part_title: Some("{title} — part {part} of {parts}".into()),
+            mark_title: Some("Part {part} of {parts}".into()),
             chapter: Some(target),
         })
         .await
         .unwrap();
     let saved = service.playlist(playlist.id).unwrap();
-    assert_eq!(saved.chapters.len(), 3);
-    let joined: Vec<_> = saved.chapters[1]
+    assert_eq!(saved.chapters.len(), 1);
+    let joined: Vec<_> = saved.chapters[0]
         .tracks
         .iter()
         .map(|t| t.title.as_str())
         .collect();
-    assert_eq!(joined, ["Le milieu", "Le milieu", "Histoire — part 2 of 2"]);
-    let tail = recipe(&saved.chapters[1].tracks[2]);
+    assert_eq!(
+        joined,
+        [
+            "Partie 1",
+            "Le milieu",
+            "Partie 3",
+            "Le milieu",
+            "Part 2 of 2"
+        ]
+    );
+    let tail = recipe(&saved.chapters[0].tracks[4]);
     assert_eq!((tail.trim.start(), tail.trim.end()), (at(400.), at(500.)));
+    // Added once more on its own, the marked media is one new chapter, not several.
+    service
+        .execute(Command::AddMedia {
+            playlist: playlist.id,
+            media: vec![(media.id, original.id)],
+            part_title: None,
+            mark_title: Some("Chapitre {part}".into()),
+            chapter: None,
+        })
+        .await
+        .unwrap();
+    let saved = service.playlist(playlist.id).unwrap();
+    assert_eq!(saved.chapters.len(), 2);
+    let again: Vec<_> = saved.chapters[1]
+        .tracks
+        .iter()
+        .map(|t| t.title.as_str())
+        .collect();
+    assert_eq!(again, ["Chapitre 1", "Le milieu", "Chapitre 3"]);
     // A chapter that is not in the playlist cannot receive media.
     assert!(matches!(
         service
@@ -1785,6 +1815,7 @@ async fn marked_chapters_are_added_as_chapters_cut_at_the_marks_or_into_a_chapte
                 playlist: playlist.id,
                 media: vec![(media.id, original.id)],
                 part_title: None,
+                mark_title: None,
                 chapter: Some(ChapterKey::fresh()),
             })
             .await,
@@ -1891,6 +1922,7 @@ async fn a_media_icon_survives_garbage_collection_and_reaches_new_chapters() {
             playlist: playlist.id,
             media: vec![(media.id, recipe.id)],
             part_title: None,
+            mark_title: None,
             chapter: None,
         })
         .await
@@ -1983,6 +2015,7 @@ async fn a_yoto_icon_of_another_account_is_not_copied_into_a_playlist() {
                 playlist: playlist.id,
                 media: vec![(media.id, recipe.id)],
                 part_title: None,
+                mark_title: None,
                 chapter: None,
             })
             .await
