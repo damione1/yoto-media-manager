@@ -142,7 +142,25 @@ jobs:
         with:
           path: tools/x86_64-pc-windows-msvc
           key: tools-x86_64-pc-windows-msvc-${{ hashFiles('distribution/**', 'scripts/prepare_tools.py', 'scripts/distribution_utils.py', 'LICENSE') }}
-      - run: choco install strawberryperl nasm innosetup minisign -y --no-progress
+      - run: choco install strawberryperl nasm innosetup -y --no-progress
+      # Chocolatey's minisign package stops at 0.8 (2018), which rejects the
+      # updater key: it is stored unencrypted so CI can sign without a password
+      # prompt, and only minisign 0.11+ reads unencrypted keys. Use the
+      # official 0.12 build (the version Homebrew gives the macOS jobs), pinned
+      # by checksum.
+      - name: Install minisign
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'minisign-0.12-win64.zip'
+          Invoke-WebRequest -Uri 'https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip' -OutFile $zip
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($hash -ne '37b600344e20c19314b2e82813db2bfdcc408b77b876f7727889dbd46d539479') { throw "minisign checksum mismatch: $hash" }
+          $root = Join-Path $env:RUNNER_TEMP 'minisign'
+          Expand-Archive -Path $zip -DestinationPath $root
+          $bin = Join-Path $root 'minisign-win64/x86_64'
+          & (Join-Path $bin 'minisign.exe') -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
       - if: steps.tools.outputs.cache-hit != 'true'
         run: python3 scripts/prepare_tools.py --target x86_64-pc-windows-msvc
       - run: cargo build --workspace --release --locked --target x86_64-pc-windows-msvc
