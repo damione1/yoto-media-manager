@@ -123,6 +123,16 @@ pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView
                                 } else {
                                     theme::tag_colors(tr!("Original"), theme::SAND, theme::BROWN)
                                 })
+                                .children((media.chapters.len() >= 2).then(|| {
+                                    theme::tag(
+                                        trn!(
+                                            "{count} chapitre",
+                                            "{count} chapitres",
+                                            media.chapters.len()
+                                        ),
+                                        &theme::LILAC,
+                                    )
+                                }))
                                 .child(theme::round(
                                     Button::new(element_id("open-media", id.to_string()))
                                         .icon(if open && view.preview_playing(id, cx) {

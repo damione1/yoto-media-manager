@@ -220,6 +220,24 @@ pub fn split_note(parts: usize) -> String {
     )
 }
 
+/// Under a media with chapter marks: how many chapters it becomes in a playlist.
+pub fn chapters_note(chapters: usize) -> String {
+    trn!(
+        "Ajouté à une playlist, cet audio deviendra {count} chapitre.",
+        "Ajouté à une playlist, cet audio deviendra {count} chapitres.",
+        chapters
+    )
+}
+
+/// Under a media with chapter marks, when some chapters are too long for one Yoto track.
+pub fn chapters_split_note(long: usize) -> String {
+    trn!(
+        "{count} chapitre est trop long pour une seule piste Yoto : il sera aussi découpé en parties.",
+        "{count} chapitres sont trop longs pour une seule piste Yoto : ils seront aussi découpés en parties.",
+        long
+    )
+}
+
 /// Grouped autosave of the playlist editor.
 pub mod autosave {
     /// Tag by the title while changes wait for their write or are being written.

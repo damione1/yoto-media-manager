@@ -15,6 +15,7 @@ enum SelectionOrigin {
 #[derive(Clone, Copy)]
 enum AudioEditor {
     Trim,
+    Chapters,
     Metadata,
 }
 #[derive(Default)]
@@ -36,21 +37,21 @@ impl Preparation {
 }
 /// What a press on the trim waveform holds until it is released.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum WaveGrab {
+pub(super) enum WaveGrab {
     Start,
     End,
     Playhead,
 }
 /// The waveform dragged with the pointer; it draws nothing of its own.
 #[derive(Clone)]
-struct WaveDrag;
+pub(super) struct WaveDrag;
 impl Render for WaveDrag {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         Empty
     }
 }
 /// How far from a selection handle drawn on the waveform a press still grabs it, in pixels.
-const HANDLE_REACH: f32 = 12.;
+pub(super) const HANDLE_REACH: f32 = 12.;
 /// How far the arrow keys move the playhead, in seconds.
 const NUDGE_SECONDS: f64 = 5.;
 struct TrimDraft {
@@ -61,7 +62,7 @@ struct TrimDraft {
 
 /// Retained player state. The modal observes this entity instead of duplicating its recipe or inputs.
 pub struct TrimPanel {
-    media: MediaItem,
+    pub(super) media: MediaItem,
     parent: WeakEntity<AppView>,
     service: Arc<Service>,
     runtime: Arc<tokio::runtime::Runtime>,
@@ -71,30 +72,33 @@ pub struct TrimPanel {
     start: Entity<InputState>,
     end: Entity<InputState>,
     range: Entity<SliderState>,
-    cursor: Entity<SliderState>,
-    cursor_seconds: f64,
+    pub(super) cursor: Entity<SliderState>,
+    pub(super) cursor_seconds: f64,
     /// What the pointer holds on the trim waveform, while pressed.
-    wave_grab: Option<WaveGrab>,
+    pub(super) wave_grab: Option<WaveGrab>,
     /// The trim waveform's drawing area as last painted, to read a pointer as a time.
-    wave_bounds: Bounds<Pixels>,
-    wave_focus: FocusHandle,
-    playing: bool,
-    preview_pending: Option<u64>,
+    pub(super) wave_bounds: Bounds<Pixels>,
+    pub(super) wave_focus: FocusHandle,
+    pub(super) playing: bool,
+    pub(super) preview_pending: Option<u64>,
     generation: u64,
     normalization: Normalization,
     pub waveform: Option<Waveform>,
     prepared: Option<RecipeId>,
-    selected_version: Option<TrimRange>,
+    /// The finished cut a playlist would receive, when there is one.
+    pub(super) selected_version: Option<TrimRange>,
+    /// The chapter marks being edited, while their dialog is open.
+    pub(super) chapters: Option<chapters::ChapterDraft>,
     editing: Option<TrimDraft>,
-    editor_window: Option<AnyWindowHandle>,
+    pub(super) editor_window: Option<AnyWindowHandle>,
     /// The icon picker, while it is open.
     icon_window: Option<AnyWindowHandle>,
     /// A new icon for the media is being saved.
     saving_icon: bool,
     /// Why the icon chosen in the open picker was not saved, shown inside the picker.
     icon_error: Option<String>,
-    tasks: Vec<Task<()>>,
-    status: String,
+    pub(super) tasks: Vec<Task<()>>,
+    pub(super) status: String,
     more_open: bool,
     /// Only the open media follows the player; the others stay quiet.
     active: bool,
@@ -221,6 +225,7 @@ impl TrimPanel {
             waveform: None,
             prepared: None,
             selected_version: None,
+            chapters: None,
             editing: None,
             editor_window: None,
             icon_window: None,
@@ -450,7 +455,7 @@ impl TrimPanel {
         }
         cx.notify();
     }
-    fn send(&mut self, command: Command, cx: &mut Context<Self>) {
+    pub(super) fn send(&mut self, command: Command, cx: &mut Context<Self>) {
         let rt = self.runtime.clone();
         let service = self.service.clone();
         let generation = self.generation;
@@ -459,6 +464,7 @@ impl TrimPanel {
             self.preview_pending = Some(generation);
             cx.notify();
         }
+        let chapters = matches!(&command, Command::SetMediaChapters { .. });
         let metadata = if let Command::UpdateMedia { metadata, .. } = &command {
             Some(metadata.clone())
         } else {
@@ -475,6 +481,7 @@ impl TrimPanel {
                 if preview {
                     view.preview_pending = None;
                 }
+                let chapters_saved = chapters.then_some(matches!(&r, Ok(Ok(_))));
                 match r {
                     Ok(Ok(Reply::Prepared(id))) => {
                         if let Some(draft) = &mut view.editing {
@@ -532,11 +539,14 @@ impl TrimPanel {
                         }
                     }
                 }
+                if let Some(saved) = chapters_saved {
+                    view.chapters_saved(saved, cx);
+                }
                 cx.notify();
             });
         }));
     }
-    fn stop(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn stop(&mut self, cx: &mut Context<Self>) {
         self.generation = self.generation.wrapping_add(1);
         self.playing = false;
         self.preview_pending = None;
@@ -584,21 +594,31 @@ impl TrimPanel {
     pub fn chosen_recipe(&self) -> Option<RecipeId> {
         self.prepared
     }
-    fn playback_range(&self) -> TrimRange {
-        if self.editing.is_some() {
+    pub(super) fn playback_range(&self) -> TrimRange {
+        if self.chapters.is_some() {
+            // Marking chapters is done on the original, heard in full.
+            self.whole_original()
+        } else if self.editing.is_some() {
             self.selection
         } else {
-            self.selected_version.unwrap_or_else(|| {
-                TrimRange::new(
-                    MediaTime::ZERO,
-                    self.media.info.duration,
-                    self.media.info.duration,
-                )
-                .expect("probed duration")
-            })
+            self.selected_version
+                .unwrap_or_else(|| self.whole_original())
         }
     }
-    fn play_from_cursor(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn whole_original(&self) -> TrimRange {
+        TrimRange::new(
+            MediaTime::ZERO,
+            self.media.info.duration,
+            self.media.info.duration,
+        )
+        .expect("probed duration")
+    }
+    /// What a playlist receives of this media: the latest finished cut, else the original.
+    pub(super) fn playlist_range(&self) -> TrimRange {
+        self.selected_version
+            .unwrap_or_else(|| self.whole_original())
+    }
+    pub(super) fn play_from_cursor(&mut self, cx: &mut Context<Self>) {
         let range = self.playback_range();
         let trim = range
             .played_from(MediaTime::from_seconds(self.cursor_seconds).unwrap_or(range.start()));
@@ -613,7 +633,7 @@ impl TrimPanel {
     }
     /// Move the playhead to `seconds`, kept inside what is being listened to. Playback that
     /// is running (or about to) continues from there; otherwise the next listen starts there.
-    fn seek(&mut self, seconds: f64, cx: &mut Context<Self>) {
+    pub(super) fn seek(&mut self, seconds: f64, cx: &mut Context<Self>) {
         let range = self.playback_range();
         self.cursor_seconds = seconds.clamp(range.start().seconds(), range.end().seconds());
         if self.playing || self.preview_pending.is_some() {
@@ -640,7 +660,12 @@ impl TrimPanel {
         ));
         self.wave_move(position, window, cx);
     }
-    fn wave_move(&mut self, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn wave_move(
+        &mut self,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(grab) = self.wave_grab else {
             return;
         };
@@ -666,13 +691,13 @@ impl TrimPanel {
             self.set_selection(trim, SelectionOrigin::Canonical, window, cx);
         }
     }
-    fn wave_release(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn wave_release(&mut self, cx: &mut Context<Self>) {
         if self.wave_grab.take() == Some(WaveGrab::Playhead) {
             self.seek(self.cursor_seconds, cx);
         }
     }
     /// The arrow keys move the playhead a few seconds while the waveform has focus.
-    fn wave_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+    pub(super) fn wave_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let step = match event.keystroke.key.as_str() {
             "left" => -NUDGE_SECONDS,
             "right" => NUDGE_SECONDS,
@@ -682,7 +707,7 @@ impl TrimPanel {
         self.seek(self.cursor_seconds + step, cx);
     }
     /// The pointer's distance from the waveform's left edge, and the waveform's width.
-    fn wave_pointer(&self, position: Point<Pixels>) -> (f32, f32) {
+    pub(super) fn wave_pointer(&self, position: Point<Pixels>) -> (f32, f32) {
         (
             (position.x - self.wave_bounds.left()).as_f32(),
             self.wave_bounds.size.width.as_f32(),
@@ -731,6 +756,7 @@ impl TrimPanel {
                 self.set_selection(initial, SelectionOrigin::Canonical, window, cx);
                 self.cursor_seconds = initial.start().seconds();
             }
+            AudioEditor::Chapters => self.begin_chapters(window, cx),
             AudioEditor::Metadata => {
                 self.title.update(cx, |v, cx| {
                     v.set_value(self.media.title.clone(), window, cx)
@@ -754,7 +780,7 @@ impl TrimPanel {
             let close = panel.clone();
             let cancel = panel.clone();
             let dialog = match kind {
-                AudioEditor::Trim => dialog.close_button(false).w(px(820.)),
+                AudioEditor::Trim | AudioEditor::Chapters => dialog.close_button(false).w(px(820.)),
                 AudioEditor::Metadata => dialog.title(tr!("Modifier les informations")).w(px(560.)),
             };
             dialog
@@ -763,16 +789,20 @@ impl TrimPanel {
                     cancel
                         .update(cx, |v, _| {
                             !v.editing.as_ref().is_some_and(|d| d.preparation.busy())
+                                && !v.chapters.as_ref().is_some_and(|d| d.saving())
                         })
                         .unwrap_or(true)
                 })
                 .on_close(move |_, window, cx| {
                     let _ = close.update(cx, |v, cx| {
-                        // Only the trim dialog plays its own selection.
-                        if matches!(kind, AudioEditor::Trim) {
+                        // Only the trim and chapters dialogs play their own audio.
+                        if matches!(kind, AudioEditor::Trim | AudioEditor::Chapters) {
                             v.stop(cx);
                         }
                         v.editor_window = None;
+                        if v.chapters.take().is_some() {
+                            v.end_chapters(window, cx);
+                        }
                         if let Some(draft) = v.editing.take() {
                             match draft.preparation {
                                 Preparation::Ready(id) => {
@@ -869,20 +899,9 @@ impl TrimPanel {
             )
             .into_any_element()
     }
-    fn trim_editor(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        use gpui_kit::component::switch::Switch;
-        use theme::{Height, Look};
-        let busy = self.editing.as_ref().is_some_and(|d| d.preparation.busy());
-        let ready = self
-            .editing
-            .as_ref()
-            .is_some_and(|d| matches!(d.preparation, Preparation::Ready(_)));
-        let duration = self.media.info.duration.seconds().max(0.001);
-        let selection = self.selection;
-        let start = (selection.start().seconds() / duration) as f32;
-        let end = (selection.end().seconds() / duration) as f32;
-        let cursor =
-            Some((self.cursor_seconds / duration) as f32).filter(|c| (start..=end).contains(c));
+    /// The waveform of the whole original as bars, each coloured by `color_at` from its
+    /// position (a fraction of the media); a spinner while it is still being analysed.
+    pub(super) fn wave_bars(&self, color_at: impl Fn(f32) -> u32) -> Div {
         let mut bars = div().size_full().flex().items_center().gap(px(2.));
         if let Some(w) = &self.waveform {
             if let Some(peaks) = w
@@ -894,20 +913,13 @@ impl TrimPanel {
                 let count = peaks.len().max(1) as f32;
                 for (index, (lo, hi)) in peaks.iter().enumerate() {
                     let position = (index as f32 + 0.5) / count;
-                    let color = if position < start || position > end {
-                        theme::WAVE_IDLE
-                    } else if cursor.is_some_and(|c| position <= c) {
-                        theme::SKY.accent
-                    } else {
-                        theme::WAVE_SELECTED
-                    };
                     bars = bars.child(
                         div()
                             .flex_1()
                             .min_w(px(1.))
                             .rounded(px(4.))
                             .h(px(((hi - lo).abs() * 60.).clamp(4., 118.)))
-                            .bg(theme::c(color)),
+                            .bg(theme::c(color_at(position))),
                     );
                 }
             }
@@ -923,27 +935,32 @@ impl TrimPanel {
                     .child(tr!("Analyse de la forme d’onde…")),
             );
         }
-        let handle = |left: f32| {
-            div()
-                .absolute()
-                .top_0()
-                .bottom_0()
-                .left(relative(left))
-                .ml(px(-9.))
-                .w(px(18.))
-                .rounded(px(10.))
-                .bg(theme::c(theme::SKY.accent))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    div()
-                        .w(px(4.))
-                        .h(px(26.))
-                        .rounded(px(4.))
-                        .bg(theme::c(theme::SURFACE)),
-                )
-        };
+        bars
+    }
+    fn trim_editor(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        use gpui_kit::component::switch::Switch;
+        use theme::{Height, Look};
+        let busy = self.editing.as_ref().is_some_and(|d| d.preparation.busy());
+        let ready = self
+            .editing
+            .as_ref()
+            .is_some_and(|d| matches!(d.preparation, Preparation::Ready(_)));
+        let duration = self.media.info.duration.seconds().max(0.001);
+        let selection = self.selection;
+        let start = (selection.start().seconds() / duration) as f32;
+        let end = (selection.end().seconds() / duration) as f32;
+        let cursor =
+            Some((self.cursor_seconds / duration) as f32).filter(|c| (start..=end).contains(c));
+        let bars = self.wave_bars(|position| {
+            if position < start || position > end {
+                theme::WAVE_IDLE
+            } else if cursor.is_some_and(|c| position <= c) {
+                theme::SKY.accent
+            } else {
+                theme::WAVE_SELECTED
+            }
+        });
+        let handle = |left: f32| wave_handle(left, theme::SKY.accent);
         let panel = cx.entity();
         let mut overlay = div()
             .id("trim-wave")
@@ -1250,6 +1267,28 @@ impl TrimPanel {
             .into_any_element()
     }
 }
+/// A grab handle drawn over the waveform at `left` (a fraction of its width), in `color`.
+pub(super) fn wave_handle(left: f32, color: u32) -> Div {
+    div()
+        .absolute()
+        .top_0()
+        .bottom_0()
+        .left(relative(left))
+        .ml(px(-9.))
+        .w(px(18.))
+        .rounded(px(10.))
+        .bg(theme::c(color))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            div()
+                .w(px(4.))
+                .h(px(26.))
+                .rounded(px(4.))
+                .bg(theme::c(theme::SURFACE)),
+        )
+}
 struct AudioEditorView {
     panel: WeakEntity<TrimPanel>,
     kind: AudioEditor,
@@ -1260,6 +1299,7 @@ impl Render for AudioEditorView {
         self.panel
             .update(cx, |v, cx| match self.kind {
                 AudioEditor::Trim => v.trim_editor(cx),
+                AudioEditor::Chapters => v.chapters_editor(cx),
                 AudioEditor::Metadata => v.metadata_editor(cx),
             })
             .unwrap_or_else(|_| {
@@ -1517,6 +1557,16 @@ impl Render for TrimPanel {
                 theme::BROWN,
             ))
         };
+        if self.media.chapters.len() >= 2 {
+            tags = tags.child(theme::tag(
+                trn!(
+                    "{count} chapitre",
+                    "{count} chapitres",
+                    self.media.chapters.len()
+                ),
+                &theme::LILAC,
+            ));
+        }
         let player = theme::card().rounded(px(20.)).p(px(16.)).child(
             div()
                 .flex()
@@ -1629,10 +1679,14 @@ impl Render for TrimPanel {
                         .text_size(px(14.)),
                     ),
             )
-            .children({
-                let parts = plan_parts(range).len();
-                (parts > 1).then(|| theme::note(wording::split_note(parts)))
-            })
+            .children(
+                chapters::playlist_notes(&plan_chapters(
+                    self.playlist_range(),
+                    &self.media.chapters,
+                ))
+                .into_iter()
+                .map(theme::note),
+            )
             .child(tags)
             .child(player)
             .child(theme::pill(
@@ -1646,6 +1700,19 @@ impl Render for TrimPanel {
                         }),
                     ),
                 Look::Soft(&theme::SKY),
+                Height::Hero,
+                false,
+                cx,
+            ))
+            .child(theme::pill(
+                Button::new("edit-chapters")
+                    .icon(IconName::BookmarkPlus)
+                    .label(tr!("Marquer des chapitres"))
+                    .w_full()
+                    .on_click(cx.listener(|v, _, window, cx| {
+                        v.open_editor(AudioEditor::Chapters, window, cx)
+                    })),
+                Look::Soft(&theme::LILAC),
                 Height::Hero,
                 false,
                 cx,
@@ -1785,7 +1852,7 @@ fn wave_grab(x: f32, width: f32, start: f32, end: f32) -> WaveGrab {
 }
 /// The media time, in seconds, under a pointer `x` pixels into a waveform `width` pixels
 /// wide. A pointer dragged past either edge stays at that edge.
-fn wave_time(x: f32, width: f32, duration: MediaTime) -> f64 {
+pub(super) fn wave_time(x: f32, width: f32, duration: MediaTime) -> f64 {
     if width <= 0. {
         return 0.;
     }

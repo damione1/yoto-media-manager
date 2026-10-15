@@ -1,5 +1,6 @@
 mod account;
 mod autosave;
+mod chapters;
 mod device;
 mod editor;
 mod group;
