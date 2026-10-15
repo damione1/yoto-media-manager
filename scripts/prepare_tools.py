@@ -17,7 +17,9 @@ if out.exists():shutil.rmtree(out)
 out.mkdir(parents=True)
 cache=ROOT/'tools'/'downloads';cache.mkdir(parents=True,exist_ok=True);sources=out/'sources';sources.mkdir(exist_ok=True)
 for name in ['yt-dlp','deno']:
-    item=m[name]['targets'][a.target];f=fetch(item,cache);shutil.copy2(f,sources/f.name)
+    # The executables ship extracted (and, on macOS, signed); a copy of the downloaded
+    # archive would hide unsigned code from codesign and fail notarization.
+    item=m[name]['targets'][a.target];f=fetch(item,cache)
     if name=='deno':
         with zipfile.ZipFile(f) as z:z.extract('deno.exe' if 'windows' in a.target else 'deno',out)
     else:
