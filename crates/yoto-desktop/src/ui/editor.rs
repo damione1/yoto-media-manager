@@ -203,19 +203,49 @@ fn position_after_removal(from: usize, slot: usize) -> usize {
 /// What dropping `dragged` at height `y` would do, or nothing when it would change nothing.
 /// A track dropped on a header joins the chapter, on the middle of a lone track groups them,
 /// and between rows lands there. The lower fifth of a chapter's last row and the edges of a
-/// lone track mean the gap between chapters. A chapter lands before or after the chapter
-/// under the pointer, by halves.
+/// lone track mean the gap between chapters. A chapter (a lone track is dragged as one)
+/// dropped on a header or on the middle of a lone track merges into that chapter; over the
+/// rows of a chapter of several tracks it lands before or after that chapter, by halves.
 fn drop_target(dragged: Dragged, y: f32, bands: &[ChapterBand]) -> Option<DropTarget> {
     let band = bands.iter().find(|b| y >= b.top && y < b.bottom)?;
+    let quarter = |top: f32, bottom: f32| (bottom - top) / 4.;
     match dragged {
         Dragged::Chapter(id) => {
             let source = bands.iter().find(|b| b.id == id)?.index;
-            let slot = if y < (band.top + band.bottom) / 2. {
-                band.index
-            } else {
-                band.index + 1
+            if band.id == id {
+                return None;
+            }
+            let target = match band.header {
+                Some((top, bottom)) if y < bottom => {
+                    if y < top + quarter(top, bottom) {
+                        DropTarget::ChapterSlot(band.index)
+                    } else {
+                        DropTarget::Into(band.id)
+                    }
+                }
+                Some(_) => {
+                    if y < (band.top + band.bottom) / 2. {
+                        DropTarget::ChapterSlot(band.index)
+                    } else {
+                        DropTarget::ChapterSlot(band.index + 1)
+                    }
+                }
+                None => {
+                    let row = band.tracks.first()?;
+                    if y < row.top + quarter(row.top, row.bottom) {
+                        DropTarget::ChapterSlot(band.index)
+                    } else if y >= row.bottom - quarter(row.top, row.bottom) {
+                        DropTarget::ChapterSlot(band.index + 1)
+                    } else {
+                        DropTarget::Into(band.id)
+                    }
+                }
             };
-            (slot != source && slot != source + 1).then_some(DropTarget::ChapterSlot(slot))
+            let unchanged = matches!(
+                target,
+                DropTarget::ChapterSlot(slot) if slot == source || slot == source + 1
+            );
+            (!unchanged).then_some(target)
         }
         Dragged::Track(id) => {
             let source = bands.iter().find(|b| b.tracks.iter().any(|t| t.id == id))?;
@@ -246,10 +276,9 @@ fn drop_target(dragged: Dragged, y: f32, bands: &[ChapterBand]) -> Option<DropTa
                 }
                 None => {
                     let row = band.tracks.first()?;
-                    let quarter = (row.bottom - row.top) / 4.;
-                    if y < row.top + quarter {
+                    if y < row.top + quarter(row.top, row.bottom) {
                         DropTarget::ChapterSlot(band.index)
-                    } else if y >= row.bottom - quarter {
+                    } else if y >= row.bottom - quarter(row.top, row.bottom) {
                         DropTarget::ChapterSlot(band.index + 1)
                     } else {
                         DropTarget::Into(band.id)
@@ -363,6 +392,23 @@ fn drop_line() -> Div {
         .rounded(px(3.))
         .bg(theme::c(theme::PEACH.accent))
 }
+/// The line between two chapters where a dragged item will land, saying so when the item
+/// is a track that leaves its chapter to become a chapter of its own.
+fn slot_line(leaving: bool) -> Div {
+    drop_line().when(leaving, |line| {
+        line.child(
+            div()
+                .absolute()
+                .right(px(12.))
+                .top(px(-11.))
+                .child(drop_hint(tr!("Chapitre à part"))),
+        )
+    })
+}
+/// What a drop would do, shown on the row that would receive it.
+fn drop_hint(text: &'static str) -> Div {
+    theme::tag_colors(text, theme::PEACH.accent, theme::SURFACE)
+}
 /// A chapter's title, or its first track's while it has none.
 fn display_title(chapter: &Chapter) -> String {
     match chapter.tracks.first() {
@@ -411,6 +457,8 @@ pub struct PlaylistEditor {
     queued_media: std::collections::VecDeque<QueuedMedia>,
     /// Where the item being dragged would land, while a drag is under way.
     drop_target: Option<DropTarget>,
+    /// What is being dragged, to word the indicator; read only while a drag is under way.
+    dragging: Option<Dragged>,
     /// Where chapters and tracks were last drawn, to find what a drag points at.
     row_bounds: BTreeMap<RowKey, (f32, f32)>,
     /// Why the last changes could not be written, until a later write succeeds.
@@ -577,6 +625,7 @@ impl PlaylistEditor {
             sent: None,
             queued_media: Default::default(),
             drop_target: None,
+            dragging: None,
             row_bounds: BTreeMap::new(),
             unsaved: None,
             failed_job: None,
@@ -1633,7 +1682,7 @@ impl PlaylistEditor {
                     .on_prepaint(remember_bounds(RowKey::Header(id), &bounds))
                     .child(self.grip(
                         element_id("chapter-grip", id),
-                        tr!("Déplacer le chapitre"),
+                        tr!("Glisser pour déplacer le chapitre, ou le déposer sur un autre pour les fusionner"),
                         ChapterDrag(id),
                         display_title(chapter),
                         cx,
@@ -1660,6 +1709,7 @@ impl PlaylistEditor {
                             .get(&id)
                             .map(|input| title_field(Input::new(input), 17.).flex_1().min_w_0()),
                     )
+                    .children(receiving.then(|| drop_hint(tr!("Ajouter au chapitre"))))
                     .child(
                         theme::round(
                             Button::new(element_id("chapter-menu", id))
@@ -1952,6 +2002,8 @@ impl PlaylistEditor {
             } else {
                 &chapter.icon
             };
+            // A lone track about to be grouped with the dragged one is highlighted.
+            let grouping = single && drop == Some(DropTarget::Into(id));
             let line = |top: bool| {
                 let line = drop_line().left(px(34.));
                 if top {
@@ -1993,19 +2045,18 @@ impl PlaylistEditor {
                             .rounded(px(18.))
                             .bg(theme::c(theme::SURFACE))
                             .border_2()
-                            .border_color(theme::c(
-                                if single && drop == Some(DropTarget::Into(id)) {
-                                    theme::PEACH.accent
-                                } else {
-                                    theme::SURFACE
-                                },
-                            ))
+                            .border_color(theme::c(if grouping {
+                                theme::PEACH.accent
+                            } else {
+                                theme::SURFACE
+                            }))
+                            .when(grouping, |row| row.bg(theme::c(theme::PEACH.soft)))
                             .shadow(theme::step(theme::BORDER, 2.))
                             .on_prepaint(remember_bounds(RowKey::Track(tid), &bounds))
                             .child(if single {
                                 self.grip(
                                     element_id("chapter-grip", id),
-                                    tr!("Déplacer la piste"),
+                                    tr!("Glisser pour déplacer la piste, ou la déposer sur une autre pour les regrouper"),
                                     ChapterDrag(id),
                                     track.title.clone(),
                                     cx,
@@ -2013,7 +2064,7 @@ impl PlaylistEditor {
                             } else {
                                 self.grip(
                                     element_id("track-grip", tid),
-                                    tr!("Déplacer la piste"),
+                                    tr!("Glisser pour déplacer la piste, ou la déposer entre deux chapitres pour la sortir du sien"),
                                     TrackDrag(tid),
                                     track.title.clone(),
                                     cx,
@@ -2054,6 +2105,7 @@ impl PlaylistEditor {
                                     )
                                     .child(theme::meta(meta).pl(px(8.))),
                             )
+                            .children(grouping.then(|| drop_hint(tr!("Regrouper"))))
                             .child({
                                 let state = self.track_sync(&track.media, snapshot, state);
                                 theme::tag(state.track_label(), state.family())
@@ -2217,13 +2269,15 @@ impl PlaylistEditor {
                 group = group.child(advanced);
             }
         }
+        // A track leaving its chapter for a gap becomes a chapter of its own: say so.
+        let leaving = matches!(self.dragging, Some(Dragged::Track(_)));
         group
             .when(drop == Some(DropTarget::ChapterSlot(index)), |group| {
-                group.child(drop_line().top_0())
+                group.child(slot_line(leaving).top_0())
             })
             .when(
                 index + 1 == count && drop == Some(DropTarget::ChapterSlot(count)),
-                |group| group.child(drop_line().bottom_0()),
+                |group| group.child(slot_line(leaving).bottom_0()),
             )
             .into_any_element()
     }
@@ -2947,8 +3001,9 @@ impl PlaylistEditor {
         } else {
             None
         };
-        if target != self.drop_target {
+        if target != self.drop_target || self.dragging != Some(dragged) {
             self.drop_target = target;
+            self.dragging = Some(dragged);
             cx.notify();
         }
     }
@@ -2959,21 +3014,28 @@ impl PlaylistEditor {
         }
         cx.notify();
     }
-    /// A chapter was dropped where the indicator showed.
+    /// A chapter was dropped where the indicator showed: between chapters it moves there,
+    /// on a chapter it merges into it, its tracks after that chapter's.
     fn drop_chapter(&mut self, chapter: ChapterId, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(DropTarget::ChapterSlot(slot)) = self.drop_target.take() {
-            self.restructure(
-                move |d| {
-                    let to = d
-                        .chapters
-                        .iter()
-                        .position(|c| c.id == chapter)
-                        .map_or(slot, |from| position_after_removal(from, slot));
-                    d.move_chapter_to(chapter, to)
-                },
-                window,
-                cx,
-            );
+        match self.drop_target.take() {
+            Some(DropTarget::ChapterSlot(slot)) => {
+                self.restructure(
+                    move |d| {
+                        let to = d
+                            .chapters
+                            .iter()
+                            .position(|c| c.id == chapter)
+                            .map_or(slot, |from| position_after_removal(from, slot));
+                        d.move_chapter_to(chapter, to)
+                    },
+                    window,
+                    cx,
+                );
+            }
+            Some(DropTarget::Into(target)) => {
+                self.restructure(move |d| d.merge_chapters(target, chapter), window, cx);
+            }
+            Some(DropTarget::TrackSlot { .. }) | None => {}
         }
         cx.notify();
     }
@@ -4565,6 +4627,47 @@ mod arrangement_tests {
         assert_eq!(
             drop_target(Dragged::Track(TrackId::new()), 40., &bands),
             None
+        );
+    }
+    #[test]
+    fn a_lone_track_dropped_on_a_track_or_a_header_joins_that_chapter() {
+        let bands = [flat(0, 0.), flat(1, 80.), grouped(2, 160., 2)];
+        let [first, second, group] = &bands;
+        let lone = Dragged::Chapter(first.id);
+        // The middle of a lone track groups them; its edges are the gaps around it.
+        assert_eq!(
+            drop_target(lone, 120., &bands),
+            Some(DropTarget::Into(second.id))
+        );
+        assert_eq!(drop_target(lone, 90., &bands), None);
+        assert_eq!(
+            drop_target(lone, 150., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        // A header receives, except its top quarter, which is the gap before it.
+        assert_eq!(
+            drop_target(lone, 170., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        assert_eq!(
+            drop_target(lone, 200., &bands),
+            Some(DropTarget::Into(group.id))
+        );
+        // Over the rows of a group, a chapter lands before or after it, by halves.
+        assert_eq!(
+            drop_target(lone, 240., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        assert_eq!(
+            drop_target(lone, 310., &bands),
+            Some(DropTarget::ChapterSlot(3))
+        );
+        // Over itself, nothing.
+        assert_eq!(drop_target(lone, 40., &bands), None);
+        // A whole group dropped on a lone track merges into it as well.
+        assert_eq!(
+            drop_target(Dragged::Chapter(group.id), 40., &bands),
+            Some(DropTarget::Into(first.id))
         );
     }
     #[test]
