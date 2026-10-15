@@ -6,7 +6,7 @@ FFmpeg on macOS is built from the included 9.0.2 source tarball with shared libr
 
 The combined yt-dlp PyInstaller executables are GPLv3-or-later, including their Python and other bundled components; yt-dlp's Python sources alone are Unlicense. Upstream licences, dependency notices and corresponding source/build recipe: https://github.com/yt-dlp/yt-dlp/tree/2026.08.19 and https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/THIRD-PARTY-LICENSES.txt. The pinned release executables and corresponding source archive accompany the distribution. They must not be represented as Unlicense-only.
 
-Deno is MIT-licensed, with third-party notices: https://github.com/denoland/deno/tree/v2.9.7. Upstream source and licence archive accompany the distribution. All sidecar upstream URLs and SHA256 values are pinned in sidecars.json; manifest.json records the final distributed files after preparing them. Code signing changes executable bytes, and the bundle manifest is regenerated after signing.
+Deno is MIT-licensed, with third-party notices: https://github.com/denoland/deno/tree/v2.9.7. Its source is published there; the source archive pinned in sidecars.json is not shipped, as it contains prebuilt test binaries. All sidecar upstream URLs and SHA256 values are pinned in sidecars.json; manifest.json records the final distributed files after preparing them. Code signing changes executable bytes, and the bundle manifest is regenerated after signing.
 
 Windows FFmpeg corresponding source is pinned to commit `2a571b606854520cf89804d8030c8b328e621689`, with the BtbN build recipes at `6c9aec5fc9a72ec3abedd1fa84db141fa18cf52b`. Both checksummed archives accompany the installer in `tools/sources`; this is the actual 9.0.2+17 build, beyond the macOS 9.0.2 release source.
 

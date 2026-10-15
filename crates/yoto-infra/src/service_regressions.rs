@@ -30,6 +30,9 @@ fn returned_asset(reply: Reply) -> AssetId {
 async fn blocked_provider_encoder_and_preview_allow_controls_and_cancel_descendants_before_commit()
 {
     use std::os::unix::fs::PermissionsExt;
+    // Upper bound for each step: they finish well under a second, but the
+    // Intel Mac CI runner can take several seconds to start a real preview.
+    const STEP: u64 = 15;
     let root = tempfile::tempdir().unwrap();
     let real = Tools::at(std::env::var_os("YOTO_TEST_TOOLS").unwrap().into());
     let input = root.path().join("tone.mp3");
@@ -87,7 +90,7 @@ async fn blocked_provider_encoder_and_preview_allow_controls_and_cancel_descenda
         let run = service.clone();
         let job = service.job(id).unwrap();
         let worker = tokio::spawn(async move { run.run_job(job).await });
-        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        tokio::time::timeout(std::time::Duration::from_secs(STEP), async {
             while !descendant.exists() {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await
             }
@@ -122,7 +125,7 @@ async fn blocked_provider_encoder_and_preview_allow_controls_and_cancel_descenda
             before.elapsed() < std::time::Duration::from_secs(1),
             "controls waited behind {mode}"
         );
-        tokio::time::timeout(std::time::Duration::from_secs(3), worker)
+        tokio::time::timeout(std::time::Duration::from_secs(STEP), worker)
             .await
             .unwrap()
             .unwrap();
@@ -137,7 +140,7 @@ async fn blocked_provider_encoder_and_preview_allow_controls_and_cancel_descenda
             .trim()
             .parse()
             .unwrap();
-        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        tokio::time::timeout(std::time::Duration::from_secs(STEP), async {
             while unsafe { libc::kill(pid, 0) } == 0 {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await
             }
@@ -163,7 +166,7 @@ async fn blocked_provider_encoder_and_preview_allow_controls_and_cancel_descenda
         })
         .await
     });
-    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+    tokio::time::timeout(std::time::Duration::from_secs(STEP), async {
         while !descendant.exists() {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await
         }
@@ -172,7 +175,7 @@ async fn blocked_provider_encoder_and_preview_allow_controls_and_cancel_descenda
     .unwrap();
     std::fs::remove_file(&blocked).unwrap();
     let newer = tokio::time::timeout(
-        std::time::Duration::from_secs(3),
+        std::time::Duration::from_secs(STEP),
         service.execute(Command::PreviewTrim {
             media: media.id,
             trim: TrimRange::new(
@@ -192,7 +195,7 @@ async fn blocked_provider_encoder_and_preview_allow_controls_and_cancel_descenda
         );
     }
     assert!(matches!(
-        tokio::time::timeout(std::time::Duration::from_secs(3), first)
+        tokio::time::timeout(std::time::Duration::from_secs(STEP), first)
             .await
             .unwrap()
             .unwrap(),

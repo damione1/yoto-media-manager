@@ -26,7 +26,9 @@ class Client:
             **({'params': parameters} if parameters is not None else {})})
         deadline = time.monotonic() + 45
         while True:
-            line = self.output.get(timeout=max(0.01, deadline - time.monotonic()))
+            try: line = self.output.get(timeout=max(0.01, deadline - time.monotonic()))
+            except queue.Empty:
+                raise TimeoutError(f'No answer to {method}: ' + ''.join(self.errors)[-3000:]) from None
             if line is None: raise RuntimeError('MCP exited: ' + ''.join(self.errors)[-3000:])
             message = json.loads(line)  # Also rejects stdout logging that corrupts stdio.
             if message.get('id') == self.sequence:

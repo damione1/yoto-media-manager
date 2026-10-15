@@ -19,7 +19,8 @@ def manifest(root,target):
     root=pathlib.Path(root)
     files={};links={}
     for file in sorted(root.rglob('*')):
-        relative=str(file.relative_to(root))
+        # Forward slashes on every platform: the app looks helpers up as youtube/yt-dlp.exe.
+        relative=file.relative_to(root).as_posix()
         if relative=='manifest.json':continue
         if file.is_symlink():
             file.resolve(strict=True).relative_to(root.resolve())
