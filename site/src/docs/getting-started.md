@@ -7,6 +7,8 @@ order: 2
 
 ## Install the app
 
+Download the latest version for your computer: [Mac with Apple Silicon](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-AppleSilicon.dmg) (M1 and later), [Mac with an Intel processor](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-Intel.dmg) or [Windows](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-Windows-setup.exe). Every version is also on [GitHub Releases](https://github.com/damione1/yoto-media-manager/releases).
+
 On macOS, open the installation disk and drag **YotoMediaManager** into **Applications**. On Windows, run the installer and follow its steps. Then open the app from Applications or the Start menu.
 
 ## Add your first audio file
