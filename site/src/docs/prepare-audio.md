@@ -14,12 +14,12 @@ From `Library`, choose `Listen` on the media you want. The player shows its titl
 1. Choose `Trim the audio` to open the trimming dialog and its waveform.
 2. Drag the start and end handles on the waveform, or the slider under it, to keep the part you want.
 3. For greater precision, enter the two positions in seconds. For example, start `12` and end `180` keep the audio from 12 seconds to 3 minutes.
-4. Click the waveform to move the playhead, then choose `Listen to the selection` to listen from there. `Play the end of the selection` plays its last seconds, to check where it ends.
+4. Click the waveform to move the playhead, then choose `Listen to the selection` to listen from there. If you click the waveform while it is already playing, playback continues from the new spot.
 5. Adjust the boundaries, then choose `Apply`. The app prepares an MP3 version; when it is ready, the dialog closes and the player shows `Trimmed version`.
 
 Playback in the trimming dialog plays only the selected range. `Stop listening` stops the preview. `Cancel` or Escape closes the dialog without creating a version; your original stays intact.
 
-![The trimming dialog: the two handles around the kept part, the playhead, the start, end and kept length, Play the end of the selection, Listen to the selection and Apply](images/trim-en.png)
+![The trimming dialog: the two handles around the kept part, the playhead, the start, end and kept length, Listen to the selection and Apply](images/trim-en.png)
 
 The end must follow the start and stay within the original duration. The app reports an error if the boundaries are invalid.
 

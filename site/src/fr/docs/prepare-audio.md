@@ -14,12 +14,12 @@ Dans `Médiathèque`, choisissez `Écouter` sur le média voulu. Le lecteur affi
 1. Choisissez `Découper l’audio` pour ouvrir le dialogue de découpe et sa forme d’onde.
 2. Faites glisser les poignées de début et de fin sur la forme d’onde, ou le curseur en dessous, pour garder la partie voulue.
 3. Pour plus de précision, saisissez les deux positions en secondes. Par exemple, début `12` et fin `180` gardent l’audio de 12 secondes à 3 minutes.
-4. Cliquez sur la forme d’onde pour déplacer la tête de lecture, puis choisissez `Écouter la sélection` pour écouter à partir de là. `Écouter la fin de la sélection` joue ses dernières secondes, pour vérifier où elle se termine.
+4. Cliquez sur la forme d’onde pour déplacer la tête de lecture, puis choisissez `Écouter la sélection` pour écouter à partir de là. Si vous cliquez sur la forme d’onde pendant l’écoute, la lecture continue à partir du nouvel endroit.
 5. Ajustez les bornes, puis choisissez `Appliquer`. L’application prépare une version MP3 ; quand elle est prête, le dialogue se ferme et le lecteur affiche `Version découpée`.
 
 Dans le dialogue de découpe, la lecture ne joue que la plage sélectionnée. `Arrêter l’écoute` arrête l’écoute. `Annuler` ou la touche Échap ferme le dialogue sans créer de version ; votre original reste intact.
 
-![Le dialogue de découpe : les deux poignées autour de la partie gardée, la tête de lecture, le début, la fin et la durée gardée, Écouter la fin de la sélection, Écouter la sélection et Appliquer](../../docs/images/trim-fr.png)
+![Le dialogue de découpe : les deux poignées autour de la partie gardée, la tête de lecture, le début, la fin et la durée gardée, Écouter la sélection et Appliquer](../../docs/images/trim-fr.png)
 
 La fin doit suivre le début et rester dans la durée de l’original. L’application signale une erreur si les bornes ne sont pas valides.
 
