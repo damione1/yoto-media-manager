@@ -88,6 +88,7 @@
     "title": "Questions fréquentes",
     "items": [
       { "q": "Est-ce une application officielle Yoto ?", "a": "Non. YotoMediaManager est une application indépendante, construite sur l’API que Yoto met à disposition des développeurs. Vous vous connectez avec votre propre compte Yoto, sur le site de Yoto." },
+      { "q": "Une version mobile pour iOS ou Android est-elle prévue ?", "a": "Non, aucune version mobile n’est prévue. L’import audio depuis YouTube est au cœur de l’application. Les restrictions de l’App Store et de Google Play sur le téléchargement de médias ne permettent pas d’y proposer cette fonction dans sa forme actuelle." },
       { "q": "Où sont stockés mes fichiers ?", "a": "Votre médiathèque reste sur votre ordinateur. Seul l’audio que vous ajoutez à une playlist est envoyé sur votre compte Yoto." },
       { "q": "Faut-il un compte Yoto ?", "a": "Pour importer et découper de l’audio, non. Pour créer des playlists et les écouter sur un lecteur, oui." },
       { "q": "Mes originaux sont-ils modifiés quand je découpe ?", "a": "Jamais. La découpe crée une version à côté de l’original, que vous pouvez exporter à tout moment." },

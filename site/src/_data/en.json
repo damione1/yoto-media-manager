@@ -88,6 +88,7 @@
     "title": "Frequently asked questions",
     "items": [
       { "q": "Is this an official Yoto app?", "a": "No. YotoMediaManager is an independent app, built on the API Yoto makes available to developers. You sign in with your own Yoto account, on Yoto’s website." },
+      { "q": "Is a mobile version for iOS or Android planned?", "a": "No, a mobile version is not planned. Importing audio from YouTube is central to the app. App Store and Google Play restrictions on media downloading prevent us from offering this feature there in its current form." },
       { "q": "Where are my files stored?", "a": "Your library stays on your computer. Only the audio you add to a playlist is sent to your Yoto account." },
       { "q": "Do I need a Yoto account?", "a": "Not to import and trim audio. To create playlists and play them on a player, yes." },
       { "q": "Are my originals changed when I trim?", "a": "Never. Trimming creates a version next to the original, which you can export at any time." },
