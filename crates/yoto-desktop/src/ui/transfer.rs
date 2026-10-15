@@ -405,10 +405,7 @@ impl Render for LibraryTransfer {
             )
         });
         body.child(
-            div()
-                .flex()
-                .justify_end()
-                .gap(px(8.))
+            theme::dialog_actions()
                 .child(theme::dialog_close(
                     "transfer-close-footer",
                     theme::pill(

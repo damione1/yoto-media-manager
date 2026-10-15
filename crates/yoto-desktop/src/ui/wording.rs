@@ -15,6 +15,11 @@ pub fn failure_text(failure: &Failure) -> String {
     match failure {
         Failure::Validation(message) => known(message)
             .or_else(|| yoto_rejected_text(message))
+            .or_else(|| {
+                yoto_domain::messages::parse_image_download_rejected(message).map(|status| {
+                    tr!("Le serveur d’images Yoto a refusé le téléchargement (code {status}). Réessayez ou importez une image.", status = status)
+                })
+            })
             .unwrap_or_else(|| message.clone()),
         Failure::Media(message) => known(message).unwrap_or_else(|| {
             tr!(
@@ -780,6 +785,9 @@ fn known_message(message: &str) -> Option<&'static str> {
         m::PLAYER_NAME_EMPTY | m::DEVICE_NAME_EMPTY => tr!("Entrez un nom pour le lecteur."),
         m::GROUP_NAME_LENGTH => tr!("Le nom du groupe doit contenir entre 1 et 100 caractères."),
         m::IMAGE_TOO_LARGE | m::FAMILY_IMAGE_TOO_LARGE => tr!("L’image dépasse 8 Mo."),
+        m::IMAGE_DOWNLOAD_FAILED => tr!(
+            "L’image choisie n’a pas pu être téléchargée depuis Yoto. Réessayez ou importez une image."
+        ),
         m::IMAGE_DIMENSIONS_EXCEED | m::IMAGE_DIMENSIONS_TOO_LARGE => {
             tr!("L’image est trop grande (8192 pixels maximum).")
         }
@@ -1027,6 +1035,11 @@ mod tests {
             "Ce lien n’est pas une adresse valide. Collez un lien YouTube complet (https://…)."
         );
         assert!(failure_text(&Failure::Connection).contains("connexion Internet"));
+        let image = failure_text(&Failure::Validation(
+            yoto_domain::messages::image_download_rejected(403),
+        ));
+        assert!(image.contains("serveur d’images") && image.contains("403"));
+        assert!(!image.contains("connexion Internet"));
         assert!(failure_text(&Failure::Authentication).contains("Compte"));
         assert!(
             failure_text(&Failure::RateLimit {
@@ -1136,6 +1149,11 @@ mod tests {
         use crate::i18n::{Language, tests::with_language};
         with_language(Language::English, || {
             assert!(failure_text(&Failure::Connection).contains("internet connection"));
+            let image = failure_text(&Failure::Validation(
+                yoto_domain::messages::image_download_rejected(403),
+            ));
+            assert!(image.contains("image server") && image.contains("403"));
+            assert!(!image.contains("internet connection"));
             let stuck = failure_text(&Failure::Transcode {
                 track: "Sleeping Beauty".into(),
                 problem: TranscodeProblem::Stalled,

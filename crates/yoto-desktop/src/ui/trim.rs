@@ -907,10 +907,7 @@ impl TrimPanel {
             .child(field(tr!("Étiquettes"), &self.tags))
             .children((!self.status.is_empty()).then(|| theme::note(self.status.clone())))
             .child(
-                div()
-                    .flex()
-                    .gap(px(8.))
-                    .justify_end()
+                theme::dialog_actions()
                     .child(theme::dialog_close(
                         "cancel-metadata-footer",
                         theme::pill(
@@ -1401,6 +1398,7 @@ impl TrimPanel {
                 pixelart::IconTarget::Media(panel.downgrade()),
                 parent,
                 account.clone(),
+                window,
                 cx,
             )
         });

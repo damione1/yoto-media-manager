@@ -334,10 +334,7 @@ impl Render for UpdatePanel {
         );
         let installing = matches!(self.state.as_ref(), UpdateState::Installing);
         body.child(
-            div()
-                .flex()
-                .justify_end()
-                .gap(px(8.))
+            theme::dialog_actions()
                 .child(theme::dialog_close(
                     "close-update-footer",
                     theme::pill(

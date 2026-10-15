@@ -3,14 +3,15 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-15 01:22-0400\n"
+"POT-Creation-Date: 2026-10-15 10:43-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/i18n.rs src/ui/chapters.rs src/ui/imports.rs src/ui/pixelart.rs
+#: src/i18n.rs src/ui/chapters.rs src/ui/imports.rs
+#: src/ui/library_playlist_picker.rs src/ui/pixelart.rs
 #: src/ui/playlist_media_picker.rs src/ui/playlist_move_picker.rs
 #: src/ui/trim.rs src/ui/wording.rs
 msgid "Annuler"
@@ -202,7 +203,7 @@ msgstr "Connected · used for syncing"
 msgid "Actualisation…"
 msgstr "Refreshing…"
 
-#: src/ui/account.rs
+#: src/ui/account.rs src/ui/library_playlist_picker.rs
 msgid "Actualiser"
 msgstr "Refresh"
 
@@ -815,7 +816,7 @@ msgstr "Unsaved images discarded. Your other entries are kept."
 msgid "Ouvrez une playlist de votre compte Yoto."
 msgstr "Open a playlist from your Yoto account."
 
-#: src/ui/editor.rs
+#: src/ui/editor.rs src/ui/library_playlist_picker.rs
 msgid "Résultat de playlist inattendu."
 msgstr "Unexpected playlist result."
 
@@ -1010,7 +1011,7 @@ msgstr ""
 "Track events are turned on with interactive playback, in the playlist’s "
 "advanced settings."
 
-#: src/ui/editor.rs
+#: src/ui/editor.rs src/ui/pixelart.rs
 msgid "Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes."
 msgstr "The account or the playlist changed. Open the icon picker again."
 
@@ -1027,6 +1028,10 @@ msgid ""
 "Cette piste n’existe plus dans la playlist ; l’audio n’a pas été remplacé."
 msgstr "This track is no longer in the playlist; the audio was not replaced."
 
+#: src/ui/editor.rs
+msgid "Cette playlist doit être vérifiée avant d’ajouter de l’audio."
+msgstr "This playlist needs to be checked before adding audio."
+
 #: src/ui/editor.rs src/ui/mod.rs
 msgid "Suppression sur Yoto…"
 msgstr "Deleting on Yoto…"
@@ -1042,10 +1047,6 @@ msgstr "Change the cover"
 #: src/ui/editor.rs
 msgid "Choisir une couverture"
 msgstr "Choose a cover"
-
-#: src/ui/editor.rs src/ui/group.rs src/ui/pixelart.rs
-msgid "Image"
-msgstr "Image"
 
 #: src/ui/editor.rs src/ui/imports.rs
 msgid "Vérifier auprès de Yoto"
@@ -1344,6 +1345,10 @@ msgstr "Unexpected answer."
 #, rust-format
 msgid "Groupe enregistré. Actualisation impossible : {reason}"
 msgstr "Group saved. Could not refresh: {reason}"
+
+#: src/ui/group.rs src/ui/pixelart.rs
+msgid "Image"
+msgstr "Image"
 
 #: src/ui/group.rs
 msgid "Modifier le groupe"
@@ -1790,10 +1795,40 @@ msgstr ""
 "computer. Media still used in a playlist or by a task in progress will be "
 "kept. This cannot be undone."
 
-#: src/ui/library.rs
+#: src/ui/library.rs src/ui/library_playlist_picker.rs
+msgid "Ajouter à une playlist"
+msgstr "Add to a playlist"
+
+#: src/ui/library_playlist_picker.rs
+msgid "Le compte Yoto a changé. Fermez cette fenêtre et recommencez."
+msgstr "The Yoto account has changed. Close this dialog and try again."
+
+#: src/ui/library_playlist_picker.rs
+msgid "Cette playlist n’est plus disponible. Actualisez la liste et réessayez."
+msgstr "This playlist is no longer available. Refresh the list and try again."
+
+#: src/ui/library_playlist_picker.rs
+msgid ""
+"Aucune playlist Yoto. Créez une playlist dans l’onglet Playlists, puis "
+"revenez ici."
+msgstr ""
+"No Yoto playlists. Create a playlist in the Playlists tab, then come back "
+"here."
+
+#: src/ui/library_playlist_picker.rs
 #, rust-format
-msgid "Ajouter à « {title} »"
-msgstr "Add to “{title}”"
+msgid "Choisissez la playlist qui recevra cet audio."
+msgid_plural "Choisissez la playlist qui recevra ces {count} audios."
+msgstr[0] "Choose the playlist to receive this audio."
+msgstr[1] "Choose the playlist to receive these {count} audio files."
+
+#: src/ui/library_playlist_picker.rs
+msgid "Chargement des playlists…"
+msgstr "Loading playlists…"
+
+#: src/ui/library_playlist_picker.rs
+msgid "Ajouter"
+msgstr "Add"
 
 #: src/ui/mod.rs
 msgid "Prêt."
@@ -2068,6 +2103,10 @@ msgid "{label} · Actualisation impossible : {reason}"
 msgstr "{label} · Could not refresh: {reason}"
 
 #: src/ui/pixelart.rs
+msgid "Rechercher une icône…"
+msgstr "Search icons…"
+
+#: src/ui/pixelart.rs
 msgid "Choisissez une image…"
 msgstr "Choose an image…"
 
@@ -2109,6 +2148,10 @@ msgid "Chargement impossible : {failure}"
 msgstr "Could not load: {failure}"
 
 #: src/ui/pixelart.rs
+msgid "Aucune icône ne correspond à votre recherche."
+msgstr "No icons match your search."
+
+#: src/ui/pixelart.rs
 msgid "Aucune icône dans cette collection. Vous pouvez importer une image."
 msgstr "No icons in this collection. You can import an image."
 
@@ -2117,6 +2160,14 @@ msgid ""
 "Aucune image pour l’instant. Importez-en une : vous pourrez la reprendre "
 "pour d’autres médias."
 msgstr "No image yet. Import one: you can reuse it for other media."
+
+#: src/ui/pixelart.rs
+msgid ""
+"Choisissez une icône Yoto ou importez une couverture. Les icônes seront "
+"agrandies en conservant leurs pixels ; vos images garderont leur résolution."
+msgstr ""
+"Choose a Yoto icon or import a cover. Icons will be enlarged with crisp "
+"pixels; your images will keep their resolution."
 
 #: src/ui/pixelart.rs
 msgid ""
@@ -2129,6 +2180,10 @@ msgstr ""
 #: src/ui/pixelart.rs
 msgid "Importer une image"
 msgstr "Import an image"
+
+#: src/ui/pixelart.rs
+msgid "Utiliser cette couverture"
+msgstr "Use this cover"
 
 #: src/ui/pixelart.rs
 msgid "Utiliser cette icône"
@@ -2555,6 +2610,13 @@ msgstr "Restarting the app…"
 
 #: src/ui/wording.rs
 #, rust-format
+msgid ""
+"Le serveur d’images Yoto a refusé le téléchargement (code {status}). "
+"Réessayez ou importez une image."
+msgstr "The Yoto image server refused the download (code {status}). Try again or import an image."
+
+#: src/ui/wording.rs
+#, rust-format
 msgid "L’audio n’a pas pu être traité. Détail : {message}"
 msgstr "The audio could not be processed. Details: {message}"
 
@@ -2848,7 +2910,8 @@ msgid ""
 msgid_plural ""
 "Ajouté à une playlist, cet audio deviendra un chapitre de {count} pistes, "
 "une par chapitre marqué."
-msgstr[0] "Added to a playlist, this audio becomes one chapter of {count} track."
+msgstr[0] ""
+"Added to a playlist, this audio becomes one chapter of {count} track."
 msgstr[1] ""
 "Added to a playlist, this audio becomes one chapter of {count} tracks, one "
 "per marked chapter."
@@ -3574,6 +3637,12 @@ msgstr "The group name must have between 1 and 100 characters."
 #: src/ui/wording.rs
 msgid "L’image dépasse 8 Mo."
 msgstr "The image is larger than 8 MB."
+
+#: src/ui/wording.rs
+msgid ""
+"L’image choisie n’a pas pu être téléchargée depuis Yoto. Réessayez ou "
+"importez une image."
+msgstr "The selected image could not be downloaded from Yoto. Try again or import an image."
 
 #: src/ui/wording.rs
 msgid "L’image est trop grande (8192 pixels maximum)."

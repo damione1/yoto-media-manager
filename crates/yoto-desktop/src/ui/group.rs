@@ -462,10 +462,7 @@ impl Render for GroupEditor {
             .children((!self.images.is_empty()).then_some(images))
             .children((!self.status.is_empty()).then(|| theme::note(self.status.clone())))
             .child(
-                div()
-                    .flex()
-                    .justify_end()
-                    .gap(px(8.))
+                theme::dialog_actions()
                     .child(theme::pill(
                         Button::new("cancel-group-draft")
                             .label(tr!("Fermer"))

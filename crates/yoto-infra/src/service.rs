@@ -258,6 +258,12 @@ pub enum Command {
     Thumbnail(AssetId),
     /// A playlist cover small enough to draw on screen, as PNG bytes.
     CoverPreview(AssetId),
+    /// Store an account catalogue icon as a full-size, crisp playlist cover.
+    StoreIconCover {
+        account: AccountId,
+        media: YotoMediaId,
+        collection: crate::api::IconCollection,
+    },
     StoreImage {
         path: PathBuf,
         pixel_art: bool,
@@ -769,7 +775,7 @@ impl Service {
             recipes: self.db.list(Table::Recipe)?,
             playlists: self.db.list(Table::Playlist)?,
             jobs: self.db.list(Table::Job)?,
-            accounts: self.db.list(Table::Account)?,
+            accounts: self.displayed_accounts(&remote)?,
             remote: current.cards.clone(),
             devices: current.devices.clone(),
             groups: current.groups.clone(),
@@ -779,6 +785,37 @@ impl Service {
             bindings: self.db.list(Table::Binding)?,
             sync_states: BTreeMap::new(),
         })
+    }
+    /// Prefer a person's profile name, then their first named player. Keep this a
+    /// projection: a player's name must not overwrite a real profile name or become
+    /// stale in the catalogue when the player is renamed or removed.
+    pub(crate) fn displayed_accounts(&self, remote: &AccountCaches) -> Result<Vec<Account>> {
+        let mut accounts = self.db.list::<Account>(Table::Account)?;
+        for account in &mut accounts {
+            if account.label != crate::auth::fallback_label(&account.id)
+                && account.label != account.id.as_str()
+            {
+                continue;
+            }
+            account.label = remote
+                .by_account
+                .get(&account.id)
+                .into_iter()
+                .flat_map(|cache| &cache.devices)
+                .find_map(|device| {
+                    let name = device
+                        .name
+                        .chars()
+                        .filter(|c| !c.is_control())
+                        .collect::<String>()
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    (!name.is_empty()).then(|| name.chars().take(60).collect())
+                })
+                .unwrap_or_else(|| "Yoto".into());
+        }
+        Ok(accounts)
     }
     fn check_device(&self, account: &AccountId, device: &DeviceId) -> Result<()> {
         let cache = self.remote.lock().map_err(storage)?;
@@ -884,7 +921,8 @@ impl Service {
             | Command::RefreshPlaylists(a)
             | Command::RefreshIcons(a)
             | Command::FamilyImages(a) => Some(a.clone()),
-            Command::CreateYotoPlaylist { account, .. }
+            Command::StoreIconCover { account, .. }
+            | Command::CreateYotoPlaylist { account, .. }
             | Command::UpdateYotoPlaylist { account, .. }
             | Command::AddYotoMedia { account, .. }
             | Command::DuplicateYotoPlaylist { account, .. }
@@ -1258,6 +1296,11 @@ impl Service {
             }
             Command::RefreshPlaylists(account) => self.refresh_cloud_playlists(&account).await,
             Command::RefreshIcons(account) => self.refresh_icons(&account).await,
+            Command::StoreIconCover {
+                account,
+                media,
+                collection,
+            } => self.store_icon_cover(&account, &media, collection).await,
             Command::CreateYotoPlaylist { account, title } => {
                 self.auth.access(&account, Scope::UserContentManage).await?;
                 self.enqueue_cloud(account, Playlist::new(title)?, CloudPlaylistWrite::Create)
@@ -1832,6 +1875,7 @@ impl Service {
             | Command::Sync(_)
             | Command::RefreshPlaylists(_)
             | Command::RefreshIcons(_)
+            | Command::StoreIconCover { .. }
             | Command::CreateYotoPlaylist { .. }
             | Command::UpdateYotoPlaylist { .. }
             | Command::AddYotoMedia { .. }
@@ -2354,6 +2398,7 @@ impl Service {
             | Command::Sync(_)
             | Command::RefreshPlaylists(_)
             | Command::RefreshIcons(_)
+            | Command::StoreIconCover { .. }
             | Command::CreateYotoPlaylist { .. }
             | Command::UpdateYotoPlaylist { .. }
             | Command::AddYotoMedia { .. }

@@ -99,6 +99,34 @@ async fn native_remote_playlist_fixture() {
             ResponseTemplate::new(200).set_body_json(json!({"displayIcon":icon})).set_delay(Duration::from_secs(2))
         })
         .mount(&server).await;
+    let cover_profile = profile.clone();
+    const COVER_URL: &str = "https://example.test/pub/fixture-cover";
+    Mock::given(method("POST"))
+        .and(path("/media/coverImage/user/me/upload"))
+        .and(query_param("autoconvert", "true"))
+        .and(query_param("coverType", "default"))
+        .and(header("Authorization", "Bearer test-token"))
+        .respond_with(move |request: &Request| {
+            assert!(request.body.starts_with(b"\x89PNG"));
+            let image = image::load_from_memory(&request.body).unwrap();
+            assert!(image.width() > 0 && image.height() > 0);
+            assert!(image.width() <= 8192 && image.height() <= 8192);
+            std::fs::write(cover_profile.join("uploaded-cover.png"), &request.body).unwrap();
+            std::fs::write(
+                cover_profile.join("cover-upload-receipt.json"),
+                serde_json::to_vec_pretty(&json!({
+                    "width": image.width(), "height": image.height(),
+                    "bytes": request.body.len(), "mediaUrl": COVER_URL
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            ResponseTemplate::new(200).set_body_json(json!({
+                "coverImage": {"mediaId": "fixture-cover", "mediaUrl": COVER_URL}
+            }))
+        })
+        .mount(&server)
+        .await;
     let documents = Arc::new(Mutex::new(BTreeMap::from([(
         "songs-card".to_owned(),
         json!({
@@ -137,6 +165,7 @@ async fn native_remote_playlist_fixture() {
         .mount(&server)
         .await;
     let create = documents.clone();
+    let saved_cover_profile = profile.clone();
     Mock::given(method("POST"))
         .and(path("/content"))
         .respond_with(move |request: &Request| {
@@ -147,6 +176,24 @@ async fn native_remote_playlist_fixture() {
                 .map(str::to_owned)
                 .unwrap_or_else(|| format!("created-{}", cards.len()));
             card["cardId"] = json!(id);
+            if card
+                .pointer("/metadata/cover/imageL")
+                .and_then(Value::as_str)
+                == Some(COVER_URL)
+            {
+                // A successful upload alone is insufficient: confirm its receipt reaches
+                // the card write that the production worker reads back from Yoto.
+                assert!(
+                    saved_cover_profile
+                        .join("cover-upload-receipt.json")
+                        .exists()
+                );
+                std::fs::write(
+                    saved_cover_profile.join("cover-save-receipt.json"),
+                    serde_json::to_vec_pretty(&card).unwrap(),
+                )
+                .unwrap();
+            }
             cards.insert(id, card.clone());
             ResponseTemplate::new(200)
                 .set_body_json(json!({"card":card}))

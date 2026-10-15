@@ -431,6 +431,16 @@ pub fn command(path: &Path) -> Command {
     #[cfg(not(windows))]
     c
 }
+/// Turn a display icon into a square cover without blurring its pixel art.
+/// Already large source images retain every original pixel.
+pub(crate) fn icon_cover(image: image::DynamicImage) -> image::DynamicImage {
+    if image.width() <= 32 && image.height() <= 32 {
+        image.resize_to_fill(512, 512, image::imageops::FilterType::Nearest)
+    } else {
+        image
+    }
+}
+
 pub fn prepare_icon(input: &Path, output: &Path) -> Result<()> {
     let image = read_image(input)?;
     if image.width() > 8192 || image.height() > 8192 {
@@ -672,5 +682,41 @@ mod preview_range_tests {
         let middle = range(10., 40., 99.421);
         assert!(preview_covers_range(at(30.001), middle, at(99.421)));
         assert!(!preview_covers_range(at(29.98), middle, at(99.421)));
+    }
+}
+
+#[cfg(test)]
+mod icon_cover_tests {
+    use super::*;
+    #[test]
+    fn catalogue_cover_enlargement_retains_hard_pixel_boundaries_and_alpha() {
+        let source = image::RgbaImage::from_fn(16, 16, |x, _| {
+            if x < 8 {
+                image::Rgba([10, 20, 30, 255])
+            } else {
+                image::Rgba([80, 90, 100, 0])
+            }
+        });
+        let cover = icon_cover(image::DynamicImage::ImageRgba8(source)).to_rgba8();
+        assert_eq!(cover.dimensions(), (512, 512));
+        assert_eq!(cover.get_pixel(255, 511).0, [10, 20, 30, 255]);
+        assert_eq!(cover.get_pixel(256, 0).0, [80, 90, 100, 0]);
+        assert_eq!(
+            cover
+                .pixels()
+                .map(|p| p.0)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            2
+        );
+    }
+    #[test]
+    fn high_resolution_cover_is_preserved_pixel_for_pixel() {
+        let source =
+            image::RgbaImage::from_fn(1024, 768, |x, y| image::Rgba([x as u8, y as u8, 55, 255]));
+        assert_eq!(
+            icon_cover(image::DynamicImage::ImageRgba8(source.clone())).to_rgba8(),
+            source
+        );
     }
 }
