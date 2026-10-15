@@ -11,6 +11,8 @@ layout: layouts/base.njk
 <a class="btn {{ 'btn-light' if onInk else 'btn-ghost' }} btn-lg" href="{{ site.download.windows }}">{{ secondary }}</a>
 {% endmacro %}
 
+{% macro signing(t) %}{{ t.dl.signing }} <a href="https://signpath.io">SignPath.io</a>{{ t.dl.signingBy }} <a href="https://signpath.org">SignPath Foundation</a>.{% endmacro %}
+
 {% macro otherDownloads(t) %}{{ t.dl.intel }} <a href="{{ site.download.macIntel }}">{{ t.dl.intelLink }}</a> · <a href="{{ site.releases }}">{{ t.dl.all }}</a>{% endmacro %}
 
 {# ── Hero ── #}
@@ -22,6 +24,7 @@ layout: layouts/base.njk
     <div id="download" class="actions">{{ downloads(t, t.hero.ctaMac, t.hero.ctaWin) }}</div>
     <p class="meta">{{ t.hero.note }}</p>
     <p class="meta other-dl">{{ otherDownloads(t) }}</p>
+    <p class="meta other-dl">{{ signing(t) }}</p>
   </div>
 
   <div class="hero-visual" aria-hidden="true">
@@ -134,6 +137,7 @@ layout: layouts/base.njk
     <div class="cta-do">
       <div class="actions">{{ downloads(t, t.cta.mac, t.cta.win, true) }}</div>
       <p class="cta-note other-dl">{{ otherDownloads(t) }}</p>
+      <p class="cta-note other-dl">{{ signing(t) }}</p>
     </div>
   </div>
 </section>

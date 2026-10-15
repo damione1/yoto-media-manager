@@ -100,7 +100,7 @@
     "mac": "Télécharger pour macOS",
     "win": "Pour Windows"
   },
-  "dl": { "intel": "Mac avec processeur Intel ?", "intelLink": "Version Intel", "all": "Toutes les versions" },
+  "dl": { "intel": "Mac avec processeur Intel ?", "intelLink": "Version Intel", "all": "Toutes les versions", "signing": "Windows : signature de code gratuite fournie par", "signingBy": ", certificat de la" },
   "footer": {
     "label": "Pied de page",
     "guide": "Guide d’utilisation",
