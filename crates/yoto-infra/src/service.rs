@@ -120,6 +120,12 @@ pub enum Command {
     },
     StopPreview,
     PreviewStatus,
+    /// Pause the local preview where it stands; the next `PreviewTrim` or `Preview` from
+    /// that position resumes it at once.
+    PausePreview,
+    /// Decode a media's original for listening ahead of its first `PreviewTrim`, so that
+    /// one starts without waiting. The decoded audio is kept for the previews that follow.
+    PreparePreview(MediaId),
     Export {
         media: MediaId,
         destination: PathBuf,
@@ -378,6 +384,12 @@ pub struct Service {
     preview: std::sync::mpsc::Sender<PreviewCommand>,
     playback: Arc<Mutex<PreviewStatus>>,
     preview_cancel: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
+    /// The last asset decoded for listening, kept so that every preview of it starts at
+    /// once; replaced when another asset is listened to.
+    preview_cache: Mutex<Option<PreviewCache>>,
+    /// The decode for listening in progress, if any; requests for its asset wait for it.
+    preview_decode: Mutex<Option<PreviewDecode>>,
+    preview_decoded: std::sync::Condvar,
     pub(crate) remote: Mutex<AccountCaches>,
     asset_mutation: Mutex<()>,
     cloud_mutation: tokio::sync::Mutex<()>,
@@ -493,13 +505,27 @@ fn apply_collection(
 }
 enum PreviewCommand {
     Play {
-        lease: Lease,
+        lease: Arc<Lease>,
         cancel: Arc<std::sync::atomic::AtomicBool>,
         reply: std::sync::mpsc::Sender<Result<()>>,
         media: MediaId,
-        start: MediaTime,
+        /// The time of the media at the start of the decoded file.
+        origin: MediaTime,
+        /// The part of the decoded file to play.
+        trim: TrimRange,
     },
+    Pause,
     Stop,
+}
+/// An asset decoded for listening, shared by the previews that play it.
+struct PreviewCache {
+    asset: AssetId,
+    lease: Arc<Lease>,
+}
+/// A decode for listening in progress, and the flag that abandons it.
+struct PreviewDecode {
+    asset: AssetId,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
 }
 impl Service {
     pub fn open(profile: PathBuf, tools: Tools) -> Result<Arc<Self>> {
@@ -573,6 +599,9 @@ impl Service {
             preview: tx,
             playback,
             preview_cancel: Mutex::new(None),
+            preview_cache: Mutex::new(None),
+            preview_decode: Mutex::new(None),
+            preview_decoded: std::sync::Condvar::new(),
             asset_mutation: Mutex::new(()),
             cloud_mutation: tokio::sync::Mutex::new(()),
             jobs: Mutex::new(BTreeMap::new()),
@@ -856,6 +885,8 @@ impl Service {
             | Command::PreviewTrim { .. }
             | Command::StopPreview
             | Command::PreviewStatus
+            | Command::PausePreview
+            | Command::PreparePreview(_)
             | Command::Export { .. }
             | Command::Connect
             | Command::CancelConnect
@@ -886,6 +917,10 @@ impl Service {
         }
         if matches!(&command, Command::StopPreview) {
             self.stop_preview()?;
+            return Ok(Reply::Updated);
+        }
+        if matches!(&command, Command::PausePreview) {
+            self.preview.send(PreviewCommand::Pause).map_err(storage)?;
             return Ok(Reply::Updated);
         }
         if matches!(&command, Command::PreviewStatus) {
@@ -1643,6 +1678,8 @@ impl Service {
             | Command::PreviewTrim { .. }
             | Command::StopPreview
             | Command::PreviewStatus
+            | Command::PausePreview
+            | Command::PreparePreview(_)
             | Command::Export { .. }
             | Command::Publish { .. }
             | Command::Retry(_)
@@ -1692,6 +1729,7 @@ impl Service {
             | Command::Waveform(_)
             | Command::Preview(_)
             | Command::PreviewTrim { .. }
+            | Command::PreparePreview(_)
             | Command::Export { .. }
             | Command::Backup { .. }
             | Command::Publish { .. }
@@ -1720,6 +1758,7 @@ impl Service {
             | Command::SetMediaChapters { .. }
             | Command::StopPreview
             | Command::PreviewStatus
+            | Command::PausePreview
             | Command::Retry(_)
             | Command::Cancel(_)
             | Command::Connect
@@ -1926,24 +1965,40 @@ impl Service {
                 let recipe = self.recipe(recipe)?;
                 let source = self.media(recipe.media)?;
                 TrimRange::new(recipe.trim.start(), recipe.trim.end(), source.info.duration)?;
-                let (asset, trim) = match (recipe.result, &recipe.info) {
+                // A finished cut is heard as encoded, its positions reported in the
+                // original's time, where the trim dialog shows them.
+                let (asset, duration, origin, trim) = match (recipe.result, &recipe.info) {
                     (Some(id), Some(info)) => (
                         self.asset(id)?,
-                        TrimRange::new(MediaTime::from_seconds(0.)?, info.duration, info.duration)?,
+                        info.duration,
+                        recipe.trim.start(),
+                        TrimRange::new(MediaTime::ZERO, info.duration, info.duration)?,
                     ),
-                    (None, _) => (self.asset(recipe.original)?, recipe.trim),
+                    (None, _) => (
+                        self.asset(recipe.original)?,
+                        source.info.duration,
+                        MediaTime::ZERO,
+                        recipe.trim,
+                    ),
                     (Some(_), None) => {
                         return Err(Failure::Storage("Prepared audio metadata missing".into()));
                     }
                 };
-                self.play_preview(recipe.media, recipe.trim.start(), &asset, trim)?;
+                self.play_preview(recipe.media, &asset, duration, origin, trim)?;
                 Ok(Reply::Updated)
             }
             Command::PreviewTrim { media, trim } => {
                 let m = self.media(media)?;
                 TrimRange::new(trim.start(), trim.end(), m.info.duration)?;
                 let a = self.asset(m.original)?;
-                self.play_preview(media, trim.start(), &a, trim)?;
+                self.play_preview(media, &a, m.info.duration, MediaTime::ZERO, trim)?;
+                Ok(Reply::Updated)
+            }
+            Command::PreparePreview(media) => {
+                let m = self.media(media)?;
+                let a = self.asset(m.original)?;
+                let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                self.decoded_preview(&a, m.info.duration, &cancel)?;
                 Ok(Reply::Updated)
             }
             Command::PreviewStatus => Ok(Reply::Data(
@@ -1951,6 +2006,10 @@ impl Service {
             )),
             Command::StopPreview => {
                 self.stop_preview()?;
+                Ok(Reply::Updated)
+            }
+            Command::PausePreview => {
+                self.preview.send(PreviewCommand::Pause).map_err(storage)?;
                 Ok(Reply::Updated)
             }
             Command::Export {
@@ -2289,11 +2348,15 @@ impl Service {
         }
         self.preview.send(PreviewCommand::Stop).map_err(storage)
     }
+    /// Play `trim` of `asset`, a file lasting `duration`, as `media`; positions are
+    /// reported from `origin`, the time of the media at the start of the file. The asset
+    /// is decoded once, so every preview of it after the first starts at once.
     fn play_preview(
         &self,
         media: MediaId,
-        start: MediaTime,
         asset: &Asset,
+        duration: MediaTime,
+        origin: MediaTime,
         trim: TrimRange,
     ) -> Result<()> {
         let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -2302,16 +2365,17 @@ impl Service {
             if let Some(previous) = active.replace(cancel.clone()) {
                 previous.store(true, std::sync::atomic::Ordering::SeqCst);
             }
-            self.preview.send(PreviewCommand::Stop).map_err(storage)?;
+            // A sound that keeps playing while the next one starts at once is replaced
+            // in one step; one that would play on through a decode is stopped first.
+            if !self.preview_decoded_for(asset.id)? {
+                self.preview.send(PreviewCommand::Stop).map_err(storage)?;
+            }
         }
-        let _guard = crate::process::OperationGuard::install(cancel.clone());
-        let input = self.store.materialize(asset)?;
-        let lease = self.store.lease("wav")?;
-        self.tools.preview(input.path(), lease.path(), trim)?;
+        let lease = self.decoded_preview(asset, duration, &cancel)?;
         let (reply, receive) = std::sync::mpsc::channel();
         {
             // The generation check and enqueue share Stop/new-preview's lock. A stale
-            // decode can neither restart playback nor displace the newer selection.
+            // request can neither restart playback nor displace the newer selection.
             let active = self.preview_cancel.lock().map_err(storage)?;
             if !active.as_ref().is_some_and(|v| Arc::ptr_eq(v, &cancel))
                 || cancel.load(std::sync::atomic::Ordering::SeqCst)
@@ -2322,7 +2386,8 @@ impl Service {
                 .send(PreviewCommand::Play {
                     lease,
                     media,
-                    start,
+                    origin,
+                    trim,
                     cancel: cancel.clone(),
                     reply,
                 })
@@ -2335,6 +2400,83 @@ impl Service {
                 Err(Failure::Media(messages::AUDIO_OUTPUT_SILENT.into()))
             }
         }
+    }
+    fn preview_decoded_for(&self, asset: AssetId) -> Result<bool> {
+        Ok(self
+            .preview_cache
+            .lock()
+            .map_err(storage)?
+            .as_ref()
+            .is_some_and(|cached| cached.asset == asset))
+    }
+    /// The whole of `asset` decoded to playable PCM: the copy kept from an earlier
+    /// preview, or a fresh decode that the following previews then share. One decode runs
+    /// at a time: a request for the asset being decoded waits for it, one for another
+    /// asset abandons it and takes its turn. `cancel` gives up the wait, or the decode
+    /// this call runs.
+    fn decoded_preview(
+        &self,
+        asset: &Asset,
+        duration: MediaTime,
+        cancel: &Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Arc<Lease>> {
+        use std::sync::atomic::Ordering::SeqCst;
+        loop {
+            if let Some(cached) = self.preview_cache.lock().map_err(storage)?.as_ref()
+                && cached.asset == asset.id
+            {
+                return Ok(cached.lease.clone());
+            }
+            if cancel.load(SeqCst) {
+                return Err(Failure::Cancelled);
+            }
+            let mut decoding = self.preview_decode.lock().map_err(storage)?;
+            if let Some(current) = decoding.as_ref() {
+                if current.asset != asset.id {
+                    current.cancel.store(true, SeqCst);
+                }
+                let (waited, _) = self
+                    .preview_decoded
+                    .wait_timeout(decoding, std::time::Duration::from_millis(100))
+                    .map_err(storage)?;
+                drop(waited);
+                continue;
+            }
+            *decoding = Some(PreviewDecode {
+                asset: asset.id,
+                cancel: cancel.clone(),
+            });
+            drop(decoding);
+            let result = self.decode_preview(asset, duration, cancel);
+            {
+                let mut decoding = self.preview_decode.lock().map_err(storage)?;
+                decoding.take();
+                if let Ok(lease) = &result {
+                    *self.preview_cache.lock().map_err(storage)? = Some(PreviewCache {
+                        asset: asset.id,
+                        lease: lease.clone(),
+                    });
+                }
+            }
+            self.preview_decoded.notify_all();
+            return result;
+        }
+    }
+    fn decode_preview(
+        &self,
+        asset: &Asset,
+        duration: MediaTime,
+        cancel: &Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Arc<Lease>> {
+        let _guard = crate::process::OperationGuard::install(cancel.clone());
+        let input = self.store.materialize(asset)?;
+        let lease = self.store.lease("wav")?;
+        let whole = TrimRange::new(MediaTime::ZERO, duration, duration)?;
+        self.tools.preview(input.path(), lease.path(), whole)?;
+        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(Failure::Cancelled);
+        }
+        Ok(Arc::new(lease))
     }
     fn protect_assets(&self) -> Result<crate::assets::AssetProtection> {
         let _commit = self.asset_mutation.lock().map_err(storage)?;
@@ -3294,12 +3436,13 @@ fn excerpt(value: &serde_json::Value) -> String {
 #[derive(Default)]
 struct Playback {
     player: Option<objc2::rc::Retained<objc2_avf_audio::AVAudioPlayer>>,
+    paused: bool,
 }
 #[cfg(target_os = "macos")]
 impl Playback {
-    /// Starts `path` through AVAudioPlayer, which plays on the system default output and
-    /// moves with it when a headset is put on or taken off mid-sound.
-    fn start(&mut self, path: &std::path::Path) -> Result<()> {
+    /// Starts `path` at `at` seconds through AVAudioPlayer, which plays on the system
+    /// default output and moves with it when a headset is put on or taken off mid-sound.
+    fn start(&mut self, path: &std::path::Path, at: f64) -> Result<()> {
         use objc2::AnyThread;
         use objc2_avf_audio::AVAudioPlayer;
         use objc2_foundation::NSURL;
@@ -3319,6 +3462,8 @@ impl Playback {
                             e.localizedDescription()
                         ))
                     })?;
+            // SAFETY: plain property writes and calls on the player this thread owns.
+            unsafe { player.setCurrentTime(at.max(0.)) };
             if !unsafe { player.play() } {
                 eprintln!(
                     "Audio output unavailable: playback of {} refused",
@@ -3329,20 +3474,34 @@ impl Playback {
                 ));
             }
             self.player = Some(player);
+            self.paused = false;
             Ok(())
         })
     }
-    /// Seconds played so far, or `None` once the sound has ended or nothing is playing.
-    fn elapsed(&self) -> Option<f64> {
+    /// Holds the sound where it stands; `start` plays again from any position.
+    fn pause(&mut self) {
+        if let Some(player) = &self.player {
+            // SAFETY: a plain call on the player this thread owns.
+            objc2::rc::autoreleasepool(|_| unsafe { player.pause() });
+            self.paused = true;
+        }
+    }
+    fn paused(&self) -> bool {
+        self.paused
+    }
+    /// Seconds into the file, playing or paused; `None` once the sound has ended or
+    /// nothing is loaded.
+    fn position(&self) -> Option<f64> {
         let player = self.player.as_ref()?;
         // SAFETY: plain property reads on the player this thread owns.
-        unsafe { player.isPlaying().then(|| player.currentTime()) }
+        unsafe { (self.paused || player.isPlaying()).then(|| player.currentTime()) }
     }
     fn stop(&mut self) {
         if let Some(player) = self.player.take() {
             // SAFETY: the player is this thread's and is dropped right after.
             objc2::rc::autoreleasepool(|_| unsafe { player.stop() });
         }
+        self.paused = false;
     }
 }
 /// Where previews play: a rodio player on the OS default output, reopened when that output
@@ -3352,10 +3511,15 @@ impl Playback {
 struct Playback {
     output: Option<PreviewOutput>,
     player: Option<rodio::Player>,
+    /// Seconds into the file where the player's own count starts.
+    offset: f64,
 }
 #[cfg(not(target_os = "macos"))]
 impl Playback {
-    fn start(&mut self, path: &std::path::Path) -> Result<()> {
+    /// Starts `path` at `at` seconds: the decoder is moved there before the player takes
+    /// it, so the player counts from that point.
+    fn start(&mut self, path: &std::path::Path, at: f64) -> Result<()> {
+        use rodio::Source;
         self.stop();
         let output = match PreviewOutput::current_or_open(self.output.take()) {
             Ok(output) => self.output.insert(output),
@@ -3365,20 +3529,36 @@ impl Playback {
             }
         };
         let file = File::open(path).map_err(storage)?;
-        let decoder = rodio::Decoder::try_from(file)
+        let mut decoder = rodio::Decoder::try_from(file)
             .map_err(|e| Failure::Media(format!("Preview decoding failed: {e}")))?;
+        let at = at.max(0.);
+        decoder
+            .try_seek(std::time::Duration::from_secs_f64(at))
+            .map_err(|e| Failure::Media(format!("Preview seeking failed: {e}")))?;
         let player = rodio::Player::connect_new(output.sink.mixer());
         player.append(decoder);
         self.player = Some(player);
+        self.offset = at;
         Ok(())
     }
-    /// Seconds played so far, or `None` once the sound has ended or nothing is playing.
-    fn elapsed(&self) -> Option<f64> {
+    /// Holds the sound where it stands; `start` plays again from any position.
+    fn pause(&mut self) {
+        if let Some(player) = &self.player {
+            player.pause();
+        }
+    }
+    fn paused(&self) -> bool {
+        self.player.as_ref().is_some_and(rodio::Player::is_paused)
+    }
+    /// Seconds into the file, playing or paused; `None` once the sound has ended or
+    /// nothing is loaded.
+    fn position(&self) -> Option<f64> {
         let player = self.player.as_ref()?;
-        (!player.empty()).then(|| player.get_pos().as_secs_f64())
+        (!player.empty()).then(|| self.offset + player.get_pos().as_secs_f64())
     }
     fn stop(&mut self) {
         self.player.take();
+        self.offset = 0.;
     }
 }
 /// A sink on the OS default output, with the device it was opened on and whether its stream
@@ -3462,39 +3642,90 @@ fn preview_position(start: MediaTime, elapsed: f64) -> MediaTime {
     }
     MediaTime::from_seconds(start.seconds() + elapsed).unwrap_or(start)
 }
+/// What the player reports for a preview of `media` whose decoded file begins at `origin`
+/// of the media and is heard up to `end` seconds into the file: where it stands, held or
+/// playing, or that it is over, once the sound ran out, reached `end` or was cancelled.
+fn preview_state(
+    media: MediaId,
+    origin: MediaTime,
+    end: MediaTime,
+    position: Option<f64>,
+    paused: bool,
+    cancelled: bool,
+) -> PreviewStatus {
+    match position {
+        Some(seconds) if !cancelled && seconds < end.seconds() => {
+            let position = preview_position(origin, seconds);
+            if paused {
+                PreviewStatus::Paused { media, position }
+            } else {
+                PreviewStatus::Playing { media, position }
+            }
+        }
+        Some(_) | None => PreviewStatus::Stopped,
+    }
+}
+/// How long the preview thread sleeps before reading the player again: its usual beat, or
+/// just what is left before `end` seconds into the file so the sound stops there and not a
+/// beat later.
+fn preview_poll(position: Option<f64>, paused: bool, end: MediaTime) -> std::time::Duration {
+    const BEAT: std::time::Duration = std::time::Duration::from_millis(100);
+    match position {
+        Some(seconds) if !paused => {
+            let left = (end.seconds() - seconds).clamp(0.001, BEAT.as_secs_f64());
+            std::time::Duration::from_secs_f64(left)
+        }
+        Some(_) | None => BEAT,
+    }
+}
+/// The preview being heard: its decoded file, kept alive while it plays, and where its
+/// sound is placed in the media.
+struct PreviewTimeline {
+    _lease: Arc<Lease>,
+    media: MediaId,
+    origin: MediaTime,
+    end: MediaTime,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
+}
 fn preview_loop(
     receiver: std::sync::mpsc::Receiver<PreviewCommand>,
     status: Arc<Mutex<PreviewStatus>>,
 ) {
     let mut playback = Playback::default();
-    let mut timeline: Option<(MediaId, MediaTime)> = None;
-    let mut lease = None;
-    let mut active_cancel: Option<Arc<std::sync::atomic::AtomicBool>> = None;
+    let mut current: Option<PreviewTimeline> = None;
+    let mut wait = preview_poll(None, false, MediaTime::ZERO);
+    let report = |current: &mut Option<PreviewTimeline>, playback: &mut Playback| {
+        let Some(timeline) = current.as_ref() else {
+            return (
+                PreviewStatus::Stopped,
+                preview_poll(None, false, MediaTime::ZERO),
+            );
+        };
+        let position = playback.position();
+        let paused = playback.paused();
+        let state = preview_state(
+            timeline.media,
+            timeline.origin,
+            timeline.end,
+            position,
+            paused,
+            timeline.cancel.load(std::sync::atomic::Ordering::SeqCst),
+        );
+        let wait = preview_poll(position, paused, timeline.end);
+        if matches!(state, PreviewStatus::Stopped) {
+            playback.stop();
+            current.take();
+        }
+        (state, wait)
+    };
     loop {
-        let command = match receiver.recv_timeout(std::time::Duration::from_millis(100)) {
+        let command = match receiver.recv_timeout(wait) {
             Ok(command) => command,
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                let Some((media, start)) = timeline else {
-                    continue;
-                };
-                let cancelled = active_cancel
-                    .as_ref()
-                    .is_some_and(|c| c.load(std::sync::atomic::Ordering::SeqCst));
-                let state = match playback.elapsed() {
-                    Some(elapsed) if !cancelled => PreviewStatus::Playing {
-                        media,
-                        position: preview_position(start, elapsed),
-                    },
-                    _ => {
-                        playback.stop();
-                        lease.take();
-                        active_cancel.take();
-                        timeline = None;
-                        PreviewStatus::Stopped
-                    }
-                };
-                if let Ok(mut current) = status.lock() {
-                    *current = state;
+                let (state, next) = report(&mut current, &mut playback);
+                wait = next;
+                if let Ok(mut status) = status.lock() {
+                    *status = state;
                 }
                 continue;
             }
@@ -3502,39 +3733,49 @@ fn preview_loop(
         };
         match command {
             PreviewCommand::Play {
-                lease: next,
+                lease,
                 media,
-                start,
+                origin,
+                trim,
                 cancel,
                 reply,
             } => {
-                playback.stop();
-                lease.take();
                 let result = (|| {
                     if cancel.load(std::sync::atomic::Ordering::SeqCst) {
                         return Err(Failure::Cancelled);
                     }
-                    playback.start(next.path())?;
+                    playback.start(lease.path(), trim.start().seconds())?;
                     if cancel.load(std::sync::atomic::Ordering::SeqCst) {
                         playback.stop();
+                        current.take();
                         return Err(Failure::Cancelled);
                     }
-                    lease = Some(next);
-                    active_cancel = Some(cancel);
-                    timeline = Some((media, start));
+                    current = Some(PreviewTimeline {
+                        _lease: lease,
+                        media,
+                        origin,
+                        end: trim.end(),
+                        cancel,
+                    });
                     *status.lock().map_err(storage)? = PreviewStatus::Playing {
                         media,
-                        position: start,
+                        position: preview_position(origin, trim.start().seconds()),
                     };
                     Ok(())
                 })();
                 let _ = reply.send(result);
             }
+            PreviewCommand::Pause => {
+                playback.pause();
+                let (state, next) = report(&mut current, &mut playback);
+                wait = next;
+                if let Ok(mut status) = status.lock() {
+                    *status = state;
+                }
+            }
             PreviewCommand::Stop => {
                 playback.stop();
-                lease.take();
-                active_cancel.take();
-                timeline = None;
+                current.take();
                 if let Ok(mut state) = status.lock() {
                     *state = PreviewStatus::Stopped;
                 }
@@ -3588,6 +3829,50 @@ mod tests {
         assert_eq!(preview_position(start, -1.0), start);
         assert_eq!(preview_position(start, f64::NAN), start);
         assert_eq!(preview_position(start, f64::INFINITY), start);
+    }
+    #[test]
+    fn a_paused_preview_keeps_its_place_and_one_at_its_end_is_over() {
+        let media = MediaId::new();
+        let origin = MediaTime::from_seconds(10.).unwrap();
+        let end = MediaTime::from_seconds(30.).unwrap();
+        let position = |state: &PreviewStatus| match state {
+            PreviewStatus::Playing { position, .. } | PreviewStatus::Paused { position, .. } => {
+                Some(position.seconds())
+            }
+            PreviewStatus::Stopped => None,
+        };
+        let playing = preview_state(media, origin, end, Some(4.5), false, false);
+        assert!(matches!(playing, PreviewStatus::Playing { media: m, .. } if m == media));
+        assert_eq!(position(&playing), Some(14.5));
+        // Held: the same place, reported as paused, for as long as the pause lasts.
+        let paused = preview_state(media, origin, end, Some(4.5), true, false);
+        assert!(matches!(paused, PreviewStatus::Paused { media: m, .. } if m == media));
+        assert_eq!(position(&paused), Some(14.5));
+        // Over: the sound ran out, the end of the range was reached, or it was cancelled.
+        for over in [
+            preview_state(media, origin, end, None, false, false),
+            preview_state(media, origin, end, Some(30.), false, false),
+            preview_state(media, origin, end, Some(31.), true, false),
+            preview_state(media, origin, end, Some(4.5), false, true),
+        ] {
+            assert!(matches!(over, PreviewStatus::Stopped));
+        }
+    }
+    #[test]
+    fn the_player_is_read_again_just_before_the_end_of_the_range() {
+        let end = MediaTime::from_seconds(30.).unwrap();
+        let beat = std::time::Duration::from_millis(100);
+        assert_eq!(preview_poll(Some(10.), false, end), beat);
+        let left = preview_poll(Some(29.96), false, end).as_secs_f64();
+        assert!((left - 0.04).abs() < 1e-6, "{left}");
+        // Never a busy loop, even past the end.
+        assert_eq!(
+            preview_poll(Some(31.), false, end),
+            std::time::Duration::from_millis(1)
+        );
+        // Paused or silent, the usual beat.
+        assert_eq!(preview_poll(Some(29.96), true, end), beat);
+        assert_eq!(preview_poll(None, false, end), beat);
     }
     #[cfg(not(target_os = "macos"))]
     #[test]

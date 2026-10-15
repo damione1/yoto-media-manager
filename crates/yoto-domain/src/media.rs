@@ -378,8 +378,11 @@ pub enum CatalogueSort {
     RecentlyImported,
 }
 
+/// Where the local player stands. A paused preview keeps its place in the media and
+/// resumes from there; a stopped one has ended or was dismissed.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum PreviewStatus {
     Stopped,
     Playing { media: MediaId, position: MediaTime },
+    Paused { media: MediaId, position: MediaTime },
 }
