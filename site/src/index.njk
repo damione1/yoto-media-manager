@@ -21,10 +21,9 @@ layout: layouts/base.njk
     <p class="badge f-lilac">{{ t.hero.badge }}</p>
     <h1 id="hero-title" class="h-display">{{ t.hero.title }} <span class="accent">{{ t.hero.titleAccent }}</span></h1>
     <p class="lede">{{ t.hero.sub }}</p>
-    <div id="download" class="actions">{{ downloads(t, t.hero.ctaMac, t.hero.ctaWin) }}</div>
+    <div class="actions">{{ downloads(t, t.hero.ctaMac, t.hero.ctaWin) }}</div>
     <p class="meta">{{ t.hero.note }}</p>
     <p class="meta other-dl">{{ otherDownloads(t) }}</p>
-    <p class="meta other-dl">{{ signing(t) }}</p>
   </div>
 
   <div class="hero-visual" aria-hidden="true">
@@ -130,8 +129,8 @@ layout: layouts/base.njk
   </div>
 </section>
 
-{# ── Last call ── #}
-<section class="wrap cta-wrap" aria-labelledby="cta-title">
+{# ── Last call: the download section links point to ── #}
+<section id="download" class="wrap cta-wrap" aria-labelledby="cta-title">
   <div class="cta">
     <h2 id="cta-title" class="h2">{{ t.cta.title }}</h2>
     <div class="cta-do">
