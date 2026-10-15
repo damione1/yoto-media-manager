@@ -98,9 +98,9 @@
   "cta": {
     "title": "Remplissez leur Yoto de leurs chansons préférées.",
     "mac": "Télécharger pour macOS",
-    "win": "Pour Windows",
-    "note": "Les téléchargements sont sur la page des versions GitHub."
+    "win": "Pour Windows"
   },
+  "dl": { "intel": "Mac avec processeur Intel ?", "intelLink": "Version Intel", "all": "Toutes les versions" },
   "footer": {
     "label": "Pied de page",
     "guide": "Guide d’utilisation",

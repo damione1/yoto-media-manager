@@ -55,7 +55,7 @@ I built **YotoMediaManager** to bring the whole process into one place: find the
 
 ## Download
 
-For **macOS** and **Windows**. Get the latest version from [Releases](https://github.com/damione1/yoto-media-manager/releases). The app checks for updates and installs them for you.
+For **macOS** and **Windows**. Download the latest version for [macOS (Apple Silicon)](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-AppleSilicon.dmg), [macOS (Intel)](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-Intel.dmg) or [Windows](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-Windows-setup.exe), or browse every version in [Releases](https://github.com/damione1/yoto-media-manager/releases). The app checks for updates and installs them for you.
 
 New to it? The [user guide](site/src/docs/index.md) walks through the first import, trimming, playlists and players.
 

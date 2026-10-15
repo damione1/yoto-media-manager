@@ -7,9 +7,11 @@ layout: layouts/base.njk
 {% from "mocks/mocks.njk" import importScene, trimScene, playlistScene %}
 
 {% macro downloads(t, primary, secondary, onInk = false) %}
-<a class="btn btn-primary btn-lg" href="{{ site.latest }}">{{ icon("download", 20, 2.6) }}{{ primary }}</a>
-<a class="btn {{ 'btn-light' if onInk else 'btn-ghost' }} btn-lg" href="{{ site.latest }}">{{ secondary }}</a>
+<a class="btn btn-primary btn-lg" href="{{ site.download.mac }}">{{ icon("download", 20, 2.6) }}{{ primary }}</a>
+<a class="btn {{ 'btn-light' if onInk else 'btn-ghost' }} btn-lg" href="{{ site.download.windows }}">{{ secondary }}</a>
 {% endmacro %}
+
+{% macro otherDownloads(t) %}{{ t.dl.intel }} <a href="{{ site.download.macIntel }}">{{ t.dl.intelLink }}</a> · <a href="{{ site.releases }}">{{ t.dl.all }}</a>{% endmacro %}
 
 {# ── Hero ── #}
 <section class="hero wrap" aria-labelledby="hero-title">
@@ -19,6 +21,7 @@ layout: layouts/base.njk
     <p class="lede">{{ t.hero.sub }}</p>
     <div id="download" class="actions">{{ downloads(t, t.hero.ctaMac, t.hero.ctaWin) }}</div>
     <p class="meta">{{ t.hero.note }}</p>
+    <p class="meta other-dl">{{ otherDownloads(t) }}</p>
   </div>
 
   <div class="hero-visual" aria-hidden="true">
@@ -130,7 +133,7 @@ layout: layouts/base.njk
     <h2 id="cta-title" class="h2">{{ t.cta.title }}</h2>
     <div class="cta-do">
       <div class="actions">{{ downloads(t, t.cta.mac, t.cta.win, true) }}</div>
-      <p class="cta-note">{{ t.cta.note }}</p>
+      <p class="cta-note other-dl">{{ otherDownloads(t) }}</p>
     </div>
   </div>
 </section>
