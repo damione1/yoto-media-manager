@@ -308,6 +308,7 @@ abbr[title] { text-decoration: none; }
 .cta .btn-primary { background: var(--ink); color: #fff; box-shadow: none; }
 .cta .btn-primary:hover { background: #31444E; color: #fff; }
 .cta-note { font-size: 14px; font-weight: 700; color: var(--on-primary); }
+.other-dl a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 /* ─── Footer ─── */
 .site-foot { padding-block: 24px 48px; }

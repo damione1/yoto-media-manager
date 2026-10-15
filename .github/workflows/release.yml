@@ -175,6 +175,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y minisign
           python3 scripts/updater_release.py --assemble release
+      # The website links to releases/latest/download/<name>, so each release
+      # also carries its installers under names without the version.
+      - name: Copy installers under fixed names
+        run: |
+          cp "release/YotoMediaManager-$YOTO_APP_VERSION-aarch64-apple-darwin.dmg" release/YotoMediaManager-macOS-AppleSilicon.dmg
+          cp "release/YotoMediaManager-$YOTO_APP_VERSION-x86_64-apple-darwin.dmg" release/YotoMediaManager-macOS-Intel.dmg
+          cp "release/YotoMediaManager-$YOTO_APP_VERSION-x64-setup.exe" release/YotoMediaManager-Windows-setup.exe
       - name: Publish complete release
         env:
           GH_TOKEN: ${{ github.token }}
