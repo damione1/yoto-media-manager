@@ -78,6 +78,12 @@ pub struct Chapter {
     pub tracks: Vec<Track>,
     pub extra: Extra,
 }
+/// One Yoto track to make from a media of the library: its prepared version and its title.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct MediaTrack {
+    pub recipe: RecipeId,
+    pub title: String,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct RemoteBase {
     pub account: AccountId,
@@ -163,27 +169,15 @@ impl Playlist {
     }
     /// Add a media version as one chapter holding one track, both with the media's icon.
     pub fn add_media(&mut self, media: &MediaItem, recipe: RecipeId) -> Result<()> {
-        let track = Track {
-            id: TrackId::new(),
-            key: TrackKey::fresh(),
-            title: media.title.clone(),
-            icon: media.icon.clone(),
-            events: None,
-            media: TrackMedia::Local {
-                media: media.id,
+        self.add_media_tracks(
+            media,
+            &media.title,
+            vec![MediaTrack {
                 recipe,
-            },
-            extra: Extra::new(),
-        };
-        self.chapters.push(Chapter {
-            id: ChapterId::new(),
-            key: ChapterKey::fresh(),
-            title: media.title.clone(),
-            icon: media.icon.clone(),
-            tracks: vec![track],
-            extra: Extra::new(),
-        });
-        self.touch()
+                title: media.title.clone(),
+            }],
+            None,
+        )
     }
     /// Add a long audio cut into parts: one chapter titled like the media, holding one
     /// track per part recipe, in order, each titled with [`part_title_with`] from
@@ -198,34 +192,66 @@ impl Playlist {
         let tracks = parts
             .iter()
             .enumerate()
-            .map(|(index, recipe)| {
-                Ok(Track {
-                    id: TrackId::new(),
-                    key: TrackKey::fresh(),
-                    title: part_title_with(
-                        template.unwrap_or(PART_TITLE),
-                        &media.title,
-                        index + 1,
-                        parts.len(),
-                    ),
-                    icon: media.icon.clone(),
-                    events: None,
-                    media: TrackMedia::Local {
-                        media: media.id,
-                        recipe: *recipe,
-                    },
-                    extra: Extra::new(),
-                })
+            .map(|(index, recipe)| MediaTrack {
+                recipe: *recipe,
+                title: part_title_with(
+                    template.unwrap_or(PART_TITLE),
+                    &media.title,
+                    index + 1,
+                    parts.len(),
+                ),
             })
-            .collect::<Result<Vec<_>>>()?;
-        self.chapters.push(Chapter {
-            id: ChapterId::new(),
-            key: ChapterKey::fresh(),
-            title: media.title.clone(),
-            icon: media.icon.clone(),
-            tracks,
-            extra: Extra::new(),
-        });
+            .collect();
+        self.add_media_tracks(media, &media.title, tracks, None)
+    }
+    /// Add prepared versions of `media` as tracks, each titled as given and carrying the
+    /// media's icon: appended to chapter `into` when one is named, otherwise as a new
+    /// chapter titled `title` with the media's icon.
+    pub fn add_media_tracks(
+        &mut self,
+        media: &MediaItem,
+        title: &str,
+        tracks: Vec<MediaTrack>,
+        into: Option<ChapterId>,
+    ) -> Result<()> {
+        if tracks.is_empty() {
+            return Err(Failure::Validation(crate::messages::CHAPTER_EMPTY.into()));
+        }
+        let tracks = tracks
+            .into_iter()
+            .map(|track| Track {
+                id: TrackId::new(),
+                key: TrackKey::fresh(),
+                title: track.title,
+                icon: media.icon.clone(),
+                events: None,
+                media: TrackMedia::Local {
+                    media: media.id,
+                    recipe: track.recipe,
+                },
+                extra: Extra::new(),
+            })
+            .collect::<Vec<_>>();
+        match into {
+            Some(id) => {
+                let chapter = self
+                    .chapters
+                    .iter_mut()
+                    .find(|c| c.id == id)
+                    .ok_or_else(|| {
+                        Failure::Validation(crate::messages::DESTINATION_ABSENT.into())
+                    })?;
+                chapter.tracks.extend(tracks);
+            }
+            None => self.chapters.push(Chapter {
+                id: ChapterId::new(),
+                key: ChapterKey::fresh(),
+                title: title.to_owned(),
+                icon: media.icon.clone(),
+                tracks,
+                extra: Extra::new(),
+            }),
+        }
         self.touch()
     }
     /// Shorten keys that Yoto would reject. Earlier versions gave new chapters and tracks
@@ -518,6 +544,8 @@ impl Playlist {
         }
         self.touch()
     }
+    /// Put a track at `index` among the tracks of chapter `destination`. A track leaving
+    /// its chapter keeps the icon it showed there; a chapter left empty leaves the playlist.
     pub fn move_track(&mut self, id: TrackId, destination: ChapterId, index: usize) -> Result<()> {
         let (ci, ti) = self
             .chapters
@@ -546,6 +574,12 @@ impl Playlist {
         }
         let old = self.clone();
         let t = self.chapters[ci].tracks.remove(ti);
+        // A track changing chapter keeps the icon it showed there.
+        let t = if ci == di {
+            t
+        } else {
+            inherit_icon(t, &self.chapters[ci].icon)
+        };
         self.chapters[di].tracks.insert(index, t);
         self.chapters.retain(|c| !c.tracks.is_empty());
         if let Err(error) = self.remap_shuffle(&old, false) {
@@ -554,6 +588,8 @@ impl Playlist {
         }
         self.touch()
     }
+    /// Make every track of a chapter a chapter of its own, in order and at the same
+    /// place. A track without an icon keeps the chapter's, so nothing changes on the player.
     pub fn ungroup(&mut self, id: ChapterId) -> Result<()> {
         let i = self
             .chapters
@@ -562,22 +598,172 @@ impl Playlist {
             .ok_or_else(|| Failure::Validation(crate::messages::CHAPTER_ABSENT.into()))?;
         let old = self.clone();
         let c = self.chapters.remove(i);
-        let mut chapters = vec![];
-        for t in c.tracks {
-            chapters.push(Chapter {
-                id: ChapterId::new(),
-                key: ChapterKey::fresh(),
-                title: t.title.clone(),
-                icon: None,
-                tracks: vec![t],
-                extra: Extra::new(),
-            });
-        }
+        let chapters: Vec<_> = c
+            .tracks
+            .into_iter()
+            .map(|t| solo_chapter(t, &c.icon))
+            .collect();
         self.chapters.splice(i..i, chapters);
         if let Err(error) = self.remap_shuffle(&old, false) {
             *self = old;
             return Err(error);
         }
         self.touch()
+    }
+    /// Put a chapter at `position` among the chapters (from 0), the others closing up.
+    pub fn move_chapter_to(&mut self, id: ChapterId, position: usize) -> Result<()> {
+        let i = self
+            .chapters
+            .iter()
+            .position(|c| c.id == id)
+            .ok_or_else(|| Failure::Validation(crate::messages::CHAPTER_ABSENT.into()))?;
+        if position >= self.chapters.len() {
+            return Err(Failure::Validation(
+                crate::messages::CHAPTER_BOUNDARY.into(),
+            ));
+        }
+        if position == i {
+            return Ok(());
+        }
+        let old = self.clone();
+        let c = self.chapters.remove(i);
+        self.chapters.insert(position, c);
+        if let Err(error) = self.remap_shuffle(&old, false) {
+            *self = old;
+            return Err(error);
+        }
+        self.touch()
+    }
+    /// Take a track out of its chapter into a new chapter of its own, titled like the
+    /// track and put at `position` among the chapters once the track has left (from 0;
+    /// `None` puts it right after the chapter it leaves). A track without an icon keeps
+    /// its chapter's. The only track of a chapter just moves that chapter.
+    pub fn extract_track(&mut self, id: TrackId, position: Option<usize>) -> Result<ChapterId> {
+        let (ci, ti) = self
+            .chapters
+            .iter()
+            .enumerate()
+            .find_map(|(ci, c)| c.tracks.iter().position(|t| t.id == id).map(|ti| (ci, ti)))
+            .ok_or_else(|| Failure::Validation(crate::messages::TRACK_ABSENT.into()))?;
+        if self.chapters[ci].tracks.len() == 1 {
+            let chapter = self.chapters[ci].id;
+            self.move_chapter_to(chapter, position.unwrap_or(ci))?;
+            return Ok(chapter);
+        }
+        if position.is_some_and(|p| p > self.chapters.len()) {
+            return Err(Failure::Validation(
+                crate::messages::CHAPTER_BOUNDARY.into(),
+            ));
+        }
+        let old = self.clone();
+        let t = self.chapters[ci].tracks.remove(ti);
+        let chapter = solo_chapter(t, &self.chapters[ci].icon);
+        let id = chapter.id;
+        self.chapters.insert(position.unwrap_or(ci + 1), chapter);
+        if let Err(error) = self.remap_shuffle(&old, false) {
+            *self = old;
+            return Err(error);
+        }
+        self.touch()?;
+        Ok(id)
+    }
+    /// Cut a chapter before a track: this track and the ones after it form a new chapter,
+    /// titled like this track, right after the one they leave. Tracks without an icon keep
+    /// the chapter's. The first track of a chapter has nothing before it to cut.
+    pub fn split_chapter(&mut self, before: TrackId) -> Result<ChapterId> {
+        let (ci, ti) = self
+            .chapters
+            .iter()
+            .enumerate()
+            .find_map(|(ci, c)| {
+                c.tracks
+                    .iter()
+                    .position(|t| t.id == before)
+                    .map(|ti| (ci, ti))
+            })
+            .ok_or_else(|| Failure::Validation(crate::messages::TRACK_ABSENT.into()))?;
+        if ti == 0 {
+            return Err(Failure::Validation(crate::messages::TRACK_BOUNDARY.into()));
+        }
+        let old = self.clone();
+        let icon = self.chapters[ci].icon.clone();
+        let tracks: Vec<_> = self.chapters[ci]
+            .tracks
+            .drain(ti..)
+            .map(|t| inherit_icon(t, &icon))
+            .collect();
+        let chapter = Chapter {
+            id: ChapterId::new(),
+            key: ChapterKey::fresh(),
+            title: tracks[0].title.clone(),
+            icon,
+            tracks,
+            extra: Extra::new(),
+        };
+        let id = chapter.id;
+        self.chapters.insert(ci + 1, chapter);
+        if let Err(error) = self.remap_shuffle(&old, false) {
+            *self = old;
+            return Err(error);
+        }
+        self.touch()?;
+        Ok(id)
+    }
+    /// Append the tracks of chapter `source` to chapter `target`, which keeps its title
+    /// and icon; `source` leaves the playlist. Its tracks without an icon keep its icon,
+    /// so nothing changes on the player. A shuffle range that held `source` shrinks.
+    pub fn merge_chapters(&mut self, target: ChapterId, source: ChapterId) -> Result<()> {
+        let ti = self
+            .chapters
+            .iter()
+            .position(|c| c.id == target)
+            .ok_or_else(|| Failure::Validation(crate::messages::DESTINATION_ABSENT.into()))?;
+        let si = self
+            .chapters
+            .iter()
+            .position(|c| c.id == source)
+            .ok_or_else(|| Failure::Validation(crate::messages::CHAPTER_ABSENT.into()))?;
+        if ti == si {
+            return Ok(());
+        }
+        if self.chapters[si]
+            .tracks
+            .iter()
+            .any(|s| self.chapters[ti].tracks.iter().any(|t| t.key == s.key))
+        {
+            return Err(Failure::Compatibility(
+                crate::messages::TRACK_KEY_COLLISION.into(),
+            ));
+        }
+        let old = self.clone();
+        let from = self.chapters.remove(si);
+        let into = ti - usize::from(si < ti);
+        self.chapters[into]
+            .tracks
+            .extend(from.tracks.into_iter().map(|t| inherit_icon(t, &from.icon)));
+        if let Err(error) = self.remap_shuffle(&old, true) {
+            *self = old;
+            return Err(error);
+        }
+        self.touch()
+    }
+}
+/// A track given its chapter's icon when it has none, so it looks the same elsewhere.
+fn inherit_icon(mut track: Track, icon: &Option<IconReference>) -> Track {
+    if track.icon.is_none() {
+        track.icon = icon.clone();
+    }
+    track
+}
+/// A new chapter holding one track, titled and illustrated like it.
+fn solo_chapter(track: Track, icon: &Option<IconReference>) -> Chapter {
+    let icon = track.icon.clone().or_else(|| icon.clone());
+    Chapter {
+        id: ChapterId::new(),
+        key: ChapterKey::fresh(),
+        title: track.title.clone(),
+        icon,
+        tracks: vec![track],
+        extra: Extra::new(),
     }
 }

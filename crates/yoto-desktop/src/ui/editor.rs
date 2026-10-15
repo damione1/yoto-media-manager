@@ -1,4 +1,5 @@
 use super::*;
+use gpui_kit::base::ElementExt as _;
 use gpui_kit::prelude::FluentBuilder;
 #[path = "playlist_media_picker.rs"]
 mod media_picker;
@@ -131,10 +132,296 @@ pub(super) enum QuitState {
     /// Changes could not be written; the reason, in plain French.
     Unsaved(String),
 }
+/// Media waiting to be added, with the chapter they go into (the end of the playlist
+/// without one).
+#[derive(Debug, PartialEq, Eq)]
+struct QueuedMedia {
+    chapter: Option<ChapterKey>,
+    media: Vec<(MediaId, RecipeId)>,
+}
+/// Queue a batch behind the others. A batch for the destination of the last one joins it,
+/// so a burst of choices is one write; the order between destinations is kept.
+fn enqueue(
+    queue: &mut std::collections::VecDeque<QueuedMedia>,
+    chapter: Option<ChapterKey>,
+    media: Vec<(MediaId, RecipeId)>,
+) {
+    match queue.back_mut() {
+        Some(last) if last.chapter == chapter => last.media.extend(media),
+        Some(_) | None => queue.push_back(QueuedMedia { chapter, media }),
+    }
+}
+/// A track dragged by its handle: it can join a chapter, or leave its own.
+#[derive(Clone, Copy)]
+struct TrackDrag(TrackId);
+/// A chapter dragged by its handle, or a track alone in its chapter.
+#[derive(Clone, Copy)]
+struct ChapterDrag(ChapterId);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Dragged {
+    Track(TrackId),
+    Chapter(ChapterId),
+}
+/// Where a dragged item would land if it were dropped now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DropTarget {
+    /// Between chapters: before the chapter at this position, or last at the playlist's length.
+    ChapterSlot(usize),
+    /// Between the tracks of a chapter: before the track at this position, or last.
+    TrackSlot { chapter: ChapterId, index: usize },
+    /// At the end of this chapter, which is highlighted.
+    Into(ChapterId),
+}
+/// What the editor last drew, to find what a drag points at.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum RowKey {
+    Chapter(ChapterId),
+    Header(ChapterId),
+    Track(TrackId),
+}
+struct TrackBand {
+    id: TrackId,
+    top: f32,
+    bottom: f32,
+}
+/// A chapter as drawn on screen, as heights in the window. Neighbours touch, so every
+/// height belongs to one chapter.
+struct ChapterBand {
+    id: ChapterId,
+    /// Position of the chapter in the playlist.
+    index: usize,
+    top: f32,
+    bottom: f32,
+    /// The header, which only a chapter of several tracks has.
+    header: Option<(f32, f32)>,
+    tracks: Vec<TrackBand>,
+}
+/// Where an item ends up once it leaves `from`, for a slot counted before it left.
+fn position_after_removal(from: usize, slot: usize) -> usize {
+    if slot > from { slot - 1 } else { slot }
+}
+/// What dropping `dragged` at height `y` would do, or nothing when it would change nothing.
+/// A track dropped on a header joins the chapter, on the middle of a lone track groups them,
+/// and between rows lands there. The lower fifth of a chapter's last row and the edges of a
+/// lone track mean the gap between chapters. A chapter (a lone track is dragged as one)
+/// dropped on a header or on the middle of a lone track merges into that chapter; over the
+/// rows of a chapter of several tracks it lands before or after that chapter, by halves.
+fn drop_target(dragged: Dragged, y: f32, bands: &[ChapterBand]) -> Option<DropTarget> {
+    let band = bands.iter().find(|b| y >= b.top && y < b.bottom)?;
+    let quarter = |top: f32, bottom: f32| (bottom - top) / 4.;
+    match dragged {
+        Dragged::Chapter(id) => {
+            let source = bands.iter().find(|b| b.id == id)?.index;
+            if band.id == id {
+                return None;
+            }
+            let target = match band.header {
+                Some((top, bottom)) if y < bottom => {
+                    if y < top + quarter(top, bottom) {
+                        DropTarget::ChapterSlot(band.index)
+                    } else {
+                        DropTarget::Into(band.id)
+                    }
+                }
+                Some(_) => {
+                    if y < (band.top + band.bottom) / 2. {
+                        DropTarget::ChapterSlot(band.index)
+                    } else {
+                        DropTarget::ChapterSlot(band.index + 1)
+                    }
+                }
+                None => {
+                    let row = band.tracks.first()?;
+                    if y < row.top + quarter(row.top, row.bottom) {
+                        DropTarget::ChapterSlot(band.index)
+                    } else if y >= row.bottom - quarter(row.top, row.bottom) {
+                        DropTarget::ChapterSlot(band.index + 1)
+                    } else {
+                        DropTarget::Into(band.id)
+                    }
+                }
+            };
+            let unchanged = matches!(
+                target,
+                DropTarget::ChapterSlot(slot) if slot == source || slot == source + 1
+            );
+            (!unchanged).then_some(target)
+        }
+        Dragged::Track(id) => {
+            let source = bands.iter().find(|b| b.tracks.iter().any(|t| t.id == id))?;
+            let from = source.tracks.iter().position(|t| t.id == id)?;
+            let target = match band.header {
+                Some((top, bottom)) if y < bottom => {
+                    if y < top + (bottom - top) / 4. {
+                        DropTarget::ChapterSlot(band.index)
+                    } else {
+                        DropTarget::Into(band.id)
+                    }
+                }
+                Some(_) => {
+                    let last = band.tracks.last()?;
+                    if y >= last.bottom - (last.bottom - last.top) / 5. {
+                        DropTarget::ChapterSlot(band.index + 1)
+                    } else {
+                        let index = band
+                            .tracks
+                            .iter()
+                            .position(|t| y < (t.top + t.bottom) / 2.)
+                            .unwrap_or(band.tracks.len());
+                        DropTarget::TrackSlot {
+                            chapter: band.id,
+                            index,
+                        }
+                    }
+                }
+                None => {
+                    let row = band.tracks.first()?;
+                    if y < row.top + quarter(row.top, row.bottom) {
+                        DropTarget::ChapterSlot(band.index)
+                    } else if y >= row.bottom - quarter(row.top, row.bottom) {
+                        DropTarget::ChapterSlot(band.index + 1)
+                    } else {
+                        DropTarget::Into(band.id)
+                    }
+                }
+            };
+            let unchanged = match target {
+                DropTarget::TrackSlot { chapter, index } => {
+                    chapter == source.id && (index == from || index == from + 1)
+                }
+                DropTarget::Into(chapter) => {
+                    chapter == source.id && from + 1 == source.tracks.len()
+                }
+                DropTarget::ChapterSlot(_) => false,
+            };
+            (!unchanged).then_some(target)
+        }
+    }
+}
+/// The small pill drawn under the pointer while a track or chapter is dragged.
+struct DragPill(SharedString);
+impl Render for DragPill {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .max_w(px(300.))
+            .px(px(16.))
+            .py(px(8.))
+            .rounded_full()
+            .bg(theme::c(theme::SURFACE))
+            .border_2()
+            .border_color(theme::c(theme::PEACH.accent))
+            .shadow(theme::step(theme::BORDER, 3.))
+            .text_size(px(15.))
+            .font_weight(FontWeight::BOLD)
+            .truncate()
+            .child(self.0.clone())
+    }
+}
+/// Put a track in a chapter of its own, at a slot between chapters counted before it left.
+/// A track alone in its chapter just moves that chapter.
+fn place_track_as_chapter(
+    draft: &mut Playlist,
+    track: TrackId,
+    slot: usize,
+) -> yoto_domain::Result<()> {
+    let chapter = draft
+        .chapters
+        .iter()
+        .position(|c| c.tracks.iter().any(|t| t.id == track));
+    match chapter {
+        Some(index) if draft.chapters[index].tracks.len() == 1 => {
+            let id = draft.chapters[index].id;
+            draft.move_chapter_to(id, position_after_removal(index, slot))
+        }
+        Some(_) | None => draft.extract_track(track, Some(slot)).map(|_| ()),
+    }
+}
+/// Carry out a drop on the playlist. Tracks of a chapter of one are dragged as chapters,
+/// so only a track of a bigger chapter reaches here.
+fn apply_track_drop(
+    draft: &mut Playlist,
+    track: TrackId,
+    target: DropTarget,
+) -> yoto_domain::Result<()> {
+    let position = |chapter: ChapterId| {
+        draft
+            .chapters
+            .iter()
+            .find(|c| c.id == chapter)
+            .map(|c| (c.tracks.len(), c.tracks.iter().position(|t| t.id == track)))
+    };
+    match target {
+        DropTarget::ChapterSlot(slot) => place_track_as_chapter(draft, track, slot),
+        DropTarget::TrackSlot { chapter, index } => {
+            let index = match position(chapter) {
+                Some((_, Some(from))) => position_after_removal(from, index),
+                Some((_, None)) | None => index,
+            };
+            draft.move_track(track, chapter, index)
+        }
+        DropTarget::Into(chapter) => {
+            let end = match position(chapter) {
+                Some((len, Some(_))) => len.saturating_sub(1),
+                Some((len, None)) => len,
+                None => 0,
+            };
+            draft.move_track(track, chapter, end)
+        }
+    }
+}
+/// Note where an element is drawn, for drag and drop to find it.
+fn remember_bounds(
+    key: RowKey,
+    owner: &WeakEntity<PlaylistEditor>,
+) -> impl FnOnce(Bounds<Pixels>, &mut Window, &mut App) + 'static {
+    let owner = owner.clone();
+    move |bounds, _, cx| {
+        let _ = owner.update(cx, |v, _| {
+            v.row_bounds
+                .insert(key, (bounds.top().as_f32(), bounds.bottom().as_f32()));
+        });
+    }
+}
+/// The line showing where a dragged item will land.
+fn drop_line() -> Div {
+    div()
+        .absolute()
+        .left_0()
+        .right_0()
+        .h(px(3.))
+        .rounded(px(3.))
+        .bg(theme::c(theme::PEACH.accent))
+}
+/// The line between two chapters where a dragged item will land, saying so when the item
+/// is a track that leaves its chapter to become a chapter of its own.
+fn slot_line(leaving: bool) -> Div {
+    drop_line().when(leaving, |line| {
+        line.child(
+            div()
+                .absolute()
+                .right(px(12.))
+                .top(px(-11.))
+                .child(drop_hint(tr!("Chapitre à part"))),
+        )
+    })
+}
+/// What a drop would do, shown on the row that would receive it.
+fn drop_hint(text: &'static str) -> Div {
+    theme::tag_colors(text, theme::PEACH.accent, theme::SURFACE)
+}
+/// A chapter's title, or its first track's while it has none.
+fn display_title(chapter: &Chapter) -> String {
+    match chapter.tracks.first() {
+        Some(track) if chapter.title.trim().is_empty() => track.title.clone(),
+        Some(_) | None => chapter.title.clone(),
+    }
+}
 pub struct PlaylistEditor {
     pub draft: Playlist,
     parent: WeakEntity<AppView>,
     replacement: Option<TrackId>,
+    /// The chapter the media picker adds to, the end of the playlist without one.
+    destination: Option<ChapterKey>,
     icon_previews: BTreeMap<AssetId, PixelArt>,
     pub(super) service: Arc<Service>,
     pub(super) runtime: Arc<tokio::runtime::Runtime>,
@@ -166,8 +453,14 @@ pub struct PlaylistEditor {
     timer_generation: u64,
     /// The playlist the write in flight was based on, to merge edits made meanwhile.
     sent: Option<Playlist>,
-    /// Media to add once the pending changes are written.
-    queued_media: Option<Vec<(MediaId, RecipeId)>>,
+    /// Media to add once the pending changes are written, one write per destination.
+    queued_media: std::collections::VecDeque<QueuedMedia>,
+    /// Where the item being dragged would land, while a drag is under way.
+    drop_target: Option<DropTarget>,
+    /// What is being dragged, to word the indicator; read only while a drag is under way.
+    dragging: Option<Dragged>,
+    /// Where chapters and tracks were last drawn, to find what a drag points at.
+    row_bounds: BTreeMap<RowKey, (f32, f32)>,
     /// Why the last changes could not be written, until a later write succeeds.
     unsaved: Option<String>,
     /// The publication job that failed last, which « Réessayer » sends again.
@@ -318,6 +611,7 @@ impl PlaylistEditor {
         let mut view = Self {
             parent,
             replacement: None,
+            destination: None,
             icon_previews: BTreeMap::new(),
             event_params,
             base_revision: draft.revision,
@@ -329,7 +623,10 @@ impl PlaylistEditor {
             autosave: Autosave::default(),
             timer_generation: 0,
             sent: None,
-            queued_media: None,
+            queued_media: Default::default(),
+            drop_target: None,
+            dragging: None,
+            row_bounds: BTreeMap::new(),
             unsaved: None,
             failed_job: None,
             verified: None,
@@ -659,7 +956,7 @@ impl PlaylistEditor {
     }
     /// Where this playlist stands while the app waits to quit.
     pub(super) fn quit_state(&self) -> QuitState {
-        let pending = self.autosave.has_pending() || self.queued_media.is_some();
+        let pending = self.autosave.has_pending() || !self.queued_media.is_empty();
         if pending && self.held() {
             return QuitState::Unsaved(if self.status.is_empty() {
                 text::needs_check().into()
@@ -691,7 +988,7 @@ impl PlaylistEditor {
         let now = Instant::now();
         let due = if self.held() {
             None
-        } else if self.queued_media.is_some() && !self.autosave.in_flight() {
+        } else if !self.queued_media.is_empty() && !self.autosave.in_flight() {
             Some(now)
         } else {
             self.autosave.next_due()
@@ -718,7 +1015,7 @@ impl PlaylistEditor {
             return;
         }
         let now = Instant::now();
-        if self.queued_media.is_some() {
+        if !self.queued_media.is_empty() {
             self.autosave.flush(now);
         }
         if self.autosave.take_due(now) {
@@ -726,9 +1023,9 @@ impl PlaylistEditor {
         }
         if !self.autosave.in_flight()
             && !self.autosave.has_pending()
-            && let Some(media) = self.queued_media.take()
+            && let Some(batch) = self.queued_media.pop_front()
         {
-            self.write_media(media, cx);
+            self.write_media(batch, cx);
         }
         self.schedule(cx);
         cx.notify();
@@ -843,7 +1140,7 @@ impl PlaylistEditor {
             ) => *target == CommitTarget::MediaPicker,
             Some(PlaylistOperation::Failed(_)) | None => false,
         };
-        self.queued_media.is_some() || (adding && self.write_running())
+        !self.queued_media.is_empty() || (adding && self.write_running())
     }
     /// Write the draft as it stands. `autosave` already counts this write as in flight.
     fn write_draft(&mut self, cx: &mut Context<Self>) {
@@ -883,7 +1180,7 @@ impl PlaylistEditor {
         );
     }
     /// Add media from the library on Yoto, now that nothing else is being written.
-    fn write_media(&mut self, media: Vec<(MediaId, RecipeId)>, cx: &mut Context<Self>) {
+    fn write_media(&mut self, batch: QueuedMedia, cx: &mut Context<Self>) {
         let (account, card) = match self.owning_remote(cx) {
             Ok(remote) => remote,
             Err(failure) => {
@@ -899,8 +1196,10 @@ impl PlaylistEditor {
             Command::AddYotoMedia {
                 account,
                 card,
-                media,
+                media: batch.media,
                 part_title: Some(wording::part_title_template().into()),
+                mark_title: Some(wording::mark_title_template().into()),
+                chapter: batch.chapter,
             },
             CommitTarget::MediaPicker,
             sent,
@@ -928,6 +1227,7 @@ impl PlaylistEditor {
     fn close_picker(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.picker_window.take() {
             self.replacement = None;
+            self.destination = None;
             cx.defer(move |cx| {
                 let _ = cx.update_window(handle, |_, window, cx| window.close_dialog(cx));
             });
@@ -992,7 +1292,7 @@ impl PlaylistEditor {
         self.draft = self.base.clone();
         self.sent = None;
         self.deleting = false;
-        self.queued_media = None;
+        self.queued_media.clear();
         self.autosave.finish();
         if target == Some(CommitTarget::Editor) {
             self.report(text::not_saved(&self.base.title, &reason), cx);
@@ -1223,12 +1523,16 @@ impl PlaylistEditor {
         let editor = cx.entity();
         let picker = cx.new(|cx| media_picker::MediaPicker::new(editor.clone(), choices, cx));
         self.picker_window = Some(window.window_handle());
+        let title: String = match self.destination_title() {
+            Some(chapter) => tr!("Ajouter des médias dans « {title} »", title = chapter),
+            None => tr!("Ajouter des médias").into(),
+        };
         let weak = editor.downgrade();
         window.open_dialog(cx, move |dialog, _, _| {
             let close = weak.clone();
             let cancel = weak.clone();
             dialog
-                .title(tr!("Ajouter des médias"))
+                .title(title.clone())
                 .w(px(720.))
                 .child(picker.clone())
                 .on_cancel(move |_, _, cx| cancel.update(cx, |v, _| !v.busy()).unwrap_or(true))
@@ -1236,10 +1540,40 @@ impl PlaylistEditor {
                     let _ = close.update(cx, |v, cx| {
                         v.picker_window = None;
                         v.replacement = None;
+                        v.destination = None;
                         cx.notify();
                     });
                 })
         });
+    }
+    /// The name of the chapter the media picker adds to, when it adds to one.
+    fn destination_title(&self) -> Option<String> {
+        let key = self.destination.as_ref()?;
+        self.draft
+            .chapters
+            .iter()
+            .find(|c| &c.key == key)
+            .map(display_title)
+    }
+    /// Open the media picker to add media at the end of a chapter.
+    fn open_chapter_media_picker(
+        &mut self,
+        chapter: ChapterId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(key) = self
+            .draft
+            .chapters
+            .iter()
+            .find(|c| c.id == chapter)
+            .map(|c| c.key.clone())
+        else {
+            return;
+        };
+        self.replacement = None;
+        self.destination = Some(key);
+        self.open_media_picker(window, cx);
     }
     /// The 48 px tile showing a track or chapter icon, or an empty slot without one: what
     /// the player will show, never a decoration it will not.
@@ -1301,6 +1635,7 @@ impl PlaylistEditor {
         index: usize,
         snapshot: &Snapshot,
         state: SyncState,
+        drop: Option<DropTarget>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         use theme::{Height, Look};
@@ -1310,16 +1645,48 @@ impl PlaylistEditor {
         let id = chapter.id;
         let single = chapter.tracks.len() == 1;
         let count = self.draft.chapters.len();
-        let mut group = div().w_full().flex().flex_col().gap(px(8.));
+        let previous = index
+            .checked_sub(1)
+            .and_then(|i| self.draft.chapters.get(i))
+            .map(|c| c.id);
+        let next = self.draft.chapters.get(index + 1).map(|c| c.id);
+        let bounds = cx.entity().downgrade();
+        // Neighbouring chapters touch: their gap is this padding, which drag and drop reads.
+        let mut group = div()
+            .relative()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .py(px(4.))
+            .on_prepaint(remember_bounds(RowKey::Chapter(id), &bounds));
         if !single {
             let owner = cx.entity().downgrade();
+            let receiving = drop == Some(DropTarget::Into(id));
             group = group.child(
                 div()
+                    .relative()
                     .w_full()
                     .flex()
                     .gap(px(12.))
                     .items_center()
                     .px(px(10.))
+                    .rounded(px(18.))
+                    .border_2()
+                    .border_color(if receiving {
+                        theme::c(theme::PEACH.accent)
+                    } else {
+                        theme::c(theme::PEACH.accent).opacity(0.)
+                    })
+                    .when(receiving, |header| header.bg(theme::c(theme::PEACH.soft)))
+                    .on_prepaint(remember_bounds(RowKey::Header(id), &bounds))
+                    .child(self.grip(
+                        element_id("chapter-grip", id),
+                        tr!("Glisser pour déplacer le chapitre, ou le déposer sur un autre pour les fusionner"),
+                        ChapterDrag(id),
+                        display_title(chapter),
+                        cx,
+                    ))
                     .child(
                         div()
                             .w(px(22.))
@@ -1342,6 +1709,7 @@ impl PlaylistEditor {
                             .get(&id)
                             .map(|input| title_field(Input::new(input), 17.).flex_1().min_w_0()),
                     )
+                    .children(receiving.then(|| drop_hint(tr!("Ajouter au chapitre"))))
                     .child(
                         theme::round(
                             Button::new(element_id("chapter-menu", id))
@@ -1390,14 +1758,47 @@ impl PlaylistEditor {
                             .separator()
                             .item(editor_menu_item(
                                 &owner,
+                                tr!("Ajouter des médias dans ce chapitre…"),
+                                move |v, window, cx| v.open_chapter_media_picker(id, window, cx),
+                            ))
+                            .item(
+                                editor_menu_item(
+                                    &owner,
+                                    tr!("Fusionner avec le chapitre précédent"),
+                                    move |v, window, cx| {
+                                        if let Some(previous) = previous {
+                                            v.restructure(
+                                                |d| d.merge_chapters(previous, id),
+                                                window,
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )
+                                .disabled(previous.is_none()),
+                            )
+                            .item(
+                                editor_menu_item(
+                                    &owner,
+                                    tr!("Fusionner avec le chapitre suivant"),
+                                    move |v, window, cx| {
+                                        if let Some(next) = next {
+                                            v.restructure(
+                                                |d| d.merge_chapters(id, next),
+                                                window,
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )
+                                .disabled(next.is_none()),
+                            )
+                            .separator()
+                            .item(editor_menu_item(
+                                &owner,
                                 tr!("Séparer les pistes en chapitres"),
                                 move |v, window, cx| {
-                                    if let Err(error) = v.draft.ungroup(id) {
-                                        v.refuse(&error, cx);
-                                        return;
-                                    }
-                                    v.refresh_inputs(window, cx);
-                                    v.changed(Change::Discrete, cx);
+                                    v.restructure(|d| d.ungroup(id), window, cx);
                                 },
                             ))
                         }),
@@ -1450,46 +1851,92 @@ impl PlaylistEditor {
                 cx,
             )
             .dropdown_menu(move |menu, _, _| {
-                menu.item(editor_menu_item(
-                    &owner,
-                    tr!("Changer l’icône"),
-                    move |v, window, cx| v.open_icon_picker(id, Some(tid), window, cx),
-                ))
-                .item(
-                    editor_menu_item(
+                let menu = menu
+                    .item(editor_menu_item(
                         &owner,
-                        if removal == Some(None) {
-                            tr!("Retirer l’icône du chapitre")
-                        } else {
-                            tr!("Retirer l’icône")
-                        },
-                        move |v, _, cx| {
-                            if let Some(target) = removal {
-                                v.assign_icon(id, target, None);
-                                v.changed(Change::Discrete, cx);
-                            }
-                        },
+                        tr!("Changer l’icône"),
+                        move |v, window, cx| v.open_icon_picker(id, Some(tid), window, cx),
+                    ))
+                    .item(
+                        editor_menu_item(
+                            &owner,
+                            if removal == Some(None) {
+                                tr!("Retirer l’icône du chapitre")
+                            } else {
+                                tr!("Retirer l’icône")
+                            },
+                            move |v, _, cx| {
+                                if let Some(target) = removal {
+                                    v.assign_icon(id, target, None);
+                                    v.changed(Change::Discrete, cx);
+                                }
+                            },
+                        )
+                        .disabled(removal.is_none()),
                     )
-                    .disabled(removal.is_none()),
-                )
-                .separator()
-                .item(editor_menu_item(
-                    &owner,
-                    tr!("Remplacer l’audio…"),
-                    move |v, window, cx| {
-                        v.replacement = Some(tid);
-                        v.open_media_picker(window, cx);
-                    },
-                ))
-                .item(
-                    editor_menu_item(
+                    .separator()
+                    .item(editor_menu_item(
                         &owner,
-                        tr!("Déplacer / regrouper…"),
-                        move |v, window, cx| v.open_move_picker(id, tid, window, cx),
+                        tr!("Remplacer l’audio…"),
+                        move |v, window, cx| {
+                            v.replacement = Some(tid);
+                            v.destination = None;
+                            v.open_media_picker(window, cx);
+                        },
+                    ))
+                    .item(
+                        editor_menu_item(
+                            &owner,
+                            tr!("Déplacer / regrouper…"),
+                            move |v, window, cx| v.open_move_picker(id, tid, window, cx),
+                        )
+                        .disabled(count < 2),
+                    );
+                let menu = if single {
+                    menu.item(
+                        editor_menu_item(
+                            &owner,
+                            tr!("Regrouper avec la piste du dessus"),
+                            move |v, window, cx| {
+                                if let Some(previous) = previous {
+                                    v.restructure(|d| d.merge_chapters(previous, id), window, cx);
+                                }
+                            },
+                        )
+                        .disabled(previous.is_none()),
                     )
-                    .disabled(count < 2),
-                )
-                .item(
+                    .item(
+                        editor_menu_item(
+                            &owner,
+                            tr!("Regrouper avec la piste du dessous"),
+                            move |v, window, cx| {
+                                if let Some(next) = next {
+                                    v.restructure(|d| d.merge_chapters(id, next), window, cx);
+                                }
+                            },
+                        )
+                        .disabled(next.is_none()),
+                    )
+                } else {
+                    menu.item(editor_menu_item(
+                        &owner,
+                        tr!("Sortir du chapitre"),
+                        move |v, window, cx| {
+                            v.restructure(|d| d.extract_track(tid, None).map(|_| ()), window, cx);
+                        },
+                    ))
+                    .item(
+                        editor_menu_item(
+                            &owner,
+                            tr!("Couper le chapitre avant cette piste"),
+                            move |v, window, cx| {
+                                v.restructure(|d| d.split_chapter(tid).map(|_| ()), window, cx);
+                            },
+                        )
+                        .disabled(track_index == 0),
+                    )
+                };
+                menu.item(
                     editor_menu_item(&owner, tr!("Remonter"), move |v, _, cx| {
                         let result = if single {
                             v.draft.move_chapter(id, -1)
@@ -1555,89 +2002,144 @@ impl PlaylistEditor {
             } else {
                 &chapter.icon
             };
+            // A lone track about to be grouped with the dragged one is highlighted.
+            let grouping = single && drop == Some(DropTarget::Into(id));
+            let line = |top: bool| {
+                let line = drop_line().left(px(34.));
+                if top {
+                    line.top(px(-5.))
+                } else {
+                    line.bottom(px(-5.))
+                }
+            };
             group = group.child(
-                div().w_full().when(!single, |row| row.pl(px(34.))).child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .gap(px(12.))
-                        .items_center()
-                        .py(px(8.))
-                        .px(px(10.))
-                        .rounded(px(18.))
-                        .bg(theme::c(theme::SURFACE))
-                        .border_2()
-                        .border_color(theme::c(theme::SURFACE))
-                        .shadow(theme::step(theme::BORDER, 2.))
-                        .child(
-                            div()
-                                .w(px(22.))
-                                .flex_shrink_0()
-                                .text_center()
-                                .font_weight(FontWeight::EXTRA_BOLD)
-                                .text_size(px(14.))
-                                .text_color(theme::c(theme::NUMBER))
-                                .child(if single {
-                                    format!("{}", index + 1)
-                                } else {
-                                    format!("{}.{}", index + 1, track_index + 1)
+                div()
+                    .relative()
+                    .w_full()
+                    .when(!single, |row| row.pl(px(34.)))
+                    .when(
+                        drop == Some(DropTarget::TrackSlot {
+                            chapter: id,
+                            index: track_index,
+                        }),
+                        |row| row.child(line(true)),
+                    )
+                    .when(
+                        track_index + 1 == track_count
+                            && drop
+                                == Some(DropTarget::TrackSlot {
+                                    chapter: id,
+                                    index: track_count,
                                 }),
-                        )
-                        .child(self.icon_button(
-                            element_id("track-icon", tid),
-                            icon,
-                            &tid.to_string(),
-                            id,
-                            Some(tid),
-                            cx,
-                        ))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .children(
-                                    self.track_titles
-                                        .get(&tid)
-                                        .map(|input| title_field(Input::new(input), 17.).w_full()),
+                        |row| row.child(line(false)),
+                    )
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .flex()
+                            .gap(px(12.))
+                            .items_center()
+                            .py(px(8.))
+                            .px(px(10.))
+                            .rounded(px(18.))
+                            .bg(theme::c(theme::SURFACE))
+                            .border_2()
+                            .border_color(theme::c(if grouping {
+                                theme::PEACH.accent
+                            } else {
+                                theme::SURFACE
+                            }))
+                            .when(grouping, |row| row.bg(theme::c(theme::PEACH.soft)))
+                            .shadow(theme::step(theme::BORDER, 2.))
+                            .on_prepaint(remember_bounds(RowKey::Track(tid), &bounds))
+                            .child(if single {
+                                self.grip(
+                                    element_id("chapter-grip", id),
+                                    tr!("Glisser pour déplacer la piste, ou la déposer sur une autre pour les regrouper"),
+                                    ChapterDrag(id),
+                                    track.title.clone(),
+                                    cx,
                                 )
-                                .child(theme::meta(meta).pl(px(8.))),
-                        )
-                        .child({
-                            let state = self.track_sync(&track.media, snapshot, state);
-                            theme::tag(state.track_label(), state.family())
-                        })
-                        .children(playable.map(|(recipe, media)| {
-                            let playing = self.previewing == Some(recipe);
-                            theme::round(
-                                Button::new(element_id("preview-track-basic", tid))
-                                    .icon(if playing {
-                                        IconName::Pause
+                            } else {
+                                self.grip(
+                                    element_id("track-grip", tid),
+                                    tr!("Glisser pour déplacer la piste, ou la déposer entre deux chapitres pour la sortir du sien"),
+                                    TrackDrag(tid),
+                                    track.title.clone(),
+                                    cx,
+                                )
+                            })
+                            .child(
+                                div()
+                                    .w(px(22.))
+                                    .flex_shrink_0()
+                                    .text_center()
+                                    .font_weight(FontWeight::EXTRA_BOLD)
+                                    .text_size(px(14.))
+                                    .text_color(theme::c(theme::NUMBER))
+                                    .child(if single {
+                                        format!("{}", index + 1)
                                     } else {
-                                        IconName::Play
-                                    })
-                                    .accessibility_label(if playing {
-                                        tr!("Arrêter l’écoute de {title}", title = track.title)
-                                    } else {
-                                        tr!("Écouter {title}", title = track.title)
-                                    })
-                                    .tooltip(if playing {
-                                        tr!("Arrêter l’écoute")
-                                    } else {
-                                        tr!("Écouter sur cet ordinateur")
-                                    })
-                                    .on_click(cx.listener(move |v, _, _, cx| {
-                                        v.toggle_preview(recipe, media, cx)
-                                    })),
-                                Look::Soft(&theme::PEACH),
-                                36.,
-                                false,
-                                cx,
+                                        format!("{}.{}", index + 1, track_index + 1)
+                                    }),
                             )
-                        }))
-                        .child(menu),
-                ),
+                            .child(self.icon_button(
+                                element_id("track-icon", tid),
+                                icon,
+                                &tid.to_string(),
+                                id,
+                                Some(tid),
+                                cx,
+                            ))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .children(
+                                        self.track_titles.get(&tid).map(|input| {
+                                            title_field(Input::new(input), 17.).w_full()
+                                        }),
+                                    )
+                                    .child(theme::meta(meta).pl(px(8.))),
+                            )
+                            .children(grouping.then(|| drop_hint(tr!("Regrouper"))))
+                            .child({
+                                let state = self.track_sync(&track.media, snapshot, state);
+                                theme::tag(state.track_label(), state.family())
+                            })
+                            .children(playable.map(|(recipe, media)| {
+                                let playing = self.previewing == Some(recipe);
+                                theme::round(
+                                    Button::new(element_id("preview-track-basic", tid))
+                                        .icon(if playing {
+                                            IconName::Pause
+                                        } else {
+                                            IconName::Play
+                                        })
+                                        .accessibility_label(if playing {
+                                            tr!("Arrêter l’écoute de {title}", title = track.title)
+                                        } else {
+                                            tr!("Écouter {title}", title = track.title)
+                                        })
+                                        .tooltip(if playing {
+                                            tr!("Arrêter l’écoute")
+                                        } else {
+                                            tr!("Écouter sur cet ordinateur")
+                                        })
+                                        .on_click(cx.listener(move |v, _, _, cx| {
+                                            v.toggle_preview(recipe, media, cx)
+                                        })),
+                                    Look::Soft(&theme::PEACH),
+                                    36.,
+                                    false,
+                                    cx,
+                                )
+                            }))
+                            .child(menu),
+                    ),
             );
             if self.expanded_tracks.contains(&tid) {
                 let mut advanced = theme::inset().ml(px(34.));
@@ -1767,7 +2269,17 @@ impl PlaylistEditor {
                 group = group.child(advanced);
             }
         }
-        group.into_any_element()
+        // A track leaving its chapter for a gap becomes a chapter of its own: say so.
+        let leaving = matches!(self.dragging, Some(Dragged::Track(_)));
+        group
+            .when(drop == Some(DropTarget::ChapterSlot(index)), |group| {
+                group.child(slot_line(leaving).top_0())
+            })
+            .when(
+                index + 1 == count && drop == Some(DropTarget::ChapterSlot(count)),
+                |group| group.child(slot_line(leaving).bottom_0()),
+            )
+            .into_any_element()
     }
     fn open_icon_picker(
         &mut self,
@@ -1883,7 +2395,7 @@ impl PlaylistEditor {
                 .iter()
                 .map(|chapter| media_picker::ChapterChoice {
                     id: chapter.id,
-                    title: chapter.title.clone(),
+                    title: display_title(chapter),
                     tracks: chapter.tracks.len(),
                 })
                 .collect::<Vec<_>>(),
@@ -1951,7 +2463,7 @@ impl PlaylistEditor {
                 cx.notify();
             }
         } else {
-            self.queued_media.get_or_insert_with(Vec::new).extend(media);
+            enqueue(&mut self.queued_media, self.destination.clone(), media);
             self.status = text::writing().into();
             self.schedule(cx);
             cx.notify();
@@ -1971,7 +2483,7 @@ impl PlaylistEditor {
         };
         // Deleting wins over changes not written yet.
         self.autosave.discard();
-        self.queued_media = None;
+        self.queued_media.clear();
         self.autosave.begin();
         self.deleting = true;
         self.operation = Some(PlaylistOperation::Submitting {
@@ -2214,7 +2726,8 @@ fn title_field(input: Input, size: f32) -> Input {
 impl PlaylistEditor {
     /// The state in the tag by the title: changes waiting for their write count as sending.
     fn sync_state(&self) -> SyncState {
-        let waiting = (self.autosave.has_pending() || self.queued_media.is_some()) && !self.held();
+        let waiting =
+            (self.autosave.has_pending() || !self.queued_media.is_empty()) && !self.held();
         let state = SyncState::of(
             self.write_running() || waiting,
             self.blocked() || self.external.is_some() || self.deleted,
@@ -2404,6 +2917,163 @@ impl PlaylistEditor {
                 )
             })
             .collect()
+    }
+    /// Carry out a chapter or track operation on the draft. A refused one is reported and
+    /// leaves the playlist as it was; an accepted one shows its new chapters and is written
+    /// with the next group.
+    fn restructure(
+        &mut self,
+        operation: impl FnOnce(&mut Playlist) -> yoto_domain::Result<()>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.blocked() {
+            return false;
+        }
+        // Titles typed but not read yet must travel with their chapters.
+        let _ = self.gather(cx);
+        if let Err(error) = operation(&mut self.draft) {
+            self.refuse(&error, cx);
+            return false;
+        }
+        self.refresh_inputs(window, cx);
+        self.show_chapter_titles(window, cx);
+        self.changed(Change::Discrete, cx);
+        true
+    }
+    /// Show in every chapter's title field the title the draft holds: a track that became
+    /// a group keeps the title it showed alone.
+    fn show_chapter_titles(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for chapter in &self.draft.chapters {
+            if let Some(input) = self.chapter_titles.get(&chapter.id)
+                && input.read(cx).value() != chapter.title
+            {
+                input.update(cx, |input, cx| {
+                    input.set_value(chapter.title.clone(), window, cx)
+                });
+            }
+        }
+    }
+    /// The chapters as last drawn, to tell what a drag points at.
+    fn bands(&self) -> Vec<ChapterBand> {
+        self.draft
+            .chapters
+            .iter()
+            .enumerate()
+            .filter_map(|(index, chapter)| {
+                let (top, bottom) = *self.row_bounds.get(&RowKey::Chapter(chapter.id))?;
+                let header = (chapter.tracks.len() > 1)
+                    .then(|| self.row_bounds.get(&RowKey::Header(chapter.id)).copied())
+                    .flatten();
+                let tracks = chapter
+                    .tracks
+                    .iter()
+                    .filter_map(|track| {
+                        let (top, bottom) = *self.row_bounds.get(&RowKey::Track(track.id))?;
+                        Some(TrackBand {
+                            id: track.id,
+                            top,
+                            bottom,
+                        })
+                    })
+                    .collect();
+                Some(ChapterBand {
+                    id: chapter.id,
+                    index,
+                    top,
+                    bottom,
+                    header,
+                    tracks,
+                })
+            })
+            .collect()
+    }
+    /// A track or chapter is dragged over the list: remember where it would land.
+    fn drag_over<T: 'static>(
+        &mut self,
+        dragged: Dragged,
+        event: &DragMoveEvent<T>,
+        cx: &mut Context<Self>,
+    ) {
+        let position = event.event.position;
+        let target = if event.bounds.contains(&position) && !self.blocked() {
+            drop_target(dragged, position.y.as_f32(), &self.bands())
+        } else {
+            None
+        };
+        if target != self.drop_target || self.dragging != Some(dragged) {
+            self.drop_target = target;
+            self.dragging = Some(dragged);
+            cx.notify();
+        }
+    }
+    /// A track was dropped where the indicator showed.
+    fn drop_track(&mut self, track: TrackId, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(target) = self.drop_target.take() {
+            self.restructure(move |d| apply_track_drop(d, track, target), window, cx);
+        }
+        cx.notify();
+    }
+    /// A chapter was dropped where the indicator showed: between chapters it moves there,
+    /// on a chapter it merges into it, its tracks after that chapter's.
+    fn drop_chapter(&mut self, chapter: ChapterId, window: &mut Window, cx: &mut Context<Self>) {
+        match self.drop_target.take() {
+            Some(DropTarget::ChapterSlot(slot)) => {
+                self.restructure(
+                    move |d| {
+                        let to = d
+                            .chapters
+                            .iter()
+                            .position(|c| c.id == chapter)
+                            .map_or(slot, |from| position_after_removal(from, slot));
+                        d.move_chapter_to(chapter, to)
+                    },
+                    window,
+                    cx,
+                );
+            }
+            Some(DropTarget::Into(target)) => {
+                self.restructure(move |d| d.merge_chapters(target, chapter), window, cx);
+            }
+            Some(DropTarget::TrackSlot { .. }) | None => {}
+        }
+        cx.notify();
+    }
+    /// The handle a track or chapter is dragged by. Starting a drag forgets the target of
+    /// an earlier one.
+    fn grip<T: 'static>(
+        &self,
+        id: ElementId,
+        label: &'static str,
+        dragged: T,
+        title: String,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let owner = cx.entity().downgrade();
+        let title = SharedString::from(title);
+        div()
+            .id(id)
+            .flex_shrink_0()
+            .w(px(18.))
+            .h(px(36.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(8.))
+            .cursor_grab()
+            .hover(|grip| grip.bg(theme::c(theme::CREAM)))
+            .tooltip(move |window, cx| {
+                gpui_kit::component::tooltip::Tooltip::new(label).build(window, cx)
+            })
+            .on_drag(dragged, move |_, _, _, cx| {
+                let _ = owner.update(cx, |v, _| v.drop_target = None);
+                cx.new(|_| DragPill(title.clone()))
+            })
+            .child(
+                gpui_kit::component::Icon::new(IconName::GripVertical)
+                    .size(px(16.))
+                    .text_color(theme::c(theme::MUTED)),
+            )
     }
     /// A menu action the playlist refused: say why where the parent is looking.
     fn refuse(&mut self, failure: &Failure, cx: &mut Context<Self>) {
@@ -2654,7 +3324,10 @@ impl PlaylistEditor {
                                 let editor = cx.entity();
                                 cx.defer(move |cx| {
                                     let _ = cx.update_window(handle, move |_, window, cx| {
-                                        editor.update(cx, |e, cx| e.open_media_picker(window, cx));
+                                        editor.update(cx, |e, cx| {
+                                            e.destination = None;
+                                            e.open_media_picker(window, cx)
+                                        });
                                     });
                                 });
                             })),
@@ -3054,9 +3727,26 @@ impl Render for PlaylistEditor {
             );
         }
         let state = self.track_state();
-        let mut tracks = div().flex().flex_col().gap(px(8.));
+        let drop = cx.has_active_drag().then_some(self.drop_target).flatten();
+        let mut tracks = div()
+            .flex()
+            .flex_col()
+            .on_drag_move(cx.listener(|v, event: &DragMoveEvent<TrackDrag>, _, cx| {
+                let TrackDrag(track) = *event.drag(cx);
+                v.drag_over(Dragged::Track(track), event, cx);
+            }))
+            .on_drag_move(cx.listener(|v, event: &DragMoveEvent<ChapterDrag>, _, cx| {
+                let ChapterDrag(chapter) = *event.drag(cx);
+                v.drag_over(Dragged::Chapter(chapter), event, cx);
+            }))
+            .on_drop(
+                cx.listener(|v, drag: &TrackDrag, window, cx| v.drop_track(drag.0, window, cx)),
+            )
+            .on_drop(
+                cx.listener(|v, drag: &ChapterDrag, window, cx| v.drop_chapter(drag.0, window, cx)),
+            );
         for index in 0..self.draft.chapters.len() {
-            tracks = tracks.child(self.render_chapter(index, &snapshot, state, cx));
+            tracks = tracks.child(self.render_chapter(index, &snapshot, state, drop, cx));
         }
         body = body.child(tracks);
         if self.external.is_some() || self.deleted {
@@ -3799,5 +4489,220 @@ mod parent_input_tests {
         assert_eq!(SyncState::Sending.playlist_label(), "Enregistrement…");
         assert_eq!(SyncState::OnYoto.playlist_label(), "Enregistré sur Yoto");
         assert_eq!(SyncState::OnYoto.track_label(), "Sur Yoto");
+    }
+}
+
+#[cfg(test)]
+mod arrangement_tests {
+    use super::{
+        ChapterBand, Dragged, DropTarget, QueuedMedia, TrackBand, drop_target, enqueue,
+        position_after_removal,
+    };
+    use yoto_domain::*;
+    /// A chapter of one track drawn without header: 80 high, the row inset by 4.
+    fn flat(index: usize, top: f32) -> ChapterBand {
+        ChapterBand {
+            id: ChapterId::new(),
+            index,
+            top,
+            bottom: top + 80.,
+            header: None,
+            tracks: vec![TrackBand {
+                id: TrackId::new(),
+                top: top + 4.,
+                bottom: top + 76.,
+            }],
+        }
+    }
+    /// A chapter of `tracks` tracks with its header: rows 72 high, 8 apart.
+    fn grouped(index: usize, top: f32, tracks: usize) -> ChapterBand {
+        let rows: Vec<_> = (0..tracks)
+            .map(|k| TrackBand {
+                id: TrackId::new(),
+                top: top + 68. + 80. * k as f32,
+                bottom: top + 140. + 80. * k as f32,
+            })
+            .collect();
+        ChapterBand {
+            id: ChapterId::new(),
+            index,
+            top,
+            bottom: rows.last().map_or(top, |row| row.bottom) + 4.,
+            header: Some((top + 4., top + 60.)),
+            tracks: rows,
+        }
+    }
+    #[test]
+    fn a_chapter_lands_before_or_after_the_one_under_the_pointer() {
+        let bands = [flat(0, 0.), flat(1, 80.), flat(2, 160.)];
+        let first = Dragged::Chapter(bands[0].id);
+        assert_eq!(drop_target(first, 90., &bands), None);
+        assert_eq!(
+            drop_target(first, 150., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        assert_eq!(
+            drop_target(first, 170., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        assert_eq!(
+            drop_target(first, 230., &bands),
+            Some(DropTarget::ChapterSlot(3))
+        );
+        assert_eq!(drop_target(first, 10., &bands), None);
+        assert_eq!(drop_target(first, 500., &bands), None);
+        assert_eq!(drop_target(first, -3., &bands), None);
+        let last = Dragged::Chapter(bands[2].id);
+        assert_eq!(
+            drop_target(last, 20., &bands),
+            Some(DropTarget::ChapterSlot(0))
+        );
+        assert_eq!(
+            drop_target(last, 100., &bands),
+            Some(DropTarget::ChapterSlot(1))
+        );
+        assert_eq!(drop_target(last, 140., &bands), None);
+        assert_eq!(
+            drop_target(Dragged::Chapter(ChapterId::new()), 20., &bands),
+            None
+        );
+    }
+    #[test]
+    fn a_track_lands_between_rows_or_on_a_header() {
+        let bands = [grouped(0, 0., 3), flat(1, 304.)];
+        let [group, single] = &bands;
+        let middle = Dragged::Track(group.tracks[1].id);
+        let chapter = group.id;
+        // Header: its top quarter is the gap before the chapter, the rest receives.
+        assert_eq!(
+            drop_target(middle, 10., &bands),
+            Some(DropTarget::ChapterSlot(0))
+        );
+        assert_eq!(
+            drop_target(middle, 40., &bands),
+            Some(DropTarget::Into(chapter))
+        );
+        // Rows: halves, and nothing where the track already is.
+        assert_eq!(
+            drop_target(middle, 80., &bands),
+            Some(DropTarget::TrackSlot { chapter, index: 0 })
+        );
+        assert_eq!(drop_target(middle, 120., &bands), None);
+        assert_eq!(drop_target(middle, 200., &bands), None);
+        assert_eq!(drop_target(middle, 250., &bands), None);
+        let first = Dragged::Track(group.tracks[0].id);
+        assert_eq!(
+            drop_target(first, 250., &bands),
+            Some(DropTarget::TrackSlot { chapter, index: 2 })
+        );
+        assert_eq!(
+            drop_target(first, 275., &bands),
+            Some(DropTarget::TrackSlot { chapter, index: 3 })
+        );
+        // The lower fifth of the last row leaves the chapter.
+        assert_eq!(
+            drop_target(first, 295., &bands),
+            Some(DropTarget::ChapterSlot(1))
+        );
+        // Joining at the end is a move only for a track that is not already last.
+        let last = Dragged::Track(group.tracks[2].id);
+        assert_eq!(drop_target(last, 40., &bands), None);
+        assert_eq!(
+            drop_target(first, 40., &bands),
+            Some(DropTarget::Into(chapter))
+        );
+        // A lone track: its edges are the gaps around it, its middle groups with it.
+        assert_eq!(
+            drop_target(first, 315., &bands),
+            Some(DropTarget::ChapterSlot(1))
+        );
+        assert_eq!(
+            drop_target(first, 345., &bands),
+            Some(DropTarget::Into(single.id))
+        );
+        assert_eq!(
+            drop_target(first, 380., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        assert_eq!(
+            drop_target(Dragged::Track(TrackId::new()), 40., &bands),
+            None
+        );
+    }
+    #[test]
+    fn a_lone_track_dropped_on_a_track_or_a_header_joins_that_chapter() {
+        let bands = [flat(0, 0.), flat(1, 80.), grouped(2, 160., 2)];
+        let [first, second, group] = &bands;
+        let lone = Dragged::Chapter(first.id);
+        // The middle of a lone track groups them; its edges are the gaps around it.
+        assert_eq!(
+            drop_target(lone, 120., &bands),
+            Some(DropTarget::Into(second.id))
+        );
+        assert_eq!(drop_target(lone, 90., &bands), None);
+        assert_eq!(
+            drop_target(lone, 150., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        // A header receives, except its top quarter, which is the gap before it.
+        assert_eq!(
+            drop_target(lone, 170., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        assert_eq!(
+            drop_target(lone, 200., &bands),
+            Some(DropTarget::Into(group.id))
+        );
+        // Over the rows of a group, a chapter lands before or after it, by halves.
+        assert_eq!(
+            drop_target(lone, 240., &bands),
+            Some(DropTarget::ChapterSlot(2))
+        );
+        assert_eq!(
+            drop_target(lone, 310., &bands),
+            Some(DropTarget::ChapterSlot(3))
+        );
+        // Over itself, nothing.
+        assert_eq!(drop_target(lone, 40., &bands), None);
+        // A whole group dropped on a lone track merges into it as well.
+        assert_eq!(
+            drop_target(Dragged::Chapter(group.id), 40., &bands),
+            Some(DropTarget::Into(first.id))
+        );
+    }
+    #[test]
+    fn a_position_counts_the_slot_before_the_item_left() {
+        assert_eq!(position_after_removal(1, 0), 0);
+        assert_eq!(position_after_removal(1, 1), 1);
+        assert_eq!(position_after_removal(1, 2), 1);
+        assert_eq!(position_after_removal(1, 4), 3);
+    }
+    #[test]
+    fn media_are_queued_by_destination_in_the_order_chosen() {
+        let a = Some(ChapterKey::new("chapter-a").unwrap());
+        let media: Vec<_> = (0..4).map(|_| (MediaId::new(), RecipeId::new())).collect();
+        let mut queue = std::collections::VecDeque::new();
+        enqueue(&mut queue, a.clone(), vec![media[0]]);
+        enqueue(&mut queue, a.clone(), vec![media[1]]);
+        enqueue(&mut queue, None, vec![media[2]]);
+        enqueue(&mut queue, a.clone(), vec![media[3]]);
+        let queued: Vec<_> = queue.into_iter().collect();
+        assert_eq!(
+            queued,
+            vec![
+                QueuedMedia {
+                    chapter: a.clone(),
+                    media: vec![media[0], media[1]]
+                },
+                QueuedMedia {
+                    chapter: None,
+                    media: vec![media[2]]
+                },
+                QueuedMedia {
+                    chapter: a,
+                    media: vec![media[3]]
+                },
+            ]
+        );
     }
 }

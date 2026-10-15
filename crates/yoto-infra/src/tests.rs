@@ -174,14 +174,8 @@ fn whole_webm_opus_preview_accepts_the_shorter_decoded_tail() {
     let decoded = tools.preview(&input, lease.path(), whole).unwrap();
     assert!(decoded.duration <= source.duration);
     assert!(source.duration.seconds() - decoded.duration.seconds() < 0.1);
-    // « Écouter la fin de la sélection » and a playhead dropped near the end both decode
-    // a range running to the source's end, which may also end early.
-    let five = MediaTime::from_seconds(5.).unwrap();
-    let ending = tools
-        .preview(&input, lease.path(), whole.ending(five))
-        .unwrap();
-    assert!(ending.duration <= five);
-    assert!(five.seconds() - ending.duration.seconds() < 0.1);
+    // A playhead dropped near the end decodes a range running to the source's end, which
+    // may also end early.
     let near_end = MediaTime::from_seconds(source.duration.seconds() - 0.1).unwrap();
     let last = tools
         .preview(&input, lease.path(), whole.played_from(near_end))
@@ -469,6 +463,193 @@ fn rich_card_preserves_extensions_and_removes_icons() {
     let typed: yoto_api_generated::models::Card = serde_json::from_value(out).unwrap();
     let channels: AudioChannels = typed.content.chapters[0].tracks[0].channels.unwrap();
     assert_eq!(channels, AudioChannels::Stereo);
+}
+fn audio_track(key: &str, label: &str, duration: f64, bytes: i64) -> serde_json::Value {
+    serde_json::json!({"key":key,"title":key,"trackUrl":format!("yoto:#{key}"),"type":"audio","format":"mp3","duration":duration,"fileSize":bytes,"channels":"stereo","overlayLabel":label})
+}
+/// Three chapters labelled as the contract's examples are; the second one is labelled
+/// "Intro" (with a manual override) when `custom` is set, and then breaks the numbering.
+fn labelled_card(custom: bool) -> serde_json::Value {
+    let second = if custom { "Intro" } else { "2" };
+    serde_json::json!({"cardId":"card1","title":"Card","content":{"chapters":[
+        {"key":"chapter1","title":"One","overlayLabel":"1","duration":99.,"futureChapter":{"x":1},"tracks":[
+            audio_track("track1a","1",3.,100),audio_track("track1b","1",4.,200)]},
+        {"key":"chapter2","title":"Two","overlayLabel":second,"overlayLabelOverride":"7","duration":5.,"fileSize":500,"tracks":[
+            audio_track("track2","2",5.,500)]},
+        {"key":"chapter3","title":"Three","overlayLabel":"3","tracks":[
+            audio_track("track3","3",6.,600)]}]}})
+}
+fn chapter_labels(card: &serde_json::Value) -> Vec<(String, Vec<String>)> {
+    let label = |v: &serde_json::Value| v["overlayLabel"].as_str().unwrap_or("-").to_owned();
+    card["content"]["chapters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            let tracks = c["tracks"].as_array().unwrap();
+            (label(c), tracks.iter().map(label).collect())
+        })
+        .collect()
+}
+fn labels(chapters: &[(&str, &[&str])]) -> Vec<(String, Vec<String>)> {
+    chapters
+        .iter()
+        .map(|(c, t)| ((*c).to_owned(), t.iter().map(|l| (*l).to_owned()).collect()))
+        .collect()
+}
+fn written(p: &Playlist, account: &AccountId) -> serde_json::Value {
+    crate::api::write_playlist(p, account, &[], &Default::default(), None).unwrap()
+}
+fn stream_chapter() -> Chapter {
+    Chapter {
+        id: ChapterId::new(),
+        key: ChapterKey::fresh(),
+        title: "Radio".into(),
+        icon: None,
+        tracks: vec![Track {
+            id: TrackId::new(),
+            key: TrackKey::fresh(),
+            title: "Radio".into(),
+            icon: None,
+            media: TrackMedia::Stream {
+                url: "https://radio.test/live.mp3".into(),
+                format: AudioFormat::Mp3,
+            },
+            events: None,
+            extra: Extra::new(),
+        }],
+        extra: Extra::new(),
+    }
+}
+#[test]
+fn an_unchanged_card_keeps_labels_and_extensions_and_recomputes_chapter_sums() {
+    let account = AccountId::new("owner").unwrap();
+    let doc = labelled_card(true);
+    let p = crate::api::read_playlist(&doc, &account).unwrap();
+    assert!(!p.chapters[0].extra.contains_key("duration"));
+    assert!(p.chapters[0].extra.contains_key("futureChapter"));
+    let out = written(&p, &account);
+    assert_eq!(
+        chapter_labels(&out),
+        labels(&[("1", &["1", "1"]), ("Intro", &["2"]), ("3", &["3"])])
+    );
+    let chapters = &out["content"]["chapters"];
+    assert_eq!(
+        chapters[0]["futureChapter"],
+        doc["content"]["chapters"][0]["futureChapter"]
+    );
+    assert_eq!(chapters[1]["overlayLabelOverride"], "7");
+    let sums: Vec<_> = chapters
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            (
+                c["duration"].as_f64().unwrap(),
+                c["fileSize"].as_i64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(sums, [(7., 300), (5., 500), (6., 600)]);
+}
+#[test]
+fn reordering_chapters_renumbers_positional_labels_only() {
+    let account = AccountId::new("owner").unwrap();
+    let mut p = crate::api::read_playlist(&labelled_card(true), &account).unwrap();
+    let last = p.chapters[2].id;
+    p.move_chapter_to(last, 0).unwrap();
+    let out = written(&p, &account);
+    assert_eq!(
+        chapter_labels(&out),
+        labels(&[("1", &["1"]), ("2", &["2", "2"]), ("Intro", &["3"])])
+    );
+    assert_eq!(out["content"]["chapters"][2]["overlayLabelOverride"], "7");
+    assert_eq!(out["content"]["chapters"][1]["futureChapter"]["x"], 1);
+}
+#[test]
+fn moving_a_track_recomputes_both_chapter_sums_and_renumbers_the_track() {
+    let account = AccountId::new("owner").unwrap();
+    let mut p = crate::api::read_playlist(&labelled_card(false), &account).unwrap();
+    let (track, chapter) = (p.chapters[0].tracks[1].id, p.chapters[2].id);
+    p.move_track(track, chapter, 0).unwrap();
+    let out = written(&p, &account);
+    assert_eq!(
+        chapter_labels(&out),
+        labels(&[("1", &["1"]), ("2", &["2"]), ("3", &["3", "3"])])
+    );
+    let chapters = &out["content"]["chapters"];
+    assert_eq!(
+        (
+            chapters[0]["duration"].as_f64(),
+            chapters[0]["fileSize"].as_i64()
+        ),
+        (Some(3.), Some(100))
+    );
+    assert_eq!(
+        (
+            chapters[2]["duration"].as_f64(),
+            chapters[2]["fileSize"].as_i64()
+        ),
+        (Some(10.), Some(800))
+    );
+}
+#[test]
+fn a_moved_track_sharing_its_key_with_other_chapters_is_renumbered_from_its_own() {
+    // Yoto starts track keys again in every chapter: "01" names a track in each of them.
+    let account = AccountId::new("owner").unwrap();
+    let doc = serde_json::json!({"cardId":"card1","title":"Card","content":{"chapters":[
+        {"key":"01","title":"One","overlayLabel":"1","tracks":[audio_track("01","1",3.,100)]},
+        {"key":"02","title":"Two","overlayLabel":"2","tracks":[audio_track("01","2",4.,200)]},
+        {"key":"03","title":"Three","overlayLabel":"3","tracks":[audio_track("01","3",5.,300)]},
+        {"key":"04","title":"Four","overlayLabel":"4","tracks":[audio_track("02","4",6.,400)]}]}});
+    let mut p = crate::api::read_playlist(&doc, &account).unwrap();
+    let (track, chapter) = (p.chapters[2].tracks[0].id, p.chapters[3].id);
+    p.move_track(track, chapter, 1).unwrap();
+    let out = written(&p, &account);
+    assert_eq!(
+        chapter_labels(&out),
+        labels(&[("1", &["1"]), ("2", &["2"]), ("3", &["3", "3"])])
+    );
+}
+#[test]
+fn a_new_chapter_is_numbered_only_on_a_numbered_card() {
+    let account = AccountId::new("owner").unwrap();
+    let mut numbered = crate::api::read_playlist(&labelled_card(false), &account).unwrap();
+    numbered.chapters.push(stream_chapter());
+    let out = written(&numbered, &account);
+    assert_eq!(
+        chapter_labels(&out)[3],
+        ("4".to_owned(), vec!["4".to_owned()])
+    );
+    assert_eq!(out["content"]["chapters"][3]["duration"], 0.);
+    assert_eq!(out["content"]["chapters"][3]["fileSize"], 0);
+    let mut custom = crate::api::read_playlist(&labelled_card(true), &account).unwrap();
+    custom.chapters.push(stream_chapter());
+    let out = written(&custom, &account);
+    // Chapters and tracks are judged separately: every labelled track of this card is numbered.
+    assert_eq!(
+        chapter_labels(&out)[3],
+        ("-".to_owned(), vec!["4".to_owned()])
+    );
+}
+#[test]
+fn a_playlist_without_a_base_card_writes_labels_as_held() {
+    let account = AccountId::new("owner").unwrap();
+    let mut p = crate::api::read_playlist(&labelled_card(false), &account).unwrap();
+    p.origin = DraftOrigin::New;
+    let last = p.chapters[2].id;
+    p.move_chapter_to(last, 0).unwrap();
+    p.chapters.push(stream_chapter());
+    let out = written(&p, &account);
+    assert_eq!(
+        chapter_labels(&out),
+        labels(&[
+            ("3", &["3"]),
+            ("1", &["1", "1"]),
+            ("2", &["2"]),
+            ("-", &["-"])
+        ])
+    );
 }
 #[tokio::test]
 async fn upload_reservation_sends_the_digest_as_lowercase_hexadecimal() {
@@ -827,6 +1008,7 @@ pub(crate) fn catalogue_fixture(
         },
         recipes: vec![],
         icon: None,
+        chapters: vec![],
     };
     service
         .db
@@ -973,6 +1155,7 @@ async fn ten_thousand_catalogue_rows_page_across_bounded_ipc_and_aliases_share_o
             },
             recipes: vec![],
             icon: None,
+            chapters: vec![],
         };
         service
             .db
@@ -1153,6 +1336,7 @@ fn migration_failure_keeps_v1_and_recoverable_encrypted_snapshot() {
         },
         recipes: vec![RecipeId::new()],
         icon: None,
+        chapters: vec![],
     };
     let recipe = MediaRecipe {
         id: media.recipes[0],
@@ -1427,6 +1611,8 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
                 playlist: playlist.id,
                 media: vec![(media.id, version.id)],
                 part_title: None,
+                mark_title: None,
+                chapter: None,
             })
             .await
             .unwrap();
@@ -1474,6 +1660,167 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
         .unwrap();
     assert!(service.playlist(playlist.id).unwrap().chapters.is_empty());
     assert!(first.iter().all(|id| service.recipe(*id).is_err()));
+}
+#[tokio::test]
+async fn marked_chapters_become_one_chapter_of_tracks_cut_at_the_marks() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [14; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"story source fixture").unwrap();
+    let asset = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &asset.id.to_string(), &asset)
+        .unwrap();
+    let (mut media, original) = catalogue_fixture(&service, asset.id, "Histoire");
+    media.info.duration = MediaTime::from_seconds(600.).unwrap();
+    media.recipes = vec![original.id];
+    service
+        .db
+        .put(Table::Media, &media.id.to_string(), &media)
+        .unwrap();
+    let whole = TrimRange::new(MediaTime::ZERO, media.info.duration, media.info.duration).unwrap();
+    service
+        .db
+        .put(
+            Table::Recipe,
+            &original.id.to_string(),
+            &MediaRecipe {
+                trim: whole,
+                ..original.clone()
+            },
+        )
+        .unwrap();
+    let at = |s: f64| MediaTime::from_seconds(s).unwrap();
+    let mark = |s: f64, title: &str| MediaChapter {
+        start: at(s),
+        title: title.into(),
+    };
+    // Marks out of order are refused and leave the media as it was.
+    assert!(
+        service
+            .execute(Command::SetMediaChapters {
+                media: media.id,
+                chapters: vec![mark(0., ""), mark(400., ""), mark(200., "")],
+            })
+            .await
+            .is_err()
+    );
+    assert!(service.media(media.id).unwrap().chapters.is_empty());
+    service
+        .execute(Command::SetMediaChapters {
+            media: media.id,
+            chapters: vec![mark(0., ""), mark(200., "Le milieu"), mark(400., "")],
+        })
+        .await
+        .unwrap();
+    assert_eq!(service.media(media.id).unwrap().chapters.len(), 3);
+    let playlist = Playlist::new("Soirée".into()).unwrap();
+    service.db.save_playlist(&playlist).unwrap();
+    service
+        .execute(Command::AddMedia {
+            playlist: playlist.id,
+            media: vec![(media.id, original.id)],
+            part_title: None,
+            mark_title: None,
+            chapter: None,
+        })
+        .await
+        .unwrap();
+    // One chapter named like the media, one track per mark: named as given or numbered.
+    let saved = service.playlist(playlist.id).unwrap();
+    assert_eq!(saved.chapters.len(), 1);
+    assert_eq!(saved.chapters[0].title, "Histoire");
+    let titles: Vec<_> = saved.chapters[0]
+        .tracks
+        .iter()
+        .map(|t| t.title.as_str())
+        .collect();
+    assert_eq!(titles, ["Partie 1", "Le milieu", "Partie 3"]);
+    let recipe = |track: &Track| match track.media {
+        TrackMedia::Local { recipe, .. } => service.recipe(recipe).unwrap(),
+        TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => panic!("local"),
+    };
+    let middle = recipe(&saved.chapters[0].tracks[1]);
+    assert_eq!(
+        (middle.trim.start(), middle.trim.end()),
+        (at(200.), at(400.))
+    );
+    assert_eq!(middle.part.unwrap().count, 3);
+    // A trimmed version keeps only the marks inside it, and joins a named chapter.
+    let Reply::Prepared(cut) = service
+        .execute(Command::Prepare {
+            media: media.id,
+            trim: TrimRange::new(at(300.), at(500.), media.info.duration).unwrap(),
+            normalization: Normalization::Preserve,
+        })
+        .await
+        .unwrap()
+    else {
+        panic!("a prepared version");
+    };
+    let target = saved.chapters[0].key.clone();
+    service
+        .execute(Command::AddMedia {
+            playlist: playlist.id,
+            media: vec![(media.id, cut)],
+            part_title: Some("{title} — part {part} of {parts}".into()),
+            mark_title: Some("Part {part} of {parts}".into()),
+            chapter: Some(target),
+        })
+        .await
+        .unwrap();
+    let saved = service.playlist(playlist.id).unwrap();
+    assert_eq!(saved.chapters.len(), 1);
+    let joined: Vec<_> = saved.chapters[0]
+        .tracks
+        .iter()
+        .map(|t| t.title.as_str())
+        .collect();
+    assert_eq!(
+        joined,
+        [
+            "Partie 1",
+            "Le milieu",
+            "Partie 3",
+            "Le milieu",
+            "Part 2 of 2"
+        ]
+    );
+    let tail = recipe(&saved.chapters[0].tracks[4]);
+    assert_eq!((tail.trim.start(), tail.trim.end()), (at(400.), at(500.)));
+    // Added once more on its own, the marked media is one new chapter, not several.
+    service
+        .execute(Command::AddMedia {
+            playlist: playlist.id,
+            media: vec![(media.id, original.id)],
+            part_title: None,
+            mark_title: Some("Chapitre {part}".into()),
+            chapter: None,
+        })
+        .await
+        .unwrap();
+    let saved = service.playlist(playlist.id).unwrap();
+    assert_eq!(saved.chapters.len(), 2);
+    let again: Vec<_> = saved.chapters[1]
+        .tracks
+        .iter()
+        .map(|t| t.title.as_str())
+        .collect();
+    assert_eq!(again, ["Chapitre 1", "Le milieu", "Chapitre 3"]);
+    // A chapter that is not in the playlist cannot receive media.
+    assert!(matches!(
+        service
+            .execute(Command::AddMedia {
+                playlist: playlist.id,
+                media: vec![(media.id, original.id)],
+                part_title: None,
+                mark_title: None,
+                chapter: Some(ChapterKey::fresh()),
+            })
+            .await,
+        Err(Failure::Validation(m)) if m == messages::DESTINATION_ABSENT
+    ));
 }
 #[tokio::test]
 async fn finished_tasks_leave_the_activity_list_but_stay_recorded() {
@@ -1575,6 +1922,8 @@ async fn a_media_icon_survives_garbage_collection_and_reaches_new_chapters() {
             playlist: playlist.id,
             media: vec![(media.id, recipe.id)],
             part_title: None,
+            mark_title: None,
+            chapter: None,
         })
         .await
         .unwrap();
@@ -1666,6 +2015,8 @@ async fn a_yoto_icon_of_another_account_is_not_copied_into_a_playlist() {
                 playlist: playlist.id,
                 media: vec![(media.id, recipe.id)],
                 part_title: None,
+                mark_title: None,
+                chapter: None,
             })
             .await
             .unwrap();

@@ -281,7 +281,6 @@
   var CUT_A = 16 / DURATION;          // 0:16
   var CUT_B = 99 / DURATION;          // 1:39
   var SEEK = 0.45;                    // where the waveform is clicked
-  var ENDING = 5 / DURATION;          // the app plays the last 5 seconds
   function Trim(root) {
     Scene.call(this, root);
     this.box = $(root, "[data-trim]");
@@ -292,7 +291,6 @@
     this.start = $(root, "[data-start]");
     this.end = $(root, "[data-end]");
     this.kept = $(root, "[data-kept]");
-    this.listenEnd = $(root, "[data-listen-end]");
     this.listen = $(root, "[data-listen]");
     this.foot = $(root, "[data-foot]");
     this.openTrim = $(root, "[data-open-trim]");
@@ -333,7 +331,7 @@
     this.apply.classList.toggle("is-busy", busy);
     this.apply.classList.toggle("is-disabled", busy);
     label(this.apply, busy ? "busy" : "idle");
-    [this.cancel, this.listen, this.listenEnd].forEach(function (b) { b.classList.toggle("is-disabled", busy); });
+    [this.cancel, this.listen].forEach(function (b) { b.classList.toggle("is-disabled", busy); });
   };
   Trim.prototype.dialog = function (open) {
     this.box.classList.toggle("is-open", open);
@@ -398,26 +396,18 @@
         run.after(500, listen);
       });
     };
-    // Listening starts from the playhead.
+    // Listening starts from the playhead; the app stops at the end of the
+    // selection, then the cut is applied.
     var listen = function () {
       self.press(self.listen, function () {
         self.playing(true);
         run.tween(2000, function (t) {
           self.p = SEEK + 0.12 * t; self.render();
-        }, ending, linear);
-      });
-    };
-    // « Écouter la fin de la sélection »: the last seconds, to check the cut.
-    var ending = function () {
-      self.press(self.listenEnd, function () {
-        self.p = CUT_B - ENDING; self.render();
-        run.tween(2300, function (t) {
-          self.p = CUT_B - ENDING + ENDING * t; self.render();
         }, function () {
           self.playing(false);
           run.after(500, apply);
         }, linear);
-      }, 700);
+      });
     };
     // Once the trimmed version is ready, the app closes the dialog: the
     // song now shows « Découpé », its trimmed version and a note.

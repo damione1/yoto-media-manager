@@ -64,6 +64,88 @@ pub struct MediaItem {
     /// Changing it later leaves playlists that already hold the media as they are.
     #[serde(default)]
     pub icon: Option<IconReference>,
+    /// Chapters marked on the original audio (see [`MediaChapter`]): empty when the media
+    /// has none. Playlists that already hold the media are not changed by new marks.
+    #[serde(default)]
+    pub chapters: Vec<MediaChapter>,
+}
+/// A chapter marked on a media of the library: where it starts in the original audio and
+/// its title, empty for the default wording (« Partie n », see [`MARK_TITLE`]). Marks
+/// cover the whole original: the first chapter starts at zero and each one ends where the
+/// next begins, or at the end of the audio. Added to a playlist, the media becomes one
+/// chapter holding one track per mark. See [`MediaItem::set_chapters`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct MediaChapter {
+    pub start: MediaTime,
+    #[serde(default)]
+    pub title: String,
+}
+impl MediaItem {
+    /// Record chapter marks on this media. They must start at zero, increase, stay inside
+    /// the audio and bear titles short enough for Yoto; fewer than two chapters mean no
+    /// marks at all, so the list is emptied.
+    pub fn set_chapters(&mut self, chapters: Vec<MediaChapter>) -> Result<()> {
+        validate_chapters(&chapters, self.info.duration)?;
+        self.chapters = if chapters.len() < 2 { vec![] } else { chapters };
+        Ok(())
+    }
+}
+/// The rules of [`MediaItem::set_chapters`], for `chapters` on an audio of `duration`.
+pub fn validate_chapters(chapters: &[MediaChapter], duration: MediaTime) -> Result<()> {
+    let invalid = || Failure::Validation(crate::messages::CHAPTER_MARKS_INVALID.into());
+    if chapters.first().is_some_and(|c| c.start != MediaTime::ZERO) {
+        return Err(invalid());
+    }
+    for pair in chapters.windows(2) {
+        if pair[0].start >= pair[1].start {
+            return Err(invalid());
+        }
+    }
+    if chapters.last().is_some_and(|c| c.start >= duration) {
+        return Err(invalid());
+    }
+    for chapter in chapters {
+        if chapter.title.chars().count() > Rules::TITLE_MAX {
+            return Err(Failure::Validation(crate::messages::TITLE_LENGTH.into()));
+        }
+    }
+    Ok(())
+}
+/// A span of a version of a media, as cut by its chapter marks: the title of the mark
+/// when it has one, and the ranges of the original to prepare, one per Yoto track (see
+/// [`plan_parts`]). In a playlist, every span is a track of the media's chapter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedChapter {
+    pub title: Option<String>,
+    pub ranges: Vec<TrimRange>,
+}
+/// Cut the version `trim` of a media along its `chapters`: one planned span per mark
+/// that overlaps the kept range, in order, holding the part of the mark that is kept.
+/// Marks outside the kept range are left out. A media without marks is one unnamed span.
+/// Every range is further cut by [`plan_parts`] when too long for one track.
+pub fn plan_chapters(trim: TrimRange, chapters: &[MediaChapter]) -> Vec<PlannedChapter> {
+    if chapters.len() < 2 {
+        return vec![PlannedChapter {
+            title: None,
+            ranges: plan_parts(trim),
+        }];
+    }
+    let mut planned = vec![];
+    for (index, chapter) in chapters.iter().enumerate() {
+        let start = chapter.start.max(trim.start());
+        let end = chapters
+            .get(index + 1)
+            .map_or(trim.end(), |next| next.start.min(trim.end()));
+        let Ok(span) = TrimRange::new(start, end, trim.end()) else {
+            continue;
+        };
+        let title = chapter.title.trim();
+        planned.push(PlannedChapter {
+            title: (!title.is_empty()).then(|| title.to_owned()),
+            ranges: plan_parts(span),
+        });
+    }
+    planned
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(try_from = "(MediaTime, MediaTime)", into = "(MediaTime, MediaTime)")]
@@ -106,18 +188,6 @@ impl TrimRange {
         } else {
             position.micros().min(latest)
         };
-        Self {
-            start: MediaTime::try_from(start).expect("inside the range"),
-            end: self.end,
-        }
-    }
-    /// The last `length` of this range, or all of it when it is shorter.
-    pub fn ending(self, length: MediaTime) -> Self {
-        let start = self
-            .end
-            .micros()
-            .saturating_sub(length.micros())
-            .max(self.start.micros());
         Self {
             start: MediaTime::try_from(start).expect("inside the range"),
             end: self.end,
@@ -187,6 +257,26 @@ pub fn plan_parts(range: TrimRange) -> Vec<TrimRange> {
         .map(|k| {
             TrimRange::new(bound(k), bound(k + 1), range.end()).expect("non-empty ordered part")
         })
+        .collect()
+}
+/// Title of the track an unnamed chapter mark becomes (see [`MediaChapter`]): short, since
+/// it sits under the chapter named like the media; `{part}` and `{parts}` are replaced.
+/// Clients may pass their own wording of it (see [`mark_title_with`]).
+pub const MARK_TITLE: &str = "Partie {part}";
+/// Title for the unnamed mark `part` of `parts` from `template`, cut to
+/// [`Rules::TITLE_MAX`]. A template without `{part}` falls back to [`MARK_TITLE`], so a
+/// mark is always numbered.
+pub fn mark_title_with(template: &str, part: usize, parts: usize) -> String {
+    let template = if template.contains("{part}") {
+        template
+    } else {
+        MARK_TITLE
+    };
+    template
+        .replace("{parts}", &parts.to_string())
+        .replace("{part}", &part.to_string())
+        .chars()
+        .take(Rules::TITLE_MAX)
         .collect()
 }
 /// Title of each part of a long audio; `{title}`, `{part}` and `{parts}` are replaced.
@@ -310,8 +400,11 @@ pub enum CatalogueSort {
     RecentlyImported,
 }
 
+/// Where the local player stands. A paused preview keeps its place in the media and
+/// resumes from there; a stopped one has ended or was dismissed.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum PreviewStatus {
     Stopped,
     Playing { media: MediaId, position: MediaTime },
+    Paused { media: MediaId, position: MediaTime },
 }

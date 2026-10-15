@@ -51,6 +51,18 @@ Une icône choisie pour un média dans `Médiathèque` l’accompagne dans les p
 
 Une chanson affiche un seul titre. Les playlists dont les chapitres contiennent plusieurs pistes gardent cette structure ; leurs réglages détaillés restent disponibles dans les menus.
 
+## Organiser les chapitres
+
+Par défaut, chaque chanson ajoutée est un chapitre à elle seule et s’affiche sur une ligne, ce qui suffit à la plupart des playlists : les boutons du lecteur passent d’un chapitre au suivant. Vous pouvez aussi regrouper plusieurs pistes dans un chapitre, pour un album ou une histoire en plusieurs fichiers, et donner à ce chapitre son titre et son icône.
+
+- **Regrouper.** Dans le menu `⋮` d’une piste, choisissez `Regrouper avec la piste du dessus` ou `Regrouper avec la piste du dessous`. Le chapitre reçoit un en-tête avec son numéro, son icône et un titre modifiable : nommez-le là. Le menu `⋮` d’un chapitre propose `Fusionner avec le chapitre précédent` et `Fusionner avec le chapitre suivant`.
+- **Séparer.** Dans le menu `⋮` d’une piste, `Sortir du chapitre` en refait un chapitre, et `Couper le chapitre avant cette piste` coupe le chapitre en deux. Le menu du chapitre garde `Séparer les pistes en chapitres`.
+- **Glisser-déposer.** Chaque piste et chaque en-tête de chapitre a une poignée (`⋮⋮`) à sa gauche. Déposez une piste au milieu d’une autre pour les regrouper (la ligne s’allume avec `Regrouper`), sur un en-tête de chapitre pour l’ajouter à la fin de ce chapitre (`Ajouter au chapitre`), ou entre deux pistes pour la déplacer là. Glissez une piste d’un chapitre jusqu’à l’espace entre deux chapitres pour la sortir du sien : le trait indique `Chapitre à part`. Glissez un en-tête de chapitre entre deux chapitres pour les réordonner, ou sur un autre chapitre pour les fusionner. Un trait montre où l’élément va se poser.
+- **Dialogue de déplacement.** `Déplacer / regrouper…` liste chaque chapitre avec son numéro, son titre et son nombre de pistes, vous laisse choisir `Au début` ou `À la fin` du chapitre choisi, et propose `Nouveau chapitre` pour mettre la piste dans un chapitre à elle seule à la fin de la playlist.
+- **Ajouter dans un chapitre.** Le menu `⋮` d’un chapitre contient `Ajouter des médias dans ce chapitre…` : les médias cochés arrivent à la fin de ce chapitre au lieu de former de nouveaux chapitres.
+
+Une piste qui quitte un chapitre garde l’icône qu’elle y montrait, pour que rien ne change sur le lecteur. Chaque changement est enregistré sur Yoto comme les autres. Un changement qui modifierait une plage de lecture aléatoire est refusé avec une explication ; retirez d’abord la plage dans les options de la playlist.
+
 ## Choisir le mode de lecture
 
 La lecture linéaire suit les chapitres et les pistes dans l’ordre. Les réglages de fin de piste permettent de passer à la piste suivante, de répéter ou de s’arrêter.

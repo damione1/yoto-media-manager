@@ -58,8 +58,8 @@
       },
       "trim": {
         "title": "Keep just the right part",
-        "text": "Drag the two handles past the intro and the credits, click the waveform to listen from any spot, and play the end of the selection to check the cut. Apply keeps your original and creates the trimmed version for your playlists.",
-        "alt": "Animation of the trim dialog: the start and end handles are dragged inward, a click on the waveform moves the playhead, the selection plays, the end of the selection plays, then Apply prepares the trimmed version."
+        "text": "Drag the two handles past the intro and the credits, and click the waveform to listen from any spot. Apply keeps your original and creates the trimmed version for your playlists.",
+        "alt": "Animation of the trim dialog: the start and end handles are dragged inward, a click on the waveform moves the playhead, the selection plays from there, then Apply prepares the trimmed version."
       },
       "playlist": {
         "title": "Straight onto their Yoto",
@@ -183,7 +183,6 @@
     "end": "End",
     "kept": "Kept length",
     "keptValue": "1 min 23 s",
-    "listenEnd": "Play the end of the selection",
     "listenSel": "Listen to the selection",
     "stopListen": "Stop listening",
     "level": "Level the volume",

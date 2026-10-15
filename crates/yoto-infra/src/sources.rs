@@ -547,6 +547,7 @@ pub fn import(
         provenance: acquired.provenance,
         recipes: vec![recipe.id],
         icon: None,
+        chapters: vec![],
     };
     Ok((media, original, recipe, waveform))
 }

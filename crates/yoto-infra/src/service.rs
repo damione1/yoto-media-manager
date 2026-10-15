@@ -55,6 +55,12 @@ pub enum Command {
         /// As in [`Command::AddYotoMedia`].
         #[serde(default)]
         part_title: Option<String>,
+        /// As in [`Command::AddYotoMedia`].
+        #[serde(default)]
+        mark_title: Option<String>,
+        /// As in [`Command::AddYotoMedia`].
+        #[serde(default)]
+        chapter: Option<ChapterKey>,
     },
     DeleteMedia {
         media: MediaId,
@@ -97,6 +103,13 @@ pub enum Command {
         media: MediaId,
         icon: Option<IconReference>,
     },
+    /// Mark chapters on a media (see [`MediaChapter`]): added to a playlist from then on,
+    /// each chapter becomes a chapter of the playlist. An empty list removes the marks.
+    /// Playlists already holding the media keep their tracks.
+    SetMediaChapters {
+        media: MediaId,
+        chapters: Vec<MediaChapter>,
+    },
     Prepare {
         media: MediaId,
         trim: TrimRange,
@@ -110,6 +123,12 @@ pub enum Command {
     },
     StopPreview,
     PreviewStatus,
+    /// Pause the local preview where it stands; the next `PreviewTrim` or `Preview` from
+    /// that position resumes it at once.
+    PausePreview,
+    /// Decode a media's original for listening ahead of its first `PreviewTrim`, so that
+    /// one starts without waiting. The decoded audio is kept for the previews that follow.
+    PreparePreview(MediaId),
     Export {
         media: MediaId,
         destination: PathBuf,
@@ -139,6 +158,15 @@ pub enum Command {
         /// `{title}`, `{part}` and `{parts}` are replaced. `None` uses [`PART_TITLE`].
         #[serde(default)]
         part_title: Option<String>,
+        /// Title of the track an unnamed chapter mark becomes, in the client's language;
+        /// `{part}` and `{parts}` are replaced. `None` uses [`MARK_TITLE`].
+        #[serde(default)]
+        mark_title: Option<String>,
+        /// The chapter of the playlist to append the tracks to, by its Yoto key. `None`
+        /// adds each media as a chapter of its own, holding one track per chapter marked
+        /// on it.
+        #[serde(default)]
+        chapter: Option<ChapterKey>,
     },
     DuplicateYotoPlaylist {
         account: AccountId,
@@ -364,6 +392,12 @@ pub struct Service {
     preview: std::sync::mpsc::Sender<PreviewCommand>,
     playback: Arc<Mutex<PreviewStatus>>,
     preview_cancel: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
+    /// The last asset decoded for listening, kept so that every preview of it starts at
+    /// once; replaced when another asset is listened to.
+    preview_cache: Mutex<Option<PreviewCache>>,
+    /// The decode for listening in progress, if any; requests for its asset wait for it.
+    preview_decode: Mutex<Option<PreviewDecode>>,
+    preview_decoded: std::sync::Condvar,
     pub(crate) remote: Mutex<AccountCaches>,
     asset_mutation: Mutex<()>,
     cloud_mutation: tokio::sync::Mutex<()>,
@@ -380,6 +414,52 @@ pub struct Service {
 }
 /// A publication job shared by the stages of its upload pipeline.
 type JobCell = Arc<Mutex<Job>>;
+/// The client's wording of the titles given to the tracks a media becomes, `None` for
+/// the domain's French defaults.
+#[derive(Clone, Copy)]
+struct Wording<'a> {
+    /// See [`Command::AddYotoMedia::part_title`].
+    part: Option<&'a str>,
+    /// See [`Command::AddYotoMedia::mark_title`].
+    mark: Option<&'a str>,
+}
+/// Where every track of a publication stands, as points from 0 (not sent yet) to
+/// [`SENT`] (converted by Yoto), to show one progress over all of them on the job.
+struct SendTracker {
+    job: JobCell,
+    points: Mutex<BTreeMap<RecipeId, u8>>,
+}
+/// Points of a track whose upload is reserved and whose file is on its way.
+const RESERVED: u8 = 10;
+/// Points of a track Yoto has received and has not started converting.
+const UPLOADED: u8 = 40;
+/// Points of a track Yoto has converted.
+const SENT: u8 = 100;
+impl SendTracker {
+    fn new(job: JobCell, recipes: impl IntoIterator<Item = RecipeId>) -> Self {
+        Self {
+            job,
+            points: Mutex::new(recipes.into_iter().map(|r| (r, 0)).collect()),
+        }
+    }
+    /// Points of a track Yoto is converting, `percent` of the way.
+    fn converting(percent: Option<u8>) -> u8 {
+        let percent = u32::from(percent.unwrap_or(0).min(100));
+        UPLOADED + (u32::from(SENT - UPLOADED) * percent / 100) as u8
+    }
+    /// Note where a track stands, and tell where the publication stands.
+    fn set(&self, recipe: RecipeId, points: u8) -> SendProgress {
+        let mut tracks = self.points.lock().unwrap_or_else(|e| e.into_inner());
+        tracks.insert(recipe, points.min(SENT));
+        let total = tracks.len().max(1) as u32;
+        let sum: u32 = tracks.values().map(|p| u32::from(*p)).sum();
+        SendProgress {
+            done: tracks.values().filter(|p| **p == SENT).count() as u32,
+            total,
+            percent: (sum / total).min(100) as u8,
+        }
+    }
+}
 /// A prepared track on its way to Yoto, with the mapping of an earlier upload if any.
 struct Outgoing {
     recipe: RecipeId,
@@ -479,13 +559,27 @@ fn apply_collection(
 }
 enum PreviewCommand {
     Play {
-        lease: Lease,
+        lease: Arc<Lease>,
         cancel: Arc<std::sync::atomic::AtomicBool>,
         reply: std::sync::mpsc::Sender<Result<()>>,
         media: MediaId,
-        start: MediaTime,
+        /// The time of the media at the start of the decoded file.
+        origin: MediaTime,
+        /// The part of the decoded file to play.
+        trim: TrimRange,
     },
+    Pause,
     Stop,
+}
+/// An asset decoded for listening, shared by the previews that play it.
+struct PreviewCache {
+    asset: AssetId,
+    lease: Arc<Lease>,
+}
+/// A decode for listening in progress, and the flag that abandons it.
+struct PreviewDecode {
+    asset: AssetId,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
 }
 impl Service {
     pub fn open(profile: PathBuf, tools: Tools) -> Result<Arc<Self>> {
@@ -559,6 +653,9 @@ impl Service {
             preview: tx,
             playback,
             preview_cancel: Mutex::new(None),
+            preview_cache: Mutex::new(None),
+            preview_decode: Mutex::new(None),
+            preview_decoded: std::sync::Condvar::new(),
             asset_mutation: Mutex::new(()),
             cloud_mutation: tokio::sync::Mutex::new(()),
             jobs: Mutex::new(BTreeMap::new()),
@@ -826,6 +923,7 @@ impl Service {
             | Command::AddMedia { .. }
             | Command::UpdateMedia { .. }
             | Command::SetMediaIcon { .. }
+            | Command::SetMediaChapters { .. }
             | Command::DeleteMedia { .. }
             | Command::DeleteRecipe { .. }
             | Command::DeleteMediaBatch { .. }
@@ -841,6 +939,8 @@ impl Service {
             | Command::PreviewTrim { .. }
             | Command::StopPreview
             | Command::PreviewStatus
+            | Command::PausePreview
+            | Command::PreparePreview(_)
             | Command::Export { .. }
             | Command::Connect
             | Command::CancelConnect
@@ -871,6 +971,10 @@ impl Service {
         }
         if matches!(&command, Command::StopPreview) {
             self.stop_preview()?;
+            return Ok(Reply::Updated);
+        }
+        if matches!(&command, Command::PausePreview) {
+            self.preview.send(PreviewCommand::Pause).map_err(storage)?;
             return Ok(Reply::Updated);
         }
         if matches!(&command, Command::PreviewStatus) {
@@ -1186,6 +1290,8 @@ impl Service {
                 card,
                 media,
                 part_title,
+                mark_title,
+                chapter,
             } => {
                 if media.is_empty() {
                     return Err(Failure::Validation(messages::MEDIA_SELECTION_EMPTY.into()));
@@ -1193,12 +1299,22 @@ impl Service {
                 let id = self.load_cloud_playlist(&account, &card).await?;
                 let mut draft = self.playlist(id)?;
                 let expected = draft.revision;
+                let into = Self::chapter_by_key(&draft, chapter.as_ref())?;
                 for (id, recipe) in media {
                     let media = self.media(id)?;
                     if !media.recipes.contains(&recipe) {
                         return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    self.add_to_playlist(&mut draft, &media, recipe, part_title.as_deref())?;
+                    self.add_to_playlist(
+                        &mut draft,
+                        &media,
+                        recipe,
+                        Wording {
+                            part: part_title.as_deref(),
+                            mark: mark_title.as_deref(),
+                        },
+                        into,
+                    )?;
                 }
                 self.auth.access(&account, Scope::UserContentManage).await?;
                 self.enqueue_cloud(account, draft, CloudPlaylistWrite::Update { expected })
@@ -1619,12 +1735,15 @@ impl Service {
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
             | Command::SetMediaIcon { .. }
+            | Command::SetMediaChapters { .. }
             | Command::Prepare { .. }
             | Command::Waveform(_)
             | Command::Preview(_)
             | Command::PreviewTrim { .. }
             | Command::StopPreview
             | Command::PreviewStatus
+            | Command::PausePreview
+            | Command::PreparePreview(_)
             | Command::Export { .. }
             | Command::Publish { .. }
             | Command::Retry(_)
@@ -1674,6 +1793,7 @@ impl Service {
             | Command::Waveform(_)
             | Command::Preview(_)
             | Command::PreviewTrim { .. }
+            | Command::PreparePreview(_)
             | Command::Export { .. }
             | Command::Backup { .. }
             | Command::Publish { .. }
@@ -1699,8 +1819,10 @@ impl Service {
             | Command::DismissJobs(_)
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
+            | Command::SetMediaChapters { .. }
             | Command::StopPreview
             | Command::PreviewStatus
+            | Command::PausePreview
             | Command::Retry(_)
             | Command::Cancel(_)
             | Command::Connect
@@ -1773,15 +1895,27 @@ impl Service {
                 playlist,
                 media,
                 part_title,
+                mark_title,
+                chapter,
             } => {
                 let mut p = self.playlist(playlist)?;
                 let base = p.revision;
+                let into = Self::chapter_by_key(&p, chapter.as_ref())?;
                 for (id, recipe) in media {
                     let m = self.media(id)?;
                     if !m.recipes.contains(&recipe) {
                         return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    self.add_to_playlist(&mut p, &m, recipe, part_title.as_deref())?;
+                    self.add_to_playlist(
+                        &mut p,
+                        &m,
+                        recipe,
+                        Wording {
+                            part: part_title.as_deref(),
+                            mark: mark_title.as_deref(),
+                        },
+                        into,
+                    )?;
                 }
                 self.db.save_playlist_cas(&p, base)?;
                 Ok(Reply::Updated)
@@ -1861,6 +1995,12 @@ impl Service {
                 self.db.update_media_icon(media, icon)?;
                 Ok(Reply::Updated)
             }
+            Command::SetMediaChapters { media, chapters } => {
+                let mut m = self.media(media)?;
+                m.set_chapters(chapters)?;
+                self.db.update_media_chapters(media, m.chapters)?;
+                Ok(Reply::Updated)
+            }
             Command::Prepare {
                 media,
                 trim,
@@ -1899,24 +2039,40 @@ impl Service {
                 let recipe = self.recipe(recipe)?;
                 let source = self.media(recipe.media)?;
                 TrimRange::new(recipe.trim.start(), recipe.trim.end(), source.info.duration)?;
-                let (asset, trim) = match (recipe.result, &recipe.info) {
+                // A finished cut is heard as encoded, its positions reported in the
+                // original's time, where the trim dialog shows them.
+                let (asset, duration, origin, trim) = match (recipe.result, &recipe.info) {
                     (Some(id), Some(info)) => (
                         self.asset(id)?,
-                        TrimRange::new(MediaTime::from_seconds(0.)?, info.duration, info.duration)?,
+                        info.duration,
+                        recipe.trim.start(),
+                        TrimRange::new(MediaTime::ZERO, info.duration, info.duration)?,
                     ),
-                    (None, _) => (self.asset(recipe.original)?, recipe.trim),
+                    (None, _) => (
+                        self.asset(recipe.original)?,
+                        source.info.duration,
+                        MediaTime::ZERO,
+                        recipe.trim,
+                    ),
                     (Some(_), None) => {
                         return Err(Failure::Storage("Prepared audio metadata missing".into()));
                     }
                 };
-                self.play_preview(recipe.media, recipe.trim.start(), &asset, trim)?;
+                self.play_preview(recipe.media, &asset, duration, origin, trim)?;
                 Ok(Reply::Updated)
             }
             Command::PreviewTrim { media, trim } => {
                 let m = self.media(media)?;
                 TrimRange::new(trim.start(), trim.end(), m.info.duration)?;
                 let a = self.asset(m.original)?;
-                self.play_preview(media, trim.start(), &a, trim)?;
+                self.play_preview(media, &a, m.info.duration, MediaTime::ZERO, trim)?;
+                Ok(Reply::Updated)
+            }
+            Command::PreparePreview(media) => {
+                let m = self.media(media)?;
+                let a = self.asset(m.original)?;
+                let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                self.decoded_preview(&a, m.info.duration, &cancel)?;
                 Ok(Reply::Updated)
             }
             Command::PreviewStatus => Ok(Reply::Data(
@@ -1924,6 +2080,10 @@ impl Service {
             )),
             Command::StopPreview => {
                 self.stop_preview()?;
+                Ok(Reply::Updated)
+            }
+            Command::PausePreview => {
+                self.preview.send(PreviewCommand::Pause).map_err(storage)?;
                 Ok(Reply::Updated)
             }
             Command::Export {
@@ -2262,11 +2422,15 @@ impl Service {
         }
         self.preview.send(PreviewCommand::Stop).map_err(storage)
     }
+    /// Play `trim` of `asset`, a file lasting `duration`, as `media`; positions are
+    /// reported from `origin`, the time of the media at the start of the file. The asset
+    /// is decoded once, so every preview of it after the first starts at once.
     fn play_preview(
         &self,
         media: MediaId,
-        start: MediaTime,
         asset: &Asset,
+        duration: MediaTime,
+        origin: MediaTime,
         trim: TrimRange,
     ) -> Result<()> {
         let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -2275,16 +2439,17 @@ impl Service {
             if let Some(previous) = active.replace(cancel.clone()) {
                 previous.store(true, std::sync::atomic::Ordering::SeqCst);
             }
-            self.preview.send(PreviewCommand::Stop).map_err(storage)?;
+            // A sound that keeps playing while the next one starts at once is replaced
+            // in one step; one that would play on through a decode is stopped first.
+            if !self.preview_decoded_for(asset.id)? {
+                self.preview.send(PreviewCommand::Stop).map_err(storage)?;
+            }
         }
-        let _guard = crate::process::OperationGuard::install(cancel.clone());
-        let input = self.store.materialize(asset)?;
-        let lease = self.store.lease("wav")?;
-        self.tools.preview(input.path(), lease.path(), trim)?;
+        let lease = self.decoded_preview(asset, duration, &cancel)?;
         let (reply, receive) = std::sync::mpsc::channel();
         {
             // The generation check and enqueue share Stop/new-preview's lock. A stale
-            // decode can neither restart playback nor displace the newer selection.
+            // request can neither restart playback nor displace the newer selection.
             let active = self.preview_cancel.lock().map_err(storage)?;
             if !active.as_ref().is_some_and(|v| Arc::ptr_eq(v, &cancel))
                 || cancel.load(std::sync::atomic::Ordering::SeqCst)
@@ -2295,7 +2460,8 @@ impl Service {
                 .send(PreviewCommand::Play {
                     lease,
                     media,
-                    start,
+                    origin,
+                    trim,
                     cancel: cancel.clone(),
                     reply,
                 })
@@ -2308,6 +2474,83 @@ impl Service {
                 Err(Failure::Media(messages::AUDIO_OUTPUT_SILENT.into()))
             }
         }
+    }
+    fn preview_decoded_for(&self, asset: AssetId) -> Result<bool> {
+        Ok(self
+            .preview_cache
+            .lock()
+            .map_err(storage)?
+            .as_ref()
+            .is_some_and(|cached| cached.asset == asset))
+    }
+    /// The whole of `asset` decoded to playable PCM: the copy kept from an earlier
+    /// preview, or a fresh decode that the following previews then share. One decode runs
+    /// at a time: a request for the asset being decoded waits for it, one for another
+    /// asset abandons it and takes its turn. `cancel` gives up the wait, or the decode
+    /// this call runs.
+    fn decoded_preview(
+        &self,
+        asset: &Asset,
+        duration: MediaTime,
+        cancel: &Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Arc<Lease>> {
+        use std::sync::atomic::Ordering::SeqCst;
+        loop {
+            if let Some(cached) = self.preview_cache.lock().map_err(storage)?.as_ref()
+                && cached.asset == asset.id
+            {
+                return Ok(cached.lease.clone());
+            }
+            if cancel.load(SeqCst) {
+                return Err(Failure::Cancelled);
+            }
+            let mut decoding = self.preview_decode.lock().map_err(storage)?;
+            if let Some(current) = decoding.as_ref() {
+                if current.asset != asset.id {
+                    current.cancel.store(true, SeqCst);
+                }
+                let (waited, _) = self
+                    .preview_decoded
+                    .wait_timeout(decoding, std::time::Duration::from_millis(100))
+                    .map_err(storage)?;
+                drop(waited);
+                continue;
+            }
+            *decoding = Some(PreviewDecode {
+                asset: asset.id,
+                cancel: cancel.clone(),
+            });
+            drop(decoding);
+            let result = self.decode_preview(asset, duration, cancel);
+            {
+                let mut decoding = self.preview_decode.lock().map_err(storage)?;
+                decoding.take();
+                if let Ok(lease) = &result {
+                    *self.preview_cache.lock().map_err(storage)? = Some(PreviewCache {
+                        asset: asset.id,
+                        lease: lease.clone(),
+                    });
+                }
+            }
+            self.preview_decoded.notify_all();
+            return result;
+        }
+    }
+    fn decode_preview(
+        &self,
+        asset: &Asset,
+        duration: MediaTime,
+        cancel: &Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Arc<Lease>> {
+        let _guard = crate::process::OperationGuard::install(cancel.clone());
+        let input = self.store.materialize(asset)?;
+        let lease = self.store.lease("wav")?;
+        let whole = TrimRange::new(MediaTime::ZERO, duration, duration)?;
+        self.tools.preview(input.path(), lease.path(), whole)?;
+        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(Failure::Cancelled);
+        }
+        Ok(Arc::new(lease))
     }
     fn protect_assets(&self) -> Result<crate::assets::AssetProtection> {
         let _commit = self.asset_mutation.lock().map_err(storage)?;
@@ -2701,15 +2944,32 @@ impl Service {
             }
         }
     }
-    /// Add a media version to a playlist. A version too long for one Yoto track becomes
-    /// one track per part; parts already cut earlier are reused, so their prepared audio
-    /// and Yoto uploads are too.
+    /// The chapter a media is to be added to, when the caller named one by its Yoto key.
+    fn chapter_by_key(playlist: &Playlist, key: Option<&ChapterKey>) -> Result<Option<ChapterId>> {
+        key.map(|key| {
+            playlist
+                .chapters
+                .iter()
+                .find(|c| c.key == *key)
+                .map(|c| c.id)
+                .ok_or_else(|| Failure::Validation(messages::DESTINATION_ABSENT.into()))
+        })
+        .transpose()
+    }
+    /// Add a media version to a playlist as one chapter titled like the media, appended
+    /// to chapter `into` instead when one is named. A media without marks is one track,
+    /// or one per part when too long for one Yoto track; a media with chapter marks (see
+    /// [`plan_chapters`]) holds one track per mark, titled as the mark is or numbered
+    /// with [`Wording::mark`], and a mark too long for one track becomes one track per
+    /// part. Parts already cut earlier are reused, so their prepared audio and Yoto
+    /// uploads are too.
     fn add_to_playlist(
         &self,
         playlist: &mut Playlist,
         media: &MediaItem,
         recipe: RecipeId,
-        part_title: Option<&str>,
+        wording: Wording<'_>,
+        into: Option<ChapterId>,
     ) -> Result<()> {
         // A Yoto icon only works on a card of the account it belongs to.
         let owner = match &playlist.origin {
@@ -2726,26 +2986,66 @@ impl Service {
             Some(IconReference::Yoto { .. } | IconReference::Local { .. }) | None => media.clone(),
         };
         let version = self.recipe(recipe)?;
-        let ranges = plan_parts(version.trim);
-        if ranges.len() == 1 {
+        let part_template = wording.part.unwrap_or(PART_TITLE);
+        let mark_template = wording.mark.unwrap_or(MARK_TITLE);
+        let spans = plan_chapters(version.trim, &media.chapters);
+        let ranges: Vec<TrimRange> = spans.iter().flat_map(|c| c.ranges.clone()).collect();
+        if ranges.len() == 1 && into.is_none() {
             return playlist.add_media(media, recipe);
         }
+        // The whole version is its own recipe; anything shorter is a part of it.
+        let recipes = if ranges.len() == 1 {
+            vec![recipe]
+        } else {
+            self.part_recipes(media, &version, &ranges)?
+        };
+        let mut recipes = recipes.into_iter();
+        let mut tracks = Vec::with_capacity(ranges.len());
+        for (index, span) in spans.iter().enumerate() {
+            // A span is the whole media, or a mark: named as given, else numbered.
+            let title = match (&span.title, spans.len()) {
+                (Some(title), _) => title.clone(),
+                (None, 1) => media.title.clone(),
+                (None, count) => mark_title_with(mark_template, index + 1, count),
+            };
+            tracks.extend(span.ranges.iter().enumerate().map(|(part, _)| MediaTrack {
+                recipe: recipes.next().expect("one recipe per planned range"),
+                title: if span.ranges.len() == 1 {
+                    title.clone()
+                } else {
+                    part_title_with(part_template, &title, part + 1, span.ranges.len())
+                },
+            }));
+        }
+        playlist.add_media_tracks(media, &media.title, tracks, into)
+    }
+    /// The recipe of each part of `version` cut at `ranges`, in order: the ones already cut
+    /// earlier are reused, the others are recorded now and prepared when published.
+    fn part_recipes(
+        &self,
+        media: &MediaItem,
+        version: &MediaRecipe,
+        ranges: &[TrimRange],
+    ) -> Result<Vec<RecipeId>> {
         let count = u16::try_from(ranges.len()).map_err(storage)?;
         let existing: Vec<MediaRecipe> = self
             .db
             .list::<MediaRecipe>(Table::Recipe)?
             .into_iter()
-            .filter(|r| r.part.is_some_and(|p| p.of == recipe && p.count == count))
+            .filter(|r| {
+                r.part
+                    .is_some_and(|p| p.of == version.id && p.count == count)
+            })
             .collect();
         let mut parts = Vec::with_capacity(ranges.len());
         for (index, trim) in (1..=count).zip(ranges) {
             let part = RecipePart {
-                of: recipe,
+                of: version.id,
                 index,
                 count,
             };
             let reused = existing.iter().find(|r| {
-                r.part == Some(part) && r.trim == trim && r.normalization == version.normalization
+                r.part == Some(part) && r.trim == *trim && r.normalization == version.normalization
             });
             let id = match reused {
                 Some(r) => r.id,
@@ -2754,7 +3054,7 @@ impl Service {
                         id: RecipeId::new(),
                         media: media.id,
                         original: version.original,
-                        trim,
+                        trim: *trim,
                         normalization: version.normalization,
                         result: None,
                         info: None,
@@ -2767,7 +3067,7 @@ impl Service {
             };
             parts.push(id);
         }
-        playlist.add_media_parts(media, &parts, part_title)
+        Ok(parts)
     }
     /// Acquire, analyse and record one import with the given tools.
     async fn import(
@@ -2832,6 +3132,10 @@ impl Service {
             })
             .collect();
         let cell: JobCell = Arc::new(Mutex::new(job.clone()));
+        let tracker = Arc::new(SendTracker::new(
+            cell.clone(),
+            tracks.iter().map(|(recipe, _)| *recipe),
+        ));
         let prepare = {
             let service = self.clone();
             let account = account.clone();
@@ -2858,11 +3162,13 @@ impl Service {
         let send = {
             let service = self.clone();
             let account = account.clone();
-            let cell = cell.clone();
+            let tracker = tracker.clone();
             move |track: Outgoing, _halt: Halt| {
-                let (service, account, cell) = (service.clone(), account.clone(), cell.clone());
+                let (service, account, tracker) =
+                    (service.clone(), account.clone(), tracker.clone());
                 async move {
                     if let Some(mapping) = track.known {
+                        tracker.set(track.recipe, SENT);
                         return Ok(Sent::Known(mapping));
                     }
                     let token = service
@@ -2870,7 +3176,7 @@ impl Service {
                         .access(&account, Scope::UserContentManage)
                         .await?;
                     let upload = service
-                        .send_audio(&cell, &token, track.recipe, &track.asset, &track.title)
+                        .send_audio(&tracker, &token, track.recipe, &track.asset, &track.title)
                         .await?;
                     Ok(Sent::Uploaded { track, upload })
                 }
@@ -2879,9 +3185,10 @@ impl Service {
         let finish = {
             let service = self.clone();
             let account = account.clone();
-            let cell = cell.clone();
+            let tracker = tracker.clone();
             move |sent: Sent, gates: Gates| {
-                let (service, account, cell) = (service.clone(), account.clone(), cell.clone());
+                let (service, account, tracker) =
+                    (service.clone(), account.clone(), tracker.clone());
                 async move {
                     let (track, mut upload) = match sent {
                         Sent::Known(mapping) => return Ok(mapping),
@@ -2896,7 +3203,7 @@ impl Service {
                     let ingested = loop {
                         let (end, percent) = service
                             .await_transcode(
-                                &cell,
+                                &tracker,
                                 &account,
                                 track.recipe,
                                 &upload,
@@ -2905,7 +3212,18 @@ impl Service {
                             )
                             .await?;
                         let problem = match end {
-                            TranscodeEnd::Ready(ingested) => break ingested,
+                            TranscodeEnd::Ready(ingested) => {
+                                service.shared_phase(
+                                    &tracker.job,
+                                    JobPhase::Ingesting {
+                                        recipe: track.recipe,
+                                        upload: upload.clone(),
+                                        percent: Some(100),
+                                        progress: Some(tracker.set(track.recipe, SENT)),
+                                    },
+                                )?;
+                                break ingested;
+                            }
                             TranscodeEnd::Stalled if !sent_again => {
                                 sent_again = true;
                                 let _slot = gates.upload().await?;
@@ -2915,7 +3233,7 @@ impl Service {
                                     .await?;
                                 upload = service
                                     .send_audio(
-                                        &cell,
+                                        &tracker,
                                         &token,
                                         track.recipe,
                                         &track.asset,
@@ -2962,25 +3280,27 @@ impl Service {
     /// Reserve an upload for a prepared track and send the file when Yoto does not have it.
     async fn send_audio(
         self: &Arc<Self>,
-        job: &JobCell,
+        tracker: &SendTracker,
         token: &str,
         recipe: RecipeId,
         asset: &Asset,
         title: &str,
     ) -> Result<UploadId> {
         self.shared_phase(
-            job,
+            &tracker.job,
             JobPhase::Uploading {
                 recipe,
                 upload: None,
+                progress: Some(tracker.set(recipe, RESERVED)),
             },
         )?;
         let reservation = self.api.reserve(token, &asset.sha256, title).await?;
         self.shared_phase(
-            job,
+            &tracker.job,
             JobPhase::Uploading {
                 recipe,
                 upload: Some(reservation.id.clone()),
+                progress: Some(tracker.set(recipe, RESERVED)),
             },
         )?;
         if let Some(url) = reservation.url {
@@ -2997,7 +3317,7 @@ impl Service {
     /// Returns how the wait ended and the last percentage Yoto reported.
     async fn await_transcode(
         self: &Arc<Self>,
-        job: &JobCell,
+        tracker: &SendTracker,
         account: &AccountId,
         recipe: RecipeId,
         upload: &UploadId,
@@ -3012,8 +3332,9 @@ impl Service {
             recipe,
             upload: upload.clone(),
             percent,
+            progress: Some(tracker.set(recipe, SendTracker::converting(percent))),
         };
-        self.shared_phase(job, ingesting(None))?;
+        self.shared_phase(&tracker.job, ingesting(None))?;
         let started = std::time::Instant::now();
         let mut watch = Watch::new(budget);
         loop {
@@ -3033,7 +3354,7 @@ impl Service {
             let shown = watch.percent();
             let verdict = watch.observe(started.elapsed(), &progress);
             if watch.percent() != shown {
-                self.shared_phase(job, ingesting(watch.percent()))?;
+                self.shared_phase(&tracker.job, ingesting(watch.percent()))?;
             }
             match verdict {
                 Verdict::Wait => {}
@@ -3205,12 +3526,13 @@ fn excerpt(value: &serde_json::Value) -> String {
 #[derive(Default)]
 struct Playback {
     player: Option<objc2::rc::Retained<objc2_avf_audio::AVAudioPlayer>>,
+    paused: bool,
 }
 #[cfg(target_os = "macos")]
 impl Playback {
-    /// Starts `path` through AVAudioPlayer, which plays on the system default output and
-    /// moves with it when a headset is put on or taken off mid-sound.
-    fn start(&mut self, path: &std::path::Path) -> Result<()> {
+    /// Starts `path` at `at` seconds through AVAudioPlayer, which plays on the system
+    /// default output and moves with it when a headset is put on or taken off mid-sound.
+    fn start(&mut self, path: &std::path::Path, at: f64) -> Result<()> {
         use objc2::AnyThread;
         use objc2_avf_audio::AVAudioPlayer;
         use objc2_foundation::NSURL;
@@ -3230,6 +3552,8 @@ impl Playback {
                             e.localizedDescription()
                         ))
                     })?;
+            // SAFETY: plain property writes and calls on the player this thread owns.
+            unsafe { player.setCurrentTime(at.max(0.)) };
             if !unsafe { player.play() } {
                 eprintln!(
                     "Audio output unavailable: playback of {} refused",
@@ -3240,20 +3564,34 @@ impl Playback {
                 ));
             }
             self.player = Some(player);
+            self.paused = false;
             Ok(())
         })
     }
-    /// Seconds played so far, or `None` once the sound has ended or nothing is playing.
-    fn elapsed(&self) -> Option<f64> {
+    /// Holds the sound where it stands; `start` plays again from any position.
+    fn pause(&mut self) {
+        if let Some(player) = &self.player {
+            // SAFETY: a plain call on the player this thread owns.
+            objc2::rc::autoreleasepool(|_| unsafe { player.pause() });
+            self.paused = true;
+        }
+    }
+    fn paused(&self) -> bool {
+        self.paused
+    }
+    /// Seconds into the file, playing or paused; `None` once the sound has ended or
+    /// nothing is loaded.
+    fn position(&self) -> Option<f64> {
         let player = self.player.as_ref()?;
         // SAFETY: plain property reads on the player this thread owns.
-        unsafe { player.isPlaying().then(|| player.currentTime()) }
+        unsafe { (self.paused || player.isPlaying()).then(|| player.currentTime()) }
     }
     fn stop(&mut self) {
         if let Some(player) = self.player.take() {
             // SAFETY: the player is this thread's and is dropped right after.
             objc2::rc::autoreleasepool(|_| unsafe { player.stop() });
         }
+        self.paused = false;
     }
 }
 /// Where previews play: a rodio player on the OS default output, reopened when that output
@@ -3263,10 +3601,15 @@ impl Playback {
 struct Playback {
     output: Option<PreviewOutput>,
     player: Option<rodio::Player>,
+    /// Seconds into the file where the player's own count starts.
+    offset: f64,
 }
 #[cfg(not(target_os = "macos"))]
 impl Playback {
-    fn start(&mut self, path: &std::path::Path) -> Result<()> {
+    /// Starts `path` at `at` seconds: the decoder is moved there before the player takes
+    /// it, so the player counts from that point.
+    fn start(&mut self, path: &std::path::Path, at: f64) -> Result<()> {
+        use rodio::Source;
         self.stop();
         let output = match PreviewOutput::current_or_open(self.output.take()) {
             Ok(output) => self.output.insert(output),
@@ -3276,20 +3619,36 @@ impl Playback {
             }
         };
         let file = File::open(path).map_err(storage)?;
-        let decoder = rodio::Decoder::try_from(file)
+        let mut decoder = rodio::Decoder::try_from(file)
             .map_err(|e| Failure::Media(format!("Preview decoding failed: {e}")))?;
+        let at = at.max(0.);
+        decoder
+            .try_seek(std::time::Duration::from_secs_f64(at))
+            .map_err(|e| Failure::Media(format!("Preview seeking failed: {e}")))?;
         let player = rodio::Player::connect_new(output.sink.mixer());
         player.append(decoder);
         self.player = Some(player);
+        self.offset = at;
         Ok(())
     }
-    /// Seconds played so far, or `None` once the sound has ended or nothing is playing.
-    fn elapsed(&self) -> Option<f64> {
+    /// Holds the sound where it stands; `start` plays again from any position.
+    fn pause(&mut self) {
+        if let Some(player) = &self.player {
+            player.pause();
+        }
+    }
+    fn paused(&self) -> bool {
+        self.player.as_ref().is_some_and(rodio::Player::is_paused)
+    }
+    /// Seconds into the file, playing or paused; `None` once the sound has ended or
+    /// nothing is loaded.
+    fn position(&self) -> Option<f64> {
         let player = self.player.as_ref()?;
-        (!player.empty()).then(|| player.get_pos().as_secs_f64())
+        (!player.empty()).then(|| self.offset + player.get_pos().as_secs_f64())
     }
     fn stop(&mut self) {
         self.player.take();
+        self.offset = 0.;
     }
 }
 /// A sink on the OS default output, with the device it was opened on and whether its stream
@@ -3373,39 +3732,90 @@ fn preview_position(start: MediaTime, elapsed: f64) -> MediaTime {
     }
     MediaTime::from_seconds(start.seconds() + elapsed).unwrap_or(start)
 }
+/// What the player reports for a preview of `media` whose decoded file begins at `origin`
+/// of the media and is heard up to `end` seconds into the file: where it stands, held or
+/// playing, or that it is over, once the sound ran out, reached `end` or was cancelled.
+fn preview_state(
+    media: MediaId,
+    origin: MediaTime,
+    end: MediaTime,
+    position: Option<f64>,
+    paused: bool,
+    cancelled: bool,
+) -> PreviewStatus {
+    match position {
+        Some(seconds) if !cancelled && seconds < end.seconds() => {
+            let position = preview_position(origin, seconds);
+            if paused {
+                PreviewStatus::Paused { media, position }
+            } else {
+                PreviewStatus::Playing { media, position }
+            }
+        }
+        Some(_) | None => PreviewStatus::Stopped,
+    }
+}
+/// How long the preview thread sleeps before reading the player again: its usual beat, or
+/// just what is left before `end` seconds into the file so the sound stops there and not a
+/// beat later.
+fn preview_poll(position: Option<f64>, paused: bool, end: MediaTime) -> std::time::Duration {
+    const BEAT: std::time::Duration = std::time::Duration::from_millis(100);
+    match position {
+        Some(seconds) if !paused => {
+            let left = (end.seconds() - seconds).clamp(0.001, BEAT.as_secs_f64());
+            std::time::Duration::from_secs_f64(left)
+        }
+        Some(_) | None => BEAT,
+    }
+}
+/// The preview being heard: its decoded file, kept alive while it plays, and where its
+/// sound is placed in the media.
+struct PreviewTimeline {
+    _lease: Arc<Lease>,
+    media: MediaId,
+    origin: MediaTime,
+    end: MediaTime,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
+}
 fn preview_loop(
     receiver: std::sync::mpsc::Receiver<PreviewCommand>,
     status: Arc<Mutex<PreviewStatus>>,
 ) {
     let mut playback = Playback::default();
-    let mut timeline: Option<(MediaId, MediaTime)> = None;
-    let mut lease = None;
-    let mut active_cancel: Option<Arc<std::sync::atomic::AtomicBool>> = None;
+    let mut current: Option<PreviewTimeline> = None;
+    let mut wait = preview_poll(None, false, MediaTime::ZERO);
+    let report = |current: &mut Option<PreviewTimeline>, playback: &mut Playback| {
+        let Some(timeline) = current.as_ref() else {
+            return (
+                PreviewStatus::Stopped,
+                preview_poll(None, false, MediaTime::ZERO),
+            );
+        };
+        let position = playback.position();
+        let paused = playback.paused();
+        let state = preview_state(
+            timeline.media,
+            timeline.origin,
+            timeline.end,
+            position,
+            paused,
+            timeline.cancel.load(std::sync::atomic::Ordering::SeqCst),
+        );
+        let wait = preview_poll(position, paused, timeline.end);
+        if matches!(state, PreviewStatus::Stopped) {
+            playback.stop();
+            current.take();
+        }
+        (state, wait)
+    };
     loop {
-        let command = match receiver.recv_timeout(std::time::Duration::from_millis(100)) {
+        let command = match receiver.recv_timeout(wait) {
             Ok(command) => command,
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                let Some((media, start)) = timeline else {
-                    continue;
-                };
-                let cancelled = active_cancel
-                    .as_ref()
-                    .is_some_and(|c| c.load(std::sync::atomic::Ordering::SeqCst));
-                let state = match playback.elapsed() {
-                    Some(elapsed) if !cancelled => PreviewStatus::Playing {
-                        media,
-                        position: preview_position(start, elapsed),
-                    },
-                    _ => {
-                        playback.stop();
-                        lease.take();
-                        active_cancel.take();
-                        timeline = None;
-                        PreviewStatus::Stopped
-                    }
-                };
-                if let Ok(mut current) = status.lock() {
-                    *current = state;
+                let (state, next) = report(&mut current, &mut playback);
+                wait = next;
+                if let Ok(mut status) = status.lock() {
+                    *status = state;
                 }
                 continue;
             }
@@ -3413,39 +3823,49 @@ fn preview_loop(
         };
         match command {
             PreviewCommand::Play {
-                lease: next,
+                lease,
                 media,
-                start,
+                origin,
+                trim,
                 cancel,
                 reply,
             } => {
-                playback.stop();
-                lease.take();
                 let result = (|| {
                     if cancel.load(std::sync::atomic::Ordering::SeqCst) {
                         return Err(Failure::Cancelled);
                     }
-                    playback.start(next.path())?;
+                    playback.start(lease.path(), trim.start().seconds())?;
                     if cancel.load(std::sync::atomic::Ordering::SeqCst) {
                         playback.stop();
+                        current.take();
                         return Err(Failure::Cancelled);
                     }
-                    lease = Some(next);
-                    active_cancel = Some(cancel);
-                    timeline = Some((media, start));
+                    current = Some(PreviewTimeline {
+                        _lease: lease,
+                        media,
+                        origin,
+                        end: trim.end(),
+                        cancel,
+                    });
                     *status.lock().map_err(storage)? = PreviewStatus::Playing {
                         media,
-                        position: start,
+                        position: preview_position(origin, trim.start().seconds()),
                     };
                     Ok(())
                 })();
                 let _ = reply.send(result);
             }
+            PreviewCommand::Pause => {
+                playback.pause();
+                let (state, next) = report(&mut current, &mut playback);
+                wait = next;
+                if let Ok(mut status) = status.lock() {
+                    *status = state;
+                }
+            }
             PreviewCommand::Stop => {
                 playback.stop();
-                lease.take();
-                active_cancel.take();
-                timeline = None;
+                current.take();
                 if let Ok(mut state) = status.lock() {
                     *state = PreviewStatus::Stopped;
                 }
@@ -3470,6 +3890,54 @@ fn db_account(db: &Database) -> Result<Option<AccountId>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_publication_counts_its_tracks_as_one_progress() {
+        let recipes: Vec<RecipeId> = (0..4).map(|_| RecipeId::new()).collect();
+        let job = Job {
+            id: JobId::new(),
+            request: JobRequest::Encode { recipe: recipes[0] },
+            state: JobState::Queued,
+            attempts: 0,
+            created: 0,
+            checkpoint: None,
+            dismissed: false,
+        };
+        let tracker = SendTracker::new(Arc::new(Mutex::new(job)), recipes.iter().copied());
+        // Yoto already had the first track; the second is reserved.
+        assert_eq!(
+            tracker.set(recipes[0], SENT),
+            SendProgress {
+                done: 1,
+                total: 4,
+                percent: 25
+            }
+        );
+        let progress = tracker.set(recipes[1], RESERVED);
+        assert_eq!(
+            (progress.done, progress.total, progress.percent),
+            (1, 4, 27)
+        );
+        // A conversion moves a track from uploaded to sent; 100 % reads as sent.
+        assert_eq!(SendTracker::converting(None), UPLOADED);
+        assert_eq!(SendTracker::converting(Some(50)), 70);
+        assert_eq!(SendTracker::converting(Some(100)), SENT);
+        let progress = tracker.set(recipes[1], SendTracker::converting(Some(50)));
+        assert_eq!((progress.done, progress.percent), (1, 42));
+        // A track sent again after a stall goes back, the others keep their points.
+        let progress = tracker.set(recipes[1], RESERVED);
+        assert_eq!((progress.done, progress.percent), (1, 27));
+        for recipe in &recipes {
+            tracker.set(*recipe, SENT);
+        }
+        assert_eq!(
+            tracker.set(recipes[3], SENT),
+            SendProgress {
+                done: 4,
+                total: 4,
+                percent: 100
+            }
+        );
+    }
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::*};
     #[test]
     fn readback_accepts_added_fields_and_whole_numbers_but_reports_changes() {
@@ -3499,6 +3967,50 @@ mod tests {
         assert_eq!(preview_position(start, -1.0), start);
         assert_eq!(preview_position(start, f64::NAN), start);
         assert_eq!(preview_position(start, f64::INFINITY), start);
+    }
+    #[test]
+    fn a_paused_preview_keeps_its_place_and_one_at_its_end_is_over() {
+        let media = MediaId::new();
+        let origin = MediaTime::from_seconds(10.).unwrap();
+        let end = MediaTime::from_seconds(30.).unwrap();
+        let position = |state: &PreviewStatus| match state {
+            PreviewStatus::Playing { position, .. } | PreviewStatus::Paused { position, .. } => {
+                Some(position.seconds())
+            }
+            PreviewStatus::Stopped => None,
+        };
+        let playing = preview_state(media, origin, end, Some(4.5), false, false);
+        assert!(matches!(playing, PreviewStatus::Playing { media: m, .. } if m == media));
+        assert_eq!(position(&playing), Some(14.5));
+        // Held: the same place, reported as paused, for as long as the pause lasts.
+        let paused = preview_state(media, origin, end, Some(4.5), true, false);
+        assert!(matches!(paused, PreviewStatus::Paused { media: m, .. } if m == media));
+        assert_eq!(position(&paused), Some(14.5));
+        // Over: the sound ran out, the end of the range was reached, or it was cancelled.
+        for over in [
+            preview_state(media, origin, end, None, false, false),
+            preview_state(media, origin, end, Some(30.), false, false),
+            preview_state(media, origin, end, Some(31.), true, false),
+            preview_state(media, origin, end, Some(4.5), false, true),
+        ] {
+            assert!(matches!(over, PreviewStatus::Stopped));
+        }
+    }
+    #[test]
+    fn the_player_is_read_again_just_before_the_end_of_the_range() {
+        let end = MediaTime::from_seconds(30.).unwrap();
+        let beat = std::time::Duration::from_millis(100);
+        assert_eq!(preview_poll(Some(10.), false, end), beat);
+        let left = preview_poll(Some(29.96), false, end).as_secs_f64();
+        assert!((left - 0.04).abs() < 1e-6, "{left}");
+        // Never a busy loop, even past the end.
+        assert_eq!(
+            preview_poll(Some(31.), false, end),
+            std::time::Duration::from_millis(1)
+        );
+        // Paused or silent, the usual beat.
+        assert_eq!(preview_poll(Some(29.96), true, end), beat);
+        assert_eq!(preview_poll(None, false, end), beat);
     }
     #[cfg(not(target_os = "macos"))]
     #[test]

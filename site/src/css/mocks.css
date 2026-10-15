@@ -253,7 +253,7 @@
 .m-time small { font-size: 10.5px; font-weight: 800; color: var(--ink-mute); }
 .m-time b { display: inline-flex; align-items: center; justify-content: center; width: 68px; height: 34px; border-radius: 10px; border: 2px solid var(--border); font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .m-kept b { width: auto; border: 0; justify-content: flex-start; font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--sky-ink); }
-.m-listen-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.m-listen-row { display: flex; justify-content: flex-end; }
 .m-play-ic { display: inline-flex; }
 .m-pause-ic { display: none; }
 .is-on > .m-pause-ic { display: inline-flex; }
@@ -370,8 +370,7 @@
   .m-pl-head { gap: 10px; }
   .m-cover { width: 60px; height: 60px; border-radius: 14px; }
   .m-head h3, .m-pl-title h3 { font-size: 18px; }
-  .m-listen-row .m-btn { flex: 1; padding: 0 8px; font-size: 11px; }
-  .m-listen-row .m-btn span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  .m-listen-row .m-btn { padding: 0 8px; font-size: 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

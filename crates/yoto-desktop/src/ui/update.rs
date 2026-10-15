@@ -338,13 +338,16 @@ impl Render for UpdatePanel {
                 .flex()
                 .justify_end()
                 .gap(px(8.))
-                .child(theme::dialog_close(theme::pill(
-                    Button::new("close-update").label(tr!("Fermer")),
-                    Look::Outline,
-                    Height::Medium,
-                    installing,
-                    cx,
-                )))
+                .child(theme::dialog_close(
+                    "close-update-footer",
+                    theme::pill(
+                        Button::new("close-update").label(tr!("Fermer")),
+                        Look::Outline,
+                        Height::Medium,
+                        installing,
+                        cx,
+                    ),
+                ))
                 .children(action),
         )
     }

@@ -58,8 +58,8 @@
       },
       "trim": {
         "title": "Gardez juste le bon morceau",
-        "text": "Faites glisser les deux poignées après l’intro et avant le générique, cliquez sur la forme d’onde pour écouter à partir de n’importe quel endroit, et écoutez la fin de la sélection pour vérifier la coupe. Appliquer garde votre original et crée la version découpée pour vos playlists.",
-        "alt": "Animation du dialogue de découpe : les poignées de début et de fin sont glissées vers l’intérieur, un clic sur la forme d’onde déplace la tête de lecture, la sélection est écoutée, puis sa fin, et Appliquer prépare la version découpée."
+        "text": "Faites glisser les deux poignées après l’intro et avant le générique, cliquez sur la forme d’onde pour écouter à partir de n’importe quel endroit. Appliquer garde votre original et crée la version découpée pour vos playlists.",
+        "alt": "Animation du dialogue de découpe : les poignées de début et de fin sont glissées vers l’intérieur, un clic sur la forme d’onde déplace la tête de lecture, la sélection est écoutée à partir de là, puis Appliquer prépare la version découpée."
       },
       "playlist": {
         "title": "Directement sur leur Yoto",
@@ -183,7 +183,6 @@
     "end": "Fin",
     "kept": "Durée gardée",
     "keptValue": "1 min 23 s",
-    "listenEnd": "Écouter la fin de la sélection",
     "listenSel": "Écouter la sélection",
     "stopListen": "Arrêter l’écoute",
     "level": "Égaliser le volume",

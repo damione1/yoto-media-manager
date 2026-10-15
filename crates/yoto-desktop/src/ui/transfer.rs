@@ -409,13 +409,16 @@ impl Render for LibraryTransfer {
                 .flex()
                 .justify_end()
                 .gap(px(8.))
-                .child(theme::dialog_close(theme::pill(
-                    Button::new("transfer-close").label(text::close()),
-                    Look::Outline,
-                    Height::Medium,
-                    false,
-                    cx,
-                )))
+                .child(theme::dialog_close(
+                    "transfer-close-footer",
+                    theme::pill(
+                        Button::new("transfer-close").label(text::close()),
+                        Look::Outline,
+                        Height::Medium,
+                        false,
+                        cx,
+                    ),
+                ))
                 .children(action)
                 .children(open_imported),
         )

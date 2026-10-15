@@ -287,13 +287,16 @@ impl Render for MediaPicker {
                 cx,
             ))
             .child(div().flex_1())
-            .child(theme::dialog_close(theme::pill(
-                Button::new("picker-cancel").label(tr!("Annuler")),
-                theme::Look::Ghost,
-                theme::Height::Medium,
-                busy,
-                cx,
-            )))
+            .child(theme::dialog_close(
+                "picker-cancel-footer",
+                theme::pill(
+                    Button::new("picker-cancel").label(tr!("Annuler")),
+                    theme::Look::Ghost,
+                    theme::Height::Medium,
+                    busy,
+                    cx,
+                ),
+            ))
             .child(theme::pill(
                 Button::new("picker-add-selected")
                     .label(if busy {
@@ -382,6 +385,7 @@ mod tests {
             },
             recipes: vec![original, ready, pending],
             icon: None,
+            chapters: vec![],
         };
         let media_id = media.id;
         let original_asset = media.original;

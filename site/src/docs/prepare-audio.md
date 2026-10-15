@@ -14,14 +14,25 @@ From `Library`, choose `Listen` on the media you want. The player shows its titl
 1. Choose `Trim the audio` to open the trimming dialog and its waveform.
 2. Drag the start and end handles on the waveform, or the slider under it, to keep the part you want.
 3. For greater precision, enter the two positions in seconds. For example, start `12` and end `180` keep the audio from 12 seconds to 3 minutes.
-4. Click the waveform to move the playhead, then choose `Listen to the selection` to listen from there. `Play the end of the selection` plays its last seconds, to check where it ends.
+4. Click the waveform to move the playhead, then choose `Listen to the selection` to listen from there. If you click the waveform while it is already playing, playback continues from the new spot.
 5. Adjust the boundaries, then choose `Apply`. The app prepares an MP3 version; when it is ready, the dialog closes and the player shows `Trimmed version`.
 
 Playback in the trimming dialog plays only the selected range. `Stop listening` stops the preview. `Cancel` or Escape closes the dialog without creating a version; your original stays intact.
 
-![The trimming dialog: the two handles around the kept part, the playhead, the start, end and kept length, Play the end of the selection, Listen to the selection and Apply](images/trim-en.png)
+![The trimming dialog: the two handles around the kept part, the playhead, the start, end and kept length, Listen to the selection and Apply](images/trim-en.png)
 
 The end must follow the start and stay within the original duration. The app reports an error if the boundaries are invalid.
+
+## Mark chapters
+
+An audiobook or a long recording can arrive in a playlist already cut into chapters, so the player's buttons skip from one to the next.
+
+1. Choose `Mark chapters` under `Trim the audio`. The dialog shows the waveform of the whole original.
+2. Listen, click the waveform to move the playhead to where a new part begins, then choose `Add a chapter here`. A mark appears on the waveform; drag it to adjust it, and the arrow keys move the playhead by a few seconds.
+3. Each resulting chapter is listed with its start, end and length. Type a title for it, or leave the field empty to use “Part 1”, “Part 2”… `Listen` plays from the chapter's start; `Remove` deletes a mark.
+4. Choose `Save`. The library row and the side panel then show how many chapters the audio has.
+
+Marks are stored with the audio on your computer; the original stays intact. When you add the audio to a playlist, it arrives as one chapter titled like the audio and carrying its icon, holding one track per mark with the title you gave it: the playlist editor shows it grouped under its header, and the player's buttons skip from one track to the next. A mark longer than 55 minutes is also cut into parts. Marks live on the original: with a trimmed version, only the marks inside the kept range are used, and the dialog shades the kept range to show it. `Remove all chapters` goes back to a single track. Playlists that already hold the audio are not changed.
 
 ## Make volume more consistent
 
