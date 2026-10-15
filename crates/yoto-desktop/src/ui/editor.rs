@@ -901,6 +901,7 @@ impl PlaylistEditor {
                 card,
                 media,
                 part_title: Some(wording::part_title_template().into()),
+                chapter: None,
             },
             CommitTarget::MediaPicker,
             sent,

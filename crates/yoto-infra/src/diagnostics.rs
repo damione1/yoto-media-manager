@@ -88,6 +88,7 @@ pub async fn smoke(tools: Tools) -> Result<()> {
             playlist: p,
             media: vec![(media.id, recipe)],
             part_title: None,
+            chapter: None,
         })
         .await?;
     let draft = service.playlist(p)?;

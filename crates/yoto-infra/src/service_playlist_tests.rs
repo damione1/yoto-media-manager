@@ -183,6 +183,7 @@ async fn synced_myo_opens_edits_adds_trimmed_audio_and_updates_the_same_cloud_ca
             card: CardId::new("songs-card").unwrap(),
             media: vec![(media, recipe)],
             part_title: None,
+            chapter: None,
         })
         .await
         .unwrap()
@@ -421,6 +422,7 @@ async fn tracks_upload_in_parallel_and_each_keeps_its_own_audio() {
             playlist,
             media: recipes.iter().map(|r| (media, *r)).collect(),
             part_title: None,
+            chapter: None,
         })
         .await
         .unwrap();

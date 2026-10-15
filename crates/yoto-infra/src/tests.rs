@@ -827,6 +827,7 @@ pub(crate) fn catalogue_fixture(
         },
         recipes: vec![],
         icon: None,
+        chapters: vec![],
     };
     service
         .db
@@ -973,6 +974,7 @@ async fn ten_thousand_catalogue_rows_page_across_bounded_ipc_and_aliases_share_o
             },
             recipes: vec![],
             icon: None,
+            chapters: vec![],
         };
         service
             .db
@@ -1153,6 +1155,7 @@ fn migration_failure_keeps_v1_and_recoverable_encrypted_snapshot() {
         },
         recipes: vec![RecipeId::new()],
         icon: None,
+        chapters: vec![],
     };
     let recipe = MediaRecipe {
         id: media.recipes[0],
@@ -1427,6 +1430,7 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
                 playlist: playlist.id,
                 media: vec![(media.id, version.id)],
                 part_title: None,
+                chapter: None,
             })
             .await
             .unwrap();
@@ -1474,6 +1478,137 @@ async fn long_media_is_added_as_reused_parts_and_removed_with_its_version() {
         .unwrap();
     assert!(service.playlist(playlist.id).unwrap().chapters.is_empty());
     assert!(first.iter().all(|id| service.recipe(*id).is_err()));
+}
+#[tokio::test]
+async fn marked_chapters_are_added_as_chapters_cut_at_the_marks_or_into_a_chapter() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [14; 32]).unwrap();
+    let input = root.path().join("audio");
+    std::fs::write(&input, b"story source fixture").unwrap();
+    let asset = service.store.put(&input, "mp3").unwrap();
+    service
+        .db
+        .put(Table::Asset, &asset.id.to_string(), &asset)
+        .unwrap();
+    let (mut media, original) = catalogue_fixture(&service, asset.id, "Histoire");
+    media.info.duration = MediaTime::from_seconds(600.).unwrap();
+    media.recipes = vec![original.id];
+    service
+        .db
+        .put(Table::Media, &media.id.to_string(), &media)
+        .unwrap();
+    let whole = TrimRange::new(MediaTime::ZERO, media.info.duration, media.info.duration).unwrap();
+    service
+        .db
+        .put(
+            Table::Recipe,
+            &original.id.to_string(),
+            &MediaRecipe {
+                trim: whole,
+                ..original.clone()
+            },
+        )
+        .unwrap();
+    let at = |s: f64| MediaTime::from_seconds(s).unwrap();
+    let mark = |s: f64, title: &str| MediaChapter {
+        start: at(s),
+        title: title.into(),
+    };
+    // Marks out of order are refused and leave the media as it was.
+    assert!(
+        service
+            .execute(Command::SetMediaChapters {
+                media: media.id,
+                chapters: vec![mark(0., ""), mark(400., ""), mark(200., "")],
+            })
+            .await
+            .is_err()
+    );
+    assert!(service.media(media.id).unwrap().chapters.is_empty());
+    service
+        .execute(Command::SetMediaChapters {
+            media: media.id,
+            chapters: vec![mark(0., ""), mark(200., "Le milieu"), mark(400., "")],
+        })
+        .await
+        .unwrap();
+    assert_eq!(service.media(media.id).unwrap().chapters.len(), 3);
+    let playlist = Playlist::new("Soirée".into()).unwrap();
+    service.db.save_playlist(&playlist).unwrap();
+    service
+        .execute(Command::AddMedia {
+            playlist: playlist.id,
+            media: vec![(media.id, original.id)],
+            part_title: None,
+            chapter: None,
+        })
+        .await
+        .unwrap();
+    let saved = service.playlist(playlist.id).unwrap();
+    let titles: Vec<_> = saved.chapters.iter().map(|c| c.title.as_str()).collect();
+    assert_eq!(
+        titles,
+        [
+            "Histoire — partie 1/3",
+            "Le milieu",
+            "Histoire — partie 3/3"
+        ]
+    );
+    assert!(saved.chapters.iter().all(|c| c.tracks.len() == 1));
+    let recipe = |track: &Track| match track.media {
+        TrackMedia::Local { recipe, .. } => service.recipe(recipe).unwrap(),
+        TrackMedia::RemoteAudio { .. } | TrackMedia::Stream { .. } => panic!("local"),
+    };
+    let middle = recipe(&saved.chapters[1].tracks[0]);
+    assert_eq!(
+        (middle.trim.start(), middle.trim.end()),
+        (at(200.), at(400.))
+    );
+    assert_eq!(middle.part.unwrap().count, 3);
+    // A trimmed version keeps only the marks inside it, and joins a named chapter.
+    let Reply::Prepared(cut) = service
+        .execute(Command::Prepare {
+            media: media.id,
+            trim: TrimRange::new(at(300.), at(500.), media.info.duration).unwrap(),
+            normalization: Normalization::Preserve,
+        })
+        .await
+        .unwrap()
+    else {
+        panic!("a prepared version");
+    };
+    let target = saved.chapters[1].key.clone();
+    service
+        .execute(Command::AddMedia {
+            playlist: playlist.id,
+            media: vec![(media.id, cut)],
+            part_title: Some("{title} — part {part} of {parts}".into()),
+            chapter: Some(target),
+        })
+        .await
+        .unwrap();
+    let saved = service.playlist(playlist.id).unwrap();
+    assert_eq!(saved.chapters.len(), 3);
+    let joined: Vec<_> = saved.chapters[1]
+        .tracks
+        .iter()
+        .map(|t| t.title.as_str())
+        .collect();
+    assert_eq!(joined, ["Le milieu", "Le milieu", "Histoire — part 2 of 2"]);
+    let tail = recipe(&saved.chapters[1].tracks[2]);
+    assert_eq!((tail.trim.start(), tail.trim.end()), (at(400.), at(500.)));
+    // A chapter that is not in the playlist cannot receive media.
+    assert!(matches!(
+        service
+            .execute(Command::AddMedia {
+                playlist: playlist.id,
+                media: vec![(media.id, original.id)],
+                part_title: None,
+                chapter: Some(ChapterKey::fresh()),
+            })
+            .await,
+        Err(Failure::Validation(m)) if m == messages::DESTINATION_ABSENT
+    ));
 }
 #[tokio::test]
 async fn finished_tasks_leave_the_activity_list_but_stay_recorded() {
@@ -1575,6 +1710,7 @@ async fn a_media_icon_survives_garbage_collection_and_reaches_new_chapters() {
             playlist: playlist.id,
             media: vec![(media.id, recipe.id)],
             part_title: None,
+            chapter: None,
         })
         .await
         .unwrap();
@@ -1666,6 +1802,7 @@ async fn a_yoto_icon_of_another_account_is_not_copied_into_a_playlist() {
                 playlist: playlist.id,
                 media: vec![(media.id, recipe.id)],
                 part_title: None,
+                chapter: None,
             })
             .await
             .unwrap();

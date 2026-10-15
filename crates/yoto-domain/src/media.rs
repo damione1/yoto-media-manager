@@ -64,6 +64,86 @@ pub struct MediaItem {
     /// Changing it later leaves playlists that already hold the media as they are.
     #[serde(default)]
     pub icon: Option<IconReference>,
+    /// Chapters marked on the original audio (see [`MediaChapter`]): empty when the media
+    /// has none. Playlists that already hold the media are not changed by new marks.
+    #[serde(default)]
+    pub chapters: Vec<MediaChapter>,
+}
+/// A chapter marked on a media of the library: where it starts in the original audio and
+/// its title, empty for the default wording (« <title> — part n/N »). Marks cover the
+/// whole original: the first chapter starts at zero and each one ends where the next
+/// begins, or at the end of the audio. See [`MediaItem::set_chapters`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct MediaChapter {
+    pub start: MediaTime,
+    #[serde(default)]
+    pub title: String,
+}
+impl MediaItem {
+    /// Record chapter marks on this media. They must start at zero, increase, stay inside
+    /// the audio and bear titles short enough for Yoto; fewer than two chapters mean no
+    /// marks at all, so the list is emptied.
+    pub fn set_chapters(&mut self, chapters: Vec<MediaChapter>) -> Result<()> {
+        validate_chapters(&chapters, self.info.duration)?;
+        self.chapters = if chapters.len() < 2 { vec![] } else { chapters };
+        Ok(())
+    }
+}
+/// The rules of [`MediaItem::set_chapters`], for `chapters` on an audio of `duration`.
+pub fn validate_chapters(chapters: &[MediaChapter], duration: MediaTime) -> Result<()> {
+    let invalid = || Failure::Validation(crate::messages::CHAPTER_MARKS_INVALID.into());
+    if chapters.first().is_some_and(|c| c.start != MediaTime::ZERO) {
+        return Err(invalid());
+    }
+    for pair in chapters.windows(2) {
+        if pair[0].start >= pair[1].start {
+            return Err(invalid());
+        }
+    }
+    if chapters.last().is_some_and(|c| c.start >= duration) {
+        return Err(invalid());
+    }
+    for chapter in chapters {
+        if chapter.title.chars().count() > Rules::TITLE_MAX {
+            return Err(Failure::Validation(crate::messages::TITLE_LENGTH.into()));
+        }
+    }
+    Ok(())
+}
+/// A chapter a version of a media becomes in a playlist: its title when the mark has
+/// one, and the ranges of the original to prepare, one per Yoto track (see [`plan_parts`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedChapter {
+    pub title: Option<String>,
+    pub ranges: Vec<TrimRange>,
+}
+/// Cut the version `trim` of a media along its `chapters`: one planned chapter per mark
+/// whose span overlaps the kept range, in order, holding the part of the span that is
+/// kept. Marks outside the kept range are left out. A media without marks is one unnamed
+/// chapter. Every range is further cut by [`plan_parts`] when too long for one track.
+pub fn plan_chapters(trim: TrimRange, chapters: &[MediaChapter]) -> Vec<PlannedChapter> {
+    if chapters.len() < 2 {
+        return vec![PlannedChapter {
+            title: None,
+            ranges: plan_parts(trim),
+        }];
+    }
+    let mut planned = vec![];
+    for (index, chapter) in chapters.iter().enumerate() {
+        let start = chapter.start.max(trim.start());
+        let end = chapters
+            .get(index + 1)
+            .map_or(trim.end(), |next| next.start.min(trim.end()));
+        let Ok(span) = TrimRange::new(start, end, trim.end()) else {
+            continue;
+        };
+        let title = chapter.title.trim();
+        planned.push(PlannedChapter {
+            title: (!title.is_empty()).then(|| title.to_owned()),
+            ranges: plan_parts(span),
+        });
+    }
+    planned
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(try_from = "(MediaTime, MediaTime)", into = "(MediaTime, MediaTime)")]

@@ -55,6 +55,9 @@ pub enum Command {
         /// As in [`Command::AddYotoMedia`].
         #[serde(default)]
         part_title: Option<String>,
+        /// As in [`Command::AddYotoMedia`].
+        #[serde(default)]
+        chapter: Option<ChapterKey>,
     },
     DeleteMedia {
         media: MediaId,
@@ -96,6 +99,13 @@ pub enum Command {
     SetMediaIcon {
         media: MediaId,
         icon: Option<IconReference>,
+    },
+    /// Mark chapters on a media (see [`MediaChapter`]): added to a playlist from then on,
+    /// each chapter becomes a chapter of the playlist. An empty list removes the marks.
+    /// Playlists already holding the media keep their tracks.
+    SetMediaChapters {
+        media: MediaId,
+        chapters: Vec<MediaChapter>,
     },
     Prepare {
         media: MediaId,
@@ -139,6 +149,10 @@ pub enum Command {
         /// `{title}`, `{part}` and `{parts}` are replaced. `None` uses [`PART_TITLE`].
         #[serde(default)]
         part_title: Option<String>,
+        /// The chapter of the playlist to append the tracks to, by its Yoto key. `None`
+        /// adds each media as a chapter of its own (or one per chapter marked on it).
+        #[serde(default)]
+        chapter: Option<ChapterKey>,
     },
     DuplicateYotoPlaylist {
         account: AccountId,
@@ -826,6 +840,7 @@ impl Service {
             | Command::AddMedia { .. }
             | Command::UpdateMedia { .. }
             | Command::SetMediaIcon { .. }
+            | Command::SetMediaChapters { .. }
             | Command::DeleteMedia { .. }
             | Command::DeleteRecipe { .. }
             | Command::DeleteMediaBatch { .. }
@@ -1186,6 +1201,7 @@ impl Service {
                 card,
                 media,
                 part_title,
+                chapter,
             } => {
                 if media.is_empty() {
                     return Err(Failure::Validation(messages::MEDIA_SELECTION_EMPTY.into()));
@@ -1193,12 +1209,13 @@ impl Service {
                 let id = self.load_cloud_playlist(&account, &card).await?;
                 let mut draft = self.playlist(id)?;
                 let expected = draft.revision;
+                let into = Self::chapter_by_key(&draft, chapter.as_ref())?;
                 for (id, recipe) in media {
                     let media = self.media(id)?;
                     if !media.recipes.contains(&recipe) {
                         return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    self.add_to_playlist(&mut draft, &media, recipe, part_title.as_deref())?;
+                    self.add_to_playlist(&mut draft, &media, recipe, part_title.as_deref(), into)?;
                 }
                 self.auth.access(&account, Scope::UserContentManage).await?;
                 self.enqueue_cloud(account, draft, CloudPlaylistWrite::Update { expected })
@@ -1619,6 +1636,7 @@ impl Service {
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
             | Command::SetMediaIcon { .. }
+            | Command::SetMediaChapters { .. }
             | Command::Prepare { .. }
             | Command::Waveform(_)
             | Command::Preview(_)
@@ -1699,6 +1717,7 @@ impl Service {
             | Command::DismissJobs(_)
             | Command::Restore { .. }
             | Command::UpdateMedia { .. }
+            | Command::SetMediaChapters { .. }
             | Command::StopPreview
             | Command::PreviewStatus
             | Command::Retry(_)
@@ -1773,15 +1792,17 @@ impl Service {
                 playlist,
                 media,
                 part_title,
+                chapter,
             } => {
                 let mut p = self.playlist(playlist)?;
                 let base = p.revision;
+                let into = Self::chapter_by_key(&p, chapter.as_ref())?;
                 for (id, recipe) in media {
                     let m = self.media(id)?;
                     if !m.recipes.contains(&recipe) {
                         return Err(Failure::Validation(messages::RECIPE_NOT_OF_MEDIA.into()));
                     }
-                    self.add_to_playlist(&mut p, &m, recipe, part_title.as_deref())?;
+                    self.add_to_playlist(&mut p, &m, recipe, part_title.as_deref(), into)?;
                 }
                 self.db.save_playlist_cas(&p, base)?;
                 Ok(Reply::Updated)
@@ -1859,6 +1880,12 @@ impl Service {
                     return Err(Failure::Validation(messages::ICON_ABSENT.into()));
                 }
                 self.db.update_media_icon(media, icon)?;
+                Ok(Reply::Updated)
+            }
+            Command::SetMediaChapters { media, chapters } => {
+                let mut m = self.media(media)?;
+                m.set_chapters(chapters)?;
+                self.db.update_media_chapters(media, m.chapters)?;
                 Ok(Reply::Updated)
             }
             Command::Prepare {
@@ -2701,15 +2728,29 @@ impl Service {
             }
         }
     }
-    /// Add a media version to a playlist. A version too long for one Yoto track becomes
-    /// one track per part; parts already cut earlier are reused, so their prepared audio
-    /// and Yoto uploads are too.
+    /// The chapter a media is to be added to, when the caller named one by its Yoto key.
+    fn chapter_by_key(playlist: &Playlist, key: Option<&ChapterKey>) -> Result<Option<ChapterId>> {
+        key.map(|key| {
+            playlist
+                .chapters
+                .iter()
+                .find(|c| c.key == *key)
+                .map(|c| c.id)
+                .ok_or_else(|| Failure::Validation(messages::DESTINATION_ABSENT.into()))
+        })
+        .transpose()
+    }
+    /// Add a media version to a playlist: one chapter, or one per chapter marked on the
+    /// media (see [`plan_chapters`]), each appended to chapter `into` instead when one is
+    /// named. A chapter too long for one Yoto track becomes one track per part; parts
+    /// already cut earlier are reused, so their prepared audio and Yoto uploads are too.
     fn add_to_playlist(
         &self,
         playlist: &mut Playlist,
         media: &MediaItem,
         recipe: RecipeId,
         part_title: Option<&str>,
+        into: Option<ChapterId>,
     ) -> Result<()> {
         // A Yoto icon only works on a card of the account it belongs to.
         let owner = match &playlist.origin {
@@ -2726,26 +2767,74 @@ impl Service {
             Some(IconReference::Yoto { .. } | IconReference::Local { .. }) | None => media.clone(),
         };
         let version = self.recipe(recipe)?;
-        let ranges = plan_parts(version.trim);
-        if ranges.len() == 1 {
+        let template = part_title.unwrap_or(PART_TITLE);
+        let chapters = plan_chapters(version.trim, &media.chapters);
+        let ranges: Vec<TrimRange> = chapters.iter().flat_map(|c| c.ranges.clone()).collect();
+        if ranges.len() == 1 && into.is_none() && chapters[0].title.is_none() {
             return playlist.add_media(media, recipe);
         }
+        // The whole version is its own recipe; anything shorter is a part of it.
+        let recipes = if ranges.len() == 1 {
+            vec![recipe]
+        } else {
+            self.part_recipes(media, &version, &ranges)?
+        };
+        let mut recipes = recipes.into_iter();
+        let mut groups = Vec::with_capacity(chapters.len());
+        for (index, chapter) in chapters.iter().enumerate() {
+            // A marked chapter has the title it was given, or is numbered like a part.
+            let title = match (&chapter.title, chapters.len()) {
+                (Some(title), _) => title.clone(),
+                (None, 1) => media.title.clone(),
+                (None, count) => part_title_with(template, &media.title, index + 1, count),
+            };
+            let tracks: Vec<MediaTrack> = chapter
+                .ranges
+                .iter()
+                .enumerate()
+                .map(|(part, _)| MediaTrack {
+                    recipe: recipes.next().expect("one recipe per planned range"),
+                    title: if chapter.ranges.len() == 1 {
+                        title.clone()
+                    } else {
+                        part_title_with(template, &title, part + 1, chapter.ranges.len())
+                    },
+                })
+                .collect();
+            groups.push((title, tracks));
+        }
+        for (title, tracks) in groups {
+            playlist.add_media_tracks(media, &title, tracks, into)?;
+        }
+        Ok(())
+    }
+    /// The recipe of each part of `version` cut at `ranges`, in order: the ones already cut
+    /// earlier are reused, the others are recorded now and prepared when published.
+    fn part_recipes(
+        &self,
+        media: &MediaItem,
+        version: &MediaRecipe,
+        ranges: &[TrimRange],
+    ) -> Result<Vec<RecipeId>> {
         let count = u16::try_from(ranges.len()).map_err(storage)?;
         let existing: Vec<MediaRecipe> = self
             .db
             .list::<MediaRecipe>(Table::Recipe)?
             .into_iter()
-            .filter(|r| r.part.is_some_and(|p| p.of == recipe && p.count == count))
+            .filter(|r| {
+                r.part
+                    .is_some_and(|p| p.of == version.id && p.count == count)
+            })
             .collect();
         let mut parts = Vec::with_capacity(ranges.len());
         for (index, trim) in (1..=count).zip(ranges) {
             let part = RecipePart {
-                of: recipe,
+                of: version.id,
                 index,
                 count,
             };
             let reused = existing.iter().find(|r| {
-                r.part == Some(part) && r.trim == trim && r.normalization == version.normalization
+                r.part == Some(part) && r.trim == *trim && r.normalization == version.normalization
             });
             let id = match reused {
                 Some(r) => r.id,
@@ -2754,7 +2843,7 @@ impl Service {
                         id: RecipeId::new(),
                         media: media.id,
                         original: version.original,
-                        trim,
+                        trim: *trim,
                         normalization: version.normalization,
                         result: None,
                         info: None,
@@ -2767,7 +2856,7 @@ impl Service {
             };
             parts.push(id);
         }
-        playlist.add_media_parts(media, &parts, part_title)
+        Ok(parts)
     }
     /// Acquire, analyse and record one import with the given tools.
     async fn import(

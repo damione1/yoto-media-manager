@@ -1875,6 +1875,7 @@ mod tests {
             },
             recipes: vec![],
             icon: None,
+            chapters: vec![],
         };
         assert_eq!(export_name(&media), "Contes - Soir.M4A");
         media.provenance = Provenance::LocalFile {

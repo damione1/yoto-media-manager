@@ -832,6 +832,9 @@ fn known_message(message: &str) -> Option<&'static str> {
                 "Le début doit précéder la fin, et les deux doivent rester dans la durée de l’audio."
             )
         }
+        m::CHAPTER_MARKS_INVALID => {
+            tr!("Les repères de chapitre doivent se suivre et rester dans la durée de l’audio.")
+        }
         m::TIME_FORMAT => tr!("Indiquez une heure au format HH:MM, par exemple 07:30."),
         m::COLOUR_FORMAT => tr!("Indiquez une couleur au format #RRGGBB, par exemple #FF8800."),
         m::LIMITS_NONNEGATIVE => {

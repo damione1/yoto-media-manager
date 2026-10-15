@@ -1630,6 +1630,7 @@ fn command_status(command: &Command) -> Option<(&'static str, &'static str)> {
         | Command::DeleteRecipe { .. }
         | Command::UpdateMedia { .. }
         | Command::SetMediaIcon { .. }
+        | Command::SetMediaChapters { .. }
         | Command::Prepare { .. }
         | Command::Export { .. }
         | Command::UpdateYotoPlaylist { .. }

@@ -303,6 +303,7 @@ fn a_long_media_becomes_one_chapter_of_ordered_parts() {
         },
         recipes: vec![],
         icon: None,
+        chapters: vec![],
     };
     let parts = [RecipeId::new(), RecipeId::new()];
     let mut playlist = Playlist::new("Soir".into()).unwrap();
@@ -384,6 +385,7 @@ fn a_media_icon_goes_to_its_chapter_and_every_track() {
         },
         recipes: vec![],
         icon: Some(IconReference::Local { asset: icon }),
+        chapters: vec![],
     };
     let local = |reference: &Option<IconReference>| match reference {
         Some(IconReference::Local { asset }) => Some(*asset),
@@ -441,4 +443,384 @@ fn the_end_of_a_selection_is_its_last_seconds_or_all_of_a_short_one() {
     assert_eq!(short.ending(at(5.)), short);
     let exact = TrimRange::new(at(0.), at(5.), at(5.)).unwrap();
     assert_eq!(exact.ending(at(5.)), exact);
+}
+
+/// A playlist of stream tracks, one chapter per name holding the tracks listed after it.
+fn structured(chapters: &[(&str, &[&str])]) -> Playlist {
+    let mut p = Playlist::new("Structure".into()).unwrap();
+    for (name, tracks) in chapters {
+        p.chapters.push(Chapter {
+            id: ChapterId::new(),
+            key: ChapterKey::new(*name).unwrap(),
+            title: (*name).into(),
+            icon: None,
+            tracks: tracks
+                .iter()
+                .map(|track| Track {
+                    id: TrackId::new(),
+                    key: TrackKey::new(*track).unwrap(),
+                    title: (*track).into(),
+                    icon: None,
+                    events: None,
+                    media: TrackMedia::Stream {
+                        url: "https://example.com/audio.mp3".into(),
+                        format: AudioFormat::Mp3,
+                    },
+                    extra: Extra::new(),
+                })
+                .collect(),
+            extra: Extra::new(),
+        });
+    }
+    p
+}
+fn layout(p: &Playlist) -> Vec<(String, Vec<String>)> {
+    p.chapters
+        .iter()
+        .map(|c| {
+            (
+                c.title.clone(),
+                c.tracks.iter().map(|t| t.title.clone()).collect(),
+            )
+        })
+        .collect()
+}
+fn local_icon(reference: &Option<IconReference>) -> Option<AssetId> {
+    match reference {
+        Some(IconReference::Local { asset }) => Some(*asset),
+        Some(IconReference::Yoto { .. }) | None => None,
+    }
+}
+fn media_fixture(title: &str, seconds: f64, icon: Option<AssetId>) -> MediaItem {
+    MediaItem {
+        id: MediaId::new(),
+        title: title.into(),
+        author: String::new(),
+        tags: vec![],
+        original: AssetId::new(),
+        info: AudioInfo {
+            duration: MediaTime::from_seconds(seconds).unwrap(),
+            bytes: 1,
+            codec: "mp3".into(),
+            sample_rate: 44_100,
+            channels: 2,
+        },
+        provenance: Provenance::LocalFile {
+            name: format!("{title}.mp3"),
+        },
+        recipes: vec![],
+        icon: icon.map(|asset| IconReference::Local { asset }),
+        chapters: vec![],
+    }
+}
+#[test]
+fn tracks_leaving_a_chapter_keep_the_icon_they_showed() {
+    let icon = AssetId::new();
+    let own = AssetId::new();
+    let mut p = structured(&[("Album", &["a", "b", "c"]), ("Solo", &["s"])]);
+    p.chapters[0].icon = Some(IconReference::Local { asset: icon });
+    p.chapters[0].tracks[1].icon = Some(IconReference::Local { asset: own });
+    let album = p.chapters[0].id;
+    let (a, b, c) = (
+        p.chapters[0].tracks[0].id,
+        p.chapters[0].tracks[1].id,
+        p.chapters[0].tracks[2].id,
+    );
+    // Ungrouping: every new chapter and its track look as before.
+    let mut ungrouped = p.clone();
+    ungrouped.ungroup(album).unwrap();
+    assert_eq!(ungrouped.chapters.len(), 4);
+    // The new chapter carries the icon; its track goes on inheriting it.
+    assert_eq!(local_icon(&ungrouped.chapters[0].icon), Some(icon));
+    assert!(ungrouped.chapters[0].tracks[0].icon.is_none());
+    assert_eq!(local_icon(&ungrouped.chapters[1].icon), Some(own));
+    assert_eq!(local_icon(&ungrouped.chapters[1].tracks[0].icon), Some(own));
+    ungrouped.validate().unwrap();
+    // Moving into another chapter: the track brings its chapter's icon along.
+    let solo = p.chapters[1].id;
+    let mut moved = p.clone();
+    moved.move_track(a, solo, 1).unwrap();
+    assert_eq!(local_icon(&moved.chapters[1].tracks[1].icon), Some(icon));
+    moved.move_track(b, solo, 0).unwrap();
+    assert_eq!(local_icon(&moved.chapters[1].tracks[0].icon), Some(own));
+    // Within its chapter, a track keeps relying on the chapter's icon.
+    let mut within = p.clone();
+    within.move_track(a, album, 2).unwrap();
+    assert!(within.chapters[0].tracks[2].icon.is_none());
+    // Extracting and splitting pass the icon on the same way.
+    let mut extracted = p.clone();
+    let new = extracted.extract_track(c, None).unwrap();
+    assert_eq!(extracted.chapters[1].id, new);
+    assert_eq!(local_icon(&extracted.chapters[1].icon), Some(icon));
+    assert!(extracted.chapters[1].tracks[0].icon.is_none());
+    let mut split = p.clone();
+    split.split_chapter(b).unwrap();
+    assert_eq!(local_icon(&split.chapters[1].icon), Some(icon));
+    assert_eq!(local_icon(&split.chapters[1].tracks[0].icon), Some(own));
+    assert_eq!(local_icon(&split.chapters[1].tracks[1].icon), Some(icon));
+    // Merging the album into the solo chapter: the album's tracks keep its icon.
+    let mut merged = p.clone();
+    merged.merge_chapters(solo, album).unwrap();
+    assert_eq!(merged.chapters.len(), 1);
+    assert!(merged.chapters[0].icon.is_none());
+    assert_eq!(local_icon(&merged.chapters[0].tracks[1].icon), Some(icon));
+    assert_eq!(local_icon(&merged.chapters[0].tracks[2].icon), Some(own));
+}
+#[test]
+fn chapters_are_moved_extracted_split_and_merged_in_place() {
+    let p = structured(&[
+        ("A", &["a1", "a2", "a3"]),
+        ("B", &["b1"]),
+        ("C", &["c1", "c2"]),
+    ]);
+    let (a, b, c) = (p.chapters[0].id, p.chapters[1].id, p.chapters[2].id);
+    let (a2, a3, b1, c2) = (
+        p.chapters[0].tracks[1].id,
+        p.chapters[0].tracks[2].id,
+        p.chapters[1].tracks[0].id,
+        p.chapters[2].tracks[1].id,
+    );
+    let titles = |p: &Playlist| -> Vec<String> { layout(p).into_iter().map(|c| c.0).collect() };
+    let mut moved = p.clone();
+    moved.move_chapter_to(c, 0).unwrap();
+    assert_eq!(titles(&moved), ["C", "A", "B"]);
+    moved.move_chapter_to(c, 2).unwrap();
+    assert_eq!(titles(&moved), ["A", "B", "C"]);
+    assert!(moved.move_chapter_to(c, 3).is_err());
+    let revision = moved.revision;
+    moved.move_chapter_to(c, 2).unwrap();
+    assert_eq!(moved.revision, revision, "no move, no change");
+    // A track extracted lands right after its chapter, or where asked.
+    let mut extracted = p.clone();
+    extracted.extract_track(a2, None).unwrap();
+    assert_eq!(
+        layout(&extracted),
+        [
+            ("A".into(), vec!["a1".into(), "a3".into()]),
+            ("a2".into(), vec!["a2".into()]),
+            ("B".into(), vec!["b1".into()]),
+            ("C".into(), vec!["c1".into(), "c2".into()]),
+        ]
+    );
+    extracted.validate().unwrap();
+    let mut placed = p.clone();
+    placed.extract_track(a3, Some(0)).unwrap();
+    assert_eq!(titles(&placed), ["a3", "A", "B", "C"]);
+    placed.extract_track(c2, Some(4)).unwrap();
+    assert_eq!(titles(&placed), ["a3", "A", "B", "C", "c2"]);
+    assert!(placed.extract_track(c2, Some(6)).is_err());
+    // The only track of a chapter just moves that chapter.
+    let mut lone = p.clone();
+    assert_eq!(lone.extract_track(b1, Some(0)).unwrap(), b);
+    assert_eq!(titles(&lone), ["B", "A", "C"]);
+    assert_eq!(lone.chapters.len(), 3);
+    // Splitting before a track; the first track has nothing before it.
+    let mut split = p.clone();
+    split.split_chapter(a3).unwrap();
+    assert_eq!(
+        layout(&split)[..2],
+        [
+            ("A".into(), vec!["a1".into(), "a2".into()]),
+            ("a3".into(), vec!["a3".into()]),
+        ]
+    );
+    assert!(matches!(
+        split.split_chapter(p.chapters[0].tracks[0].id),
+        Err(Failure::Validation(m)) if m == messages::TRACK_BOUNDARY
+    ));
+    // Merging appends and keeps the target's title.
+    let mut merged = p.clone();
+    merged.merge_chapters(c, a).unwrap();
+    assert_eq!(
+        layout(&merged),
+        [
+            ("B".into(), vec!["b1".into()]),
+            (
+                "C".into(),
+                vec![
+                    "c1".into(),
+                    "c2".into(),
+                    "a1".into(),
+                    "a2".into(),
+                    "a3".into()
+                ]
+            ),
+        ]
+    );
+    merged.validate().unwrap();
+    let mut backwards = p.clone();
+    backwards.merge_chapters(a, c).unwrap();
+    assert_eq!(titles(&backwards), ["A", "B"]);
+    assert_eq!(backwards.chapters[0].tracks.len(), 5);
+    // Colliding wire keys refuse the merge and leave the playlist as it was.
+    let mut colliding = structured(&[("X", &["1"]), ("Y", &["1"])]);
+    let before = serde_json::to_value(&colliding).unwrap();
+    let (x, y) = (colliding.chapters[0].id, colliding.chapters[1].id);
+    assert!(matches!(
+        colliding.merge_chapters(x, y),
+        Err(Failure::Compatibility(_))
+    ));
+    assert_eq!(serde_json::to_value(&colliding).unwrap(), before);
+}
+#[test]
+fn structure_changes_follow_or_refuse_shuffle_ranges() {
+    let mut p = structured(&[("A", &["a1", "a2"]), ("B", &["b1"]), ("C", &["c1"])]);
+    p.playback.shuffle = vec![ShuffleGroup {
+        start: 1,
+        end: 2,
+        limit: 2,
+    }];
+    let (a, b, c) = (p.chapters[0].id, p.chapters[1].id, p.chapters[2].id);
+    // Moving the range's chapters together keeps the range on them.
+    let mut moved = p.clone();
+    moved.move_chapter_to(a, 2).unwrap();
+    let range = &moved.playback.shuffle[0];
+    assert_eq!((range.start, range.end, range.limit), (0, 1, 2));
+    moved.validate().unwrap();
+    // Merging a chapter of the range away shrinks the range, and empties it when alone.
+    let mut merged = p.clone();
+    merged.merge_chapters(a, b).unwrap();
+    let range = &merged.playback.shuffle[0];
+    assert_eq!((range.start, range.end, range.limit), (1, 1, 1));
+    merged.merge_chapters(a, c).unwrap();
+    assert!(merged.playback.shuffle.is_empty());
+    merged.validate().unwrap();
+    // A new chapter inside the range would change what is shuffled: refused, untouched.
+    let before = serde_json::to_value(&p).unwrap();
+    let a2 = p.chapters[0].tracks[1].id;
+    assert!(matches!(
+        p.extract_track(a2, Some(2)),
+        Err(Failure::Compatibility(_))
+    ));
+    assert_eq!(serde_json::to_value(&p).unwrap(), before);
+    // Outside the range it is fine, and the range follows.
+    p.extract_track(a2, Some(0)).unwrap();
+    let range = &p.playback.shuffle[0];
+    assert_eq!((range.start, range.end), (2, 3));
+    p.validate().unwrap();
+}
+#[test]
+fn media_tracks_join_a_named_chapter_or_make_their_own() {
+    let icon = AssetId::new();
+    let media = media_fixture("Comptine", 60., Some(icon));
+    let mut p = structured(&[("Album", &["a1"])]);
+    let album = p.chapters[0].id;
+    let track = |title: &str| MediaTrack {
+        recipe: RecipeId::new(),
+        title: title.into(),
+    };
+    p.add_media_tracks(
+        &media,
+        "Chapitre",
+        vec![track("Un"), track("Deux")],
+        Some(album),
+    )
+    .unwrap();
+    assert_eq!(
+        layout(&p),
+        [(
+            "Album".into(),
+            vec!["a1".into(), "Un".into(), "Deux".into()]
+        )]
+    );
+    assert_eq!(local_icon(&p.chapters[0].tracks[2].icon), Some(icon));
+    p.add_media_tracks(&media, "Chapitre", vec![track("Trois")], None)
+        .unwrap();
+    assert_eq!(layout(&p)[1], ("Chapitre".into(), vec!["Trois".into()]));
+    assert_eq!(local_icon(&p.chapters[1].icon), Some(icon));
+    assert!(matches!(
+        p.add_media_tracks(&media, "Vide", vec![], None),
+        Err(Failure::Validation(m)) if m == messages::CHAPTER_EMPTY
+    ));
+    assert!(matches!(
+        p.add_media_tracks(&media, "Ailleurs", vec![track("Quatre")], Some(ChapterId::new())),
+        Err(Failure::Validation(m)) if m == messages::DESTINATION_ABSENT
+    ));
+    p.validate().unwrap();
+}
+#[test]
+fn chapter_marks_must_cover_the_audio_in_order() {
+    let at = |s: f64| MediaTime::from_seconds(s).unwrap();
+    let mark = |s: f64, title: &str| MediaChapter {
+        start: at(s),
+        title: title.into(),
+    };
+    let mut media = media_fixture("Histoire", 100., None);
+    media
+        .set_chapters(vec![mark(0., ""), mark(30., "Milieu"), mark(70., "")])
+        .unwrap();
+    assert_eq!(media.chapters.len(), 3);
+    let invalid = |chapters: Vec<MediaChapter>| {
+        matches!(
+            media.clone().set_chapters(chapters),
+            Err(Failure::Validation(m)) if m == messages::CHAPTER_MARKS_INVALID
+        )
+    };
+    assert!(invalid(vec![mark(10., ""), mark(30., "")]));
+    assert!(invalid(vec![mark(0., ""), mark(30., ""), mark(30., "")]));
+    assert!(invalid(vec![mark(0., ""), mark(50., ""), mark(40., "")]));
+    assert!(invalid(vec![mark(0., ""), mark(100., "")]));
+    assert!(matches!(
+        media.clone().set_chapters(vec![mark(0., ""), mark(1., &"x".repeat(141))]),
+        Err(Failure::Validation(m)) if m == messages::TITLE_LENGTH
+    ));
+    // One chapter is no chapter at all; the media is stored without marks.
+    media.set_chapters(vec![mark(0., "Tout")]).unwrap();
+    assert!(media.chapters.is_empty());
+    // Media stored before marks existed still load, without any.
+    let mut stored = serde_json::to_value(&media).unwrap();
+    stored.as_object_mut().unwrap().remove("chapters");
+    let old: MediaItem = serde_json::from_value(stored).unwrap();
+    assert!(old.chapters.is_empty());
+}
+#[test]
+fn a_version_is_cut_along_the_marks_it_keeps() {
+    let at = |s: f64| MediaTime::from_seconds(s).unwrap();
+    let range = |a: f64, b: f64| TrimRange::new(at(a), at(b), at(100.)).unwrap();
+    let mark = |s: f64, title: &str| MediaChapter {
+        start: at(s),
+        title: title.into(),
+    };
+    let marks = vec![mark(0., ""), mark(30., "Milieu"), mark(70., " Fin ")];
+    // The whole audio: one chapter per mark, titled when the mark is.
+    let whole = plan_chapters(range(0., 100.), &marks);
+    assert_eq!(
+        whole,
+        vec![
+            PlannedChapter {
+                title: None,
+                ranges: vec![range(0., 30.)]
+            },
+            PlannedChapter {
+                title: Some("Milieu".into()),
+                ranges: vec![range(30., 70.)]
+            },
+            PlannedChapter {
+                title: Some("Fin".into()),
+                ranges: vec![range(70., 100.)]
+            },
+        ]
+    );
+    // A trim keeps the parts of the chapters it overlaps, and nothing of the others.
+    let trimmed = plan_chapters(range(40., 80.), &marks);
+    assert_eq!(trimmed.len(), 2);
+    assert_eq!(trimmed[0].ranges, vec![range(40., 70.)]);
+    assert_eq!(trimmed[0].title.as_deref(), Some("Milieu"));
+    assert_eq!(trimmed[1].ranges, vec![range(70., 80.)]);
+    // A mark on the trim's edge starts no empty chapter.
+    let edge = plan_chapters(range(30., 70.), &marks);
+    assert_eq!(edge.len(), 1);
+    assert_eq!(edge[0].ranges, vec![range(30., 70.)]);
+    // Without marks, only the length cuts the audio.
+    let plain = plan_chapters(range(5., 95.), &[]);
+    assert_eq!(plain.len(), 1);
+    assert_eq!(plain[0].title, None);
+    assert_eq!(plain[0].ranges, vec![range(5., 95.)]);
+    // A long chapter is still cut for Yoto's track limit.
+    let hours = TrimRange::new(MediaTime::ZERO, at(7200.), at(7200.)).unwrap();
+    let long = plan_chapters(hours, &[mark(0., "Un"), mark(600., "Deux")]);
+    assert_eq!(long[0].ranges.len(), 1);
+    assert_eq!(long[1].ranges.len(), 2);
+    assert_eq!(long[1].ranges[0].start(), at(600.));
+    assert_eq!(long[1].ranges[1].end(), at(7200.));
 }
