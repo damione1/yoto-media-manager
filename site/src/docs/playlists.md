@@ -51,6 +51,18 @@ An icon chosen for a media in `Library` comes with it into the playlists you add
 
 A song displays a single title. Playlists with chapters containing multiple tracks keep that structure; their detailed settings remain available in the menus.
 
+## Organize chapters
+
+By default each song you add is a chapter of its own and shows as one line, which is all most playlists need: the buttons on the player skip from one chapter to the next. You can also group several tracks into one chapter, for an album or a story told in several files, and give that chapter its own title and icon.
+
+- **Group.** In a track's `⋮` menu, choose `Group with the track above` or `Group with the track below`. The chapter gets a header with its number, its icon and an editable title: name it there. A chapter's `⋮` menu offers `Merge with the previous chapter` and `Merge with the next chapter`.
+- **Take apart.** In a track's `⋮` menu, `Take out of the chapter` makes it a chapter again, and `Split the chapter before this track` cuts the chapter in two. The chapter's menu keeps `Split the tracks into chapters`.
+- **Drag and drop.** Every track and every chapter header has a grab handle (`⋮⋮`) on its left. Drag a track between two tracks to move it there, onto a chapter header to add it at the end of that chapter, or between two chapters to make it a chapter of its own; drag a chapter header to reorder chapters. A line shows where the item will land, and a chapter that will receive the track is highlighted.
+- **Move dialog.** `Move / group…` lists every chapter with its number, title and number of tracks, lets you choose `At the start` or `At the end` of the chosen chapter, and offers `New chapter` to put the track in a chapter of its own at the end of the playlist.
+- **Add into a chapter.** A chapter's `⋮` menu has `Add media to this chapter…`: the media you tick arrive at the end of that chapter instead of as new chapters.
+
+A track that leaves a chapter keeps the icon it showed there, so nothing changes on the player. Every change is saved to Yoto like the others. A change that would alter a random playback range is refused with an explanation; remove the range in the playlist's options first.
+
 ## Choose playback behavior
 
 Linear playback follows the chapters and tracks in order. End-of-track settings let playback continue to the next track, repeat, or stop.

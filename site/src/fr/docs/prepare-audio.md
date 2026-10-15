@@ -23,6 +23,17 @@ Dans le dialogue de découpe, la lecture ne joue que la plage sélectionnée. `A
 
 La fin doit suivre le début et rester dans la durée de l’original. L’application signale une erreur si les bornes ne sont pas valides.
 
+## Marquer des chapitres
+
+Un livre audio ou un long enregistrement peut arriver dans une playlist déjà découpé en chapitres, pour que les boutons du lecteur passent de l’un à l’autre.
+
+1. Choisissez `Marquer des chapitres` sous `Découper l’audio`. Le dialogue montre la forme d’onde de tout l’original.
+2. Écoutez, cliquez sur la forme d’onde pour placer la tête de lecture là où une nouvelle partie commence, puis choisissez `Ajouter un chapitre ici`. Un repère apparaît sur la forme d’onde ; faites-le glisser pour l’ajuster, et les flèches du clavier déplacent la tête de lecture de quelques secondes.
+3. Chaque chapitre obtenu est listé avec son début, sa fin et sa durée. Saisissez-lui un titre, ou laissez le champ vide pour obtenir « <titre> — partie 1/3 », « partie 2/3 »… `Écouter` joue depuis le début du chapitre ; `Retirer` supprime un repère.
+4. Choisissez `Enregistrer`. La ligne de la médiathèque et le panneau latéral indiquent alors combien de chapitres l’audio contient.
+
+Les repères sont enregistrés avec l’audio sur votre ordinateur ; l’original reste intact. Quand vous ajoutez l’audio à une playlist, chaque chapitre devient un chapitre de la playlist, avec son titre et l’icône du média ; un chapitre de plus de 55 minutes est aussi découpé en parties. Les repères vivent sur l’original : avec une version découpée, seuls les repères à l’intérieur de la plage gardée sont utilisés, et le dialogue grise le reste pour le montrer. `Retirer tous les chapitres` revient à une seule piste. Les playlists qui contiennent déjà l’audio ne sont pas modifiées.
+
 ## Rendre le volume plus régulier
 
 Dans le dialogue de découpe, activez `Égaliser le volume` pour préparer une version au volume plus régulier. Laissez cette option désactivée pour garder le niveau de la source.
