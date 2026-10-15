@@ -9,8 +9,6 @@ order: 2
 
 Sur macOS, ouvrez le disque d’installation et glissez **YotoMediaManager** dans **Applications**. Sur Windows, lancez l’installateur et suivez ses étapes. Ouvrez ensuite l’application depuis Applications ou le menu Démarrer.
 
-Les versions de développement peuvent s’appeler **YotoMediaManager Dev**. Une version de développement signée peut encore attendre sa notarisation. Si macOS empêche son ouverture, vérifiez la provenance du fichier et consultez le [dépannage](troubleshooting.md).
-
 ## Ajouter votre premier fichier audio
 
 1. Ouvrez `Médiathèque` et choisissez `Ajouter un fichier audio`.

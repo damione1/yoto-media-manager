@@ -48,7 +48,6 @@
   },
   "see": {
     "title": "En action",
-    "sub": "Ce ne sont pas des vidéos : ce sont de petites reproductions des écrans de l’app, qui rejouent les mêmes étapes.",
     "pause": "Mettre l’animation en pause",
     "play": "Lire l’animation",
     "scenes": {
@@ -92,7 +91,8 @@
       { "q": "Où sont stockés mes fichiers ?", "a": "Votre médiathèque reste sur votre ordinateur. Seul l’audio que vous ajoutez à une playlist est envoyé sur votre compte Yoto." },
       { "q": "Faut-il un compte Yoto ?", "a": "Pour importer et découper de l’audio, non. Pour créer des playlists et les écouter sur un lecteur, oui." },
       { "q": "Mes originaux sont-ils modifiés quand je découpe ?", "a": "Jamais. La découpe crée une version à côté de l’original, que vous pouvez exporter à tout moment." },
-      { "q": "L’application est-elle terminée ?", "a": "Elle est encore en rodage : certaines combinaisons de lecteurs et d’ordinateurs restent à valider. L’app vous prévient quand une fonction n’est pas disponible, et vous propose les nouvelles versions dès leur publication." }
+      { "q": "L’application est-elle terminée ?", "a": "Elle est encore en rodage : certaines combinaisons de lecteurs et d’ordinateurs restent à valider. L’app vous prévient quand une fonction n’est pas disponible, et vous propose les nouvelles versions dès leur publication." },
+      { "q": "Est-ce que c’est bien ?", "a": "Oui." }
     ]
   },
   "cta": {

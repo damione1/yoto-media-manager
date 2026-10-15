@@ -7,26 +7,26 @@ order: 6
 
 ## Connect your account
 
-1. Open `Compte` and choose `Connecter mon compte Yoto`.
+1. Open `Account` and choose `Connect my Yoto account`.
 2. Your browser opens the Yoto login page.
 3. Sign in there and approve the access the app needs.
 4. Return to YotoMediaManager after confirmation. The connected account becomes active and your playlists load automatically. The sidebar also shows the account in use.
 
 You enter your password on Yoto's website. The app keeps login authorizations in your operating system's secure vault. You do not need to create a developer key to use the configured app.
 
-With multiple accounts, choose `Utiliser ce compte` before editing a playlist. `Ajouter un compte` starts another login. Remote media and playlist associations belong to each account, and your account selection is preserved across restarts.
+With multiple accounts, choose `Use this account` before editing a playlist. `Add an account` starts another login. Remote media and playlist associations belong to each account, and your account selection is preserved across restarts.
 
 ## Find your playlists
 
-Your Make Your Own playlists load automatically from Yoto at startup, after login, and when you open `Playlists`. Click a title to open its current content. `Actualiser depuis Yoto` on that screen reloads the list.
+Your Make Your Own playlists load automatically from Yoto at startup, after login, and when you open `Playlists`. Click a title to open its current content. `Refresh from Yoto` on that screen reloads the list.
 
-Playlists, players, groups, and icons have separate loading states. A player loading error leaves successfully retrieved playlists visible. `Voir le détail` in `Compte` shows these states. `Actualiser` on that page also refreshes players and the other collections.
+Playlists, players, groups, and icons have separate loading states. A player loading error leaves successfully retrieved playlists visible. `Show details` in `Account` shows these states. `Refresh` on that page also refreshes players and the other collections.
 
 Audio references in a playlist stay remote. Opening a playlist does not automatically download its audio files.
 
 ## Send changes
 
-In the `Ajouter des médias` dialog, check your audio and choose `Ajouter`. Preparation, upload, and confirmation start immediately. The spinner and progress message stay visible during the operation; tracks appear after confirmation.
+In the `Add media` dialog, check your audio and choose `Add (…)`. Preparation, upload, and confirmation start immediately. The spinner and progress message stay visible during the operation; tracks appear after confirmation.
 
 Playlist changes and new playlists are sent directly to Yoto. There is no separate publish button. The app remembers media already uploaded and updates the same playlist on Yoto. A new audio version may require another upload.
 
@@ -34,23 +34,22 @@ Importing or trimming audio in the library is a local operation. It is sent to Y
 
 ## Recognize versions already uploaded
 
-Audio version choices show their state for the active account:
+The playlist editor shows the upload state of each track, and of the playlist next to its title:
 
 | App state | Meaning |
 | --- | --- |
-| `Local uniquement` | This version has no confirmed upload for this account. |
-| `Envoi en cours` | An upload task is using this version. |
-| `Envoyé sur Yoto` | The association with the Yoto media has been recorded. |
-| `À vérifier` | The app needs to confirm an upload's result. |
-| `Échec d’envoi` | Check the relevant task in `Imports`. |
+| `Sending to Yoto…` | The track is being uploaded to Yoto. |
+| `On Yoto` | The track has been saved on Yoto. |
+| `To check` | The app needs to confirm an upload's result. |
+| `Upload failed` | Check the relevant task in `Imports`. |
 
-An original can have several versions, each with its own state. Changing accounts can therefore change the displayed state.
+An original can have several versions; the app remembers, for each account, which ones were already uploaded. Changing accounts can therefore require another upload.
 
 ## Understand an uncertain result
 
 Yoto may accept an update before the app records its confirmation, for example after a network interruption or local error. The task then asks you to verify the remote result.
 
-In `Imports`, open `Vérifier la publication`, then choose `Vérifier auprès de Yoto`. The app checks what was created or changed before allowing another upload. A new upload is blocked during this check to avoid duplicates.
+In `Imports`, open `Check the upload`, then choose `Check with Yoto`. The app checks what was created or changed before allowing another upload. A new upload is blocked during this check to avoid duplicates.
 
 ## Resolve a conflict
 
@@ -58,10 +57,10 @@ If another app changed the playlist, the update may require a choice between you
 
 ## Advanced mode
 
-`Mode avancé`, in `Compte`, shows technical settings most families never need: interactive playback, track events, random playback ranges and streams in playlists; raw Yoto values, shortcuts and technical commands for players; manually linking a card after an uncertain upload; and `Ouvrir une autre médiathèque`, to open another library of this computer, such as an imported one, in a new window. It is off each time the app starts.
+`Advanced mode`, in `Account`, shows technical settings most families never need: interactive playback, track events, random playback ranges and streams in playlists; raw Yoto values, shortcuts and technical commands for players; manually linking a card after an uncertain upload; and `Open another library`, to open another library of this computer, such as an imported one, in a new window. It is off each time the app starts.
 
 ## Disconnect
 
-In `Compte`, open the account's `⋯` button (`Options du compte`) and choose `Déconnecter ce compte`. Its authorizations and cached remote data are removed. Your original audio and local work are preserved.
+In `Account`, open the account's `⋯` button (`Account options`) and choose `Disconnect this account`. Its authorizations and cached remote data are removed. Your original audio and local work are preserved.
 
 After reconnecting, your playlists load automatically again. Disconnecting does not delete creations already published on Yoto. The app keeps minimal references to confirmed publications so it can find the same creation during a later update. A genuinely uncertain result still needs to be resolved after reconnecting.
