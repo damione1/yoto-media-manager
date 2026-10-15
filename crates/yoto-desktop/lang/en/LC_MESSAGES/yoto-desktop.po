@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: yoto-desktop\n"
 "Report-Msgid-Bugs-To: https://github.com/damione1/yoto-media-manager/issues\n"
-"POT-Creation-Date: 2026-10-15 00:03-0400\n"
+"POT-Creation-Date: 2026-10-15 01:22-0400\n"
 "Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -275,10 +275,11 @@ msgstr "Listen, pause where a new part begins, then add a chapter right there."
 
 #: src/ui/chapters.rs
 msgid ""
-"Ajouté à une playlist, cet audio y arrivera déjà découpé, un chapitre par "
-"repère."
+"Ajouté à une playlist, cet audio arrivera en un seul chapitre, avec une "
+"piste par repère : les boutons du lecteur passent de l’une à l’autre."
 msgstr ""
-"Added to a playlist, this audio arrives already split, one chapter per mark."
+"Added to a playlist, this audio arrives as one chapter with one track per "
+"mark: the player's buttons skip from one to the next."
 
 #: src/ui/chapters.rs
 msgid "Les repères en dehors de la version découpée ne seront pas utilisés."
@@ -742,6 +743,10 @@ msgstr ""
 "Yoto may have received the change. It needs checking before sending again."
 
 #: src/ui/editor.rs
+msgid "Chapitre à part"
+msgstr "Own chapter"
+
+#: src/ui/editor.rs
 msgid "Description"
 msgstr "Description"
 
@@ -852,8 +857,14 @@ msgid "Choisir une icône"
 msgstr "Choose an icon"
 
 #: src/ui/editor.rs
-msgid "Déplacer le chapitre"
-msgstr "Move the chapter"
+msgid ""
+"Glisser pour déplacer le chapitre, ou le déposer sur un autre pour les "
+"fusionner"
+msgstr "Drag to move the chapter, or drop it onto another to merge them"
+
+#: src/ui/editor.rs
+msgid "Ajouter au chapitre"
+msgstr "Add to chapter"
 
 #: src/ui/editor.rs
 msgid "Options du chapitre"
@@ -944,8 +955,22 @@ msgid "Retirer de la playlist"
 msgstr "Remove from the playlist"
 
 #: src/ui/editor.rs
-msgid "Déplacer la piste"
-msgstr "Move the track"
+msgid ""
+"Glisser pour déplacer la piste, ou la déposer sur une autre pour les "
+"regrouper"
+msgstr "Drag to move the track, or drop it onto another to group them"
+
+#: src/ui/editor.rs
+msgid ""
+"Glisser pour déplacer la piste, ou la déposer entre deux chapitres pour la "
+"sortir du sien"
+msgstr ""
+"Drag to move the track, or drop it between two chapters to take it out of "
+"its own"
+
+#: src/ui/editor.rs
+msgid "Regrouper"
+msgstr "Group"
 
 #: src/ui/editor.rs
 #, rust-format
@@ -2633,6 +2658,11 @@ msgstr ""
 
 #: src/ui/wording.rs
 #, rust-format
+msgid "Envoi à Yoto : {done}/{total} pistes · {percent} %"
+msgstr "Sending to Yoto: {done}/{total} tracks · {percent}%"
+
+#: src/ui/wording.rs
+#, rust-format
 msgid "Traitement par Yoto ({percent} %)"
 msgstr "Processing by Yoto ({percent}%)"
 
@@ -2799,6 +2829,11 @@ msgstr "{title} — part {part} of {parts}"
 
 #: src/ui/wording.rs
 #, rust-format
+msgid "Partie {part}"
+msgstr "Part {part}"
+
+#: src/ui/wording.rs
+#, rust-format
 msgid ""
 "Trop long pour une seule piste Yoto (1 h au plus) : ajouté à une playlist, "
 "il sera découpé en {parts} parties."
@@ -2808,10 +2843,15 @@ msgstr ""
 
 #: src/ui/wording.rs
 #, rust-format
-msgid "Ajouté à une playlist, cet audio deviendra {count} chapitre."
-msgid_plural "Ajouté à une playlist, cet audio deviendra {count} chapitres."
-msgstr[0] "Added to a playlist, this audio becomes {count} chapter."
-msgstr[1] "Added to a playlist, this audio becomes {count} chapters."
+msgid ""
+"Ajouté à une playlist, cet audio deviendra un chapitre de {count} piste."
+msgid_plural ""
+"Ajouté à une playlist, cet audio deviendra un chapitre de {count} pistes, "
+"une par chapitre marqué."
+msgstr[0] "Added to a playlist, this audio becomes one chapter of {count} track."
+msgstr[1] ""
+"Added to a playlist, this audio becomes one chapter of {count} tracks, one "
+"per marked chapter."
 
 #: src/ui/wording.rs
 #, rust-format
