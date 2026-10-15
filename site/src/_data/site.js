@@ -2,15 +2,15 @@
  * Constants shared by both languages.
  *
  * `url` is the public origin used for canonical links, hreflang, Open Graph
- * images and the sitemap. The deploy workflow passes it in as SITE_URL (from
- * the `SITE_URL` repository variable); without it the build falls back to the
- * Cloudflare Pages default domain of the `yotomediamanager` project.
+ * images and the sitemap. Cloudflare's build passes it in as SITE_URL (a
+ * build variable of the Worker); without it the build falls back to the
+ * site's public domain.
  */
 const repo = "https://github.com/damione1/yoto-media-manager";
 
 export default {
   name: "YotoMediaManager",
-  url: (process.env.SITE_URL || "https://yotomediamanager.pages.dev").replace(/\/+$/, ""),
+  url: (process.env.SITE_URL || "https://yotomediamanager.damiengoehrig.ca").replace(/\/+$/, ""),
   repo,
   releases: `${repo}/releases`,
   latest: `${repo}/releases/latest`,
