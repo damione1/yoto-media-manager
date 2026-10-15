@@ -5,6 +5,8 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder;
 use theme::{Height, Look};
+#[path = "library_playlist_picker.rs"]
+mod playlist_picker;
 impl AppView {
     fn preview_playing(&self, media: MediaId, cx: &App) -> bool {
         self.trims
@@ -53,6 +55,32 @@ fn default_recipe(snapshot: &Snapshot, media: &MediaItem) -> Option<RecipeId> {
         })
         .or_else(|| media.recipes.first())
         .copied()
+}
+
+/// Capture the complete selection before opening a destination picker. Filtering the
+/// library only changes what is visible; it must not remove ticked media from a batch.
+fn selected_batch(
+    snapshot: &Snapshot,
+    selected: &std::collections::BTreeSet<MediaId>,
+    open: Option<MediaId>,
+    chosen_recipe: impl Fn(MediaId) -> Option<RecipeId>,
+) -> Vec<(MediaId, RecipeId)> {
+    snapshot
+        .media
+        .iter()
+        .filter(|media| {
+            if selected.is_empty() {
+                Some(media.id) == open
+            } else {
+                selected.contains(&media.id)
+            }
+        })
+        .filter_map(|media| {
+            chosen_recipe(media.id)
+                .or_else(|| default_recipe(snapshot, media))
+                .map(|recipe| (media.id, recipe))
+        })
+        .collect()
 }
 
 pub fn render(view: &mut AppView, _window: &mut Window, cx: &mut Context<AppView>) -> AnyElement {
@@ -420,17 +448,13 @@ fn library_menu(has_media: bool, cx: &mut Context<AppView>) -> impl IntoElement 
 }
 
 /// The dark bar floating over the list: what is selected and what can be done with it.
-/// Without a ticked audio it offers to send the open audio to the open playlist.
+/// Without a ticked audio it offers to send the open audio to a chosen playlist.
 fn selection_bar(view: &AppView, cx: &mut Context<AppView>) -> Option<AnyElement> {
-    let playlist = view
-        .selected_playlist
-        .and_then(|id| view.snapshot.playlists.iter().find(|p| p.id == id))
-        .filter(|playlist| view.editors.contains_key(&playlist.id));
     let ticked = view.selected_media_set.len();
     let open = view
         .selected_media
         .and_then(|id| view.snapshot.media.iter().find(|m| m.id == id));
-    if ticked == 0 && (playlist.is_none() || open.is_none()) {
+    if ticked == 0 && open.is_none() {
         return None;
     }
     let label = match (ticked, open) {
@@ -513,49 +537,110 @@ fn selection_bar(view: &AppView, cx: &mut Context<AppView>) -> Option<AnyElement
                 cx,
             ));
     }
-    if let Some(playlist) = playlist {
-        let id = playlist.id;
-        let blocked = view.editors.get(&id).is_none_or(|e| e.read(cx).blocked());
-        bar = bar.child(theme::pill(
-            Button::new("add-selected-audio-to-playlist")
-                .label(tr!("Ajouter à « {title} »", title = playlist.title))
-                .on_click(cx.listener(move |v, _, window, cx| {
-                    let chosen: Vec<_> = if v.selected_media_set.is_empty() {
-                        v.selected_media.into_iter().collect()
-                    } else {
-                        v.library_rows
-                            .iter()
-                            .map(|i| v.snapshot.media[*i].id)
-                            .filter(|id| v.selected_media_set.contains(id))
-                            .collect()
-                    };
-                    let batch: Vec<_> = chosen
-                        .into_iter()
-                        .filter_map(|media| {
-                            let item = v.snapshot.media.iter().find(|m| m.id == media)?;
-                            // The open audio keeps the version chosen in its panel.
-                            let recipe = v
-                                .trims
-                                .get(&media)
-                                .and_then(|p| p.read(cx).chosen_recipe())
-                                .or_else(|| default_recipe(&v.snapshot, item))?;
-                            Some((media, recipe))
-                        })
-                        .collect();
-                    v.select_playlist(id, window, cx);
-                    if let Some(editor) = v.editors.get(&id).cloned() {
-                        cx.defer(move |cx| {
-                            editor.update(cx, |e, cx| e.add_media_batch(batch, cx));
-                        });
-                        v.selected_media_set.clear();
-                        v.navigate(Route::Playlists, cx);
-                    }
-                })),
-            Look::Primary,
-            Height::Medium,
-            blocked,
-            cx,
-        ));
-    }
+    bar = bar.child(theme::pill(
+        Button::new("add-selected-audio-to-playlist")
+            .label(tr!("Ajouter à une playlist"))
+            .on_click(cx.listener(|view, _, window, cx| playlist_picker::open(view, window, cx))),
+        Look::Primary,
+        Height::Medium,
+        view.snapshot.active_account.is_none(),
+        cx,
+    ));
     Some(bar.into_any_element())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selected_batch;
+    use yoto_domain::*;
+    use yoto_infra::Snapshot;
+
+    fn audio() -> MediaItem {
+        MediaItem {
+            id: MediaId::new(),
+            title: "Audio".into(),
+            author: String::new(),
+            tags: vec![],
+            original: AssetId::new(),
+            info: AudioInfo {
+                duration: MediaTime::from_seconds(12.).unwrap(),
+                bytes: 100,
+                codec: "mp3".into(),
+                sample_rate: 44100,
+                channels: 2,
+            },
+            provenance: Provenance::LocalFile {
+                name: "audio.mp3".into(),
+            },
+            recipes: vec![RecipeId::new()],
+            icon: None,
+            chapters: vec![],
+        }
+    }
+
+    #[test]
+    fn a_batch_includes_hidden_selected_media_and_keeps_the_panels_chosen_versions() {
+        let a = audio();
+        let mut b = audio();
+        let selected_version = RecipeId::new();
+        b.recipes.push(selected_version);
+        let a_id = a.id;
+        let b_id = b.id;
+        let a_original = a.recipes[0];
+        let snapshot = Snapshot {
+            media: vec![a, b, audio()],
+            ..Default::default()
+        };
+        // Both IDs remain selected even when a search only shows the first row.
+        let selected = [a_id, b_id].into_iter().collect();
+        let batch = selected_batch(&snapshot, &selected, Some(a_id), |id| {
+            (id == b_id).then_some(selected_version)
+        });
+        assert_eq!(batch, vec![(a_id, a_original), (b_id, selected_version)]);
+        let open_only = selected_batch(&snapshot, &Default::default(), Some(b_id), |_| {
+            Some(selected_version)
+        });
+        assert_eq!(open_only, vec![(b_id, selected_version)]);
+        assert_eq!(
+            selected.len(),
+            2,
+            "capturing a batch must not consume selection on cancel or failure"
+        );
+    }
+
+    #[test]
+    fn latest_finished_cut_is_the_default_but_an_unfinished_cut_is_not() {
+        let mut media = audio();
+        let original = media.recipes[0];
+        let finished = RecipeId::new();
+        let unfinished = RecipeId::new();
+        media.recipes.extend([finished, unfinished]);
+        let recipe = |id, result| MediaRecipe {
+            id,
+            media: media.id,
+            original: media.original,
+            trim: TrimRange::new(MediaTime::ZERO, media.info.duration, media.info.duration)
+                .unwrap(),
+            normalization: Normalization::Preserve,
+            result,
+            info: None,
+            tool_version: String::new(),
+            part: None,
+        };
+        let recipes = vec![
+            recipe(original, None),
+            recipe(finished, Some(AssetId::new())),
+            recipe(unfinished, None),
+        ];
+        let media_id = media.id;
+        let snapshot = Snapshot {
+            media: vec![media],
+            recipes,
+            ..Default::default()
+        };
+        assert_eq!(
+            selected_batch(&snapshot, &Default::default(), Some(media_id), |_| None),
+            vec![(media_id, finished)]
+        );
+    }
 }

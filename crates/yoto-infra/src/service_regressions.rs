@@ -849,6 +849,186 @@ fn opened_playlist(reply: Reply) -> PlaylistId {
 }
 
 #[tokio::test]
+async fn unnamed_accounts_follow_their_first_named_player_in_snapshots_and_deltas() {
+    let root = tempfile::tempdir().unwrap();
+    let (service, account) = fixture(root.path().join("profile"), "http://127.0.0.1:1".into());
+    let stored = Account {
+        id: account.clone(),
+        label: crate::auth::fallback_label(&account),
+        scopes: vec![Scope::UserContentView],
+    };
+    service
+        .db
+        .put(Table::Account, account.as_str(), &stored)
+        .unwrap();
+    let other = AccountId::new("another-account").unwrap();
+    service
+        .db
+        .put(
+            Table::Account,
+            other.as_str(),
+            &Account {
+                id: other.clone(),
+                label: crate::auth::fallback_label(&other),
+                scopes: vec![],
+            },
+        )
+        .unwrap();
+    let mut shared = Snapshot::default();
+    let initial = service.interface_changes(&[]).unwrap().apply(&mut shared);
+    assert!(shared.accounts.iter().all(|a| a.label == "Yoto"));
+    let player = |id: &str, name: &str| Device {
+        id: DeviceId::new(id).unwrap(),
+        name: name.into(),
+        online: false,
+        firmware: None,
+        product: None,
+        extra: Extra::new(),
+    };
+    {
+        let mut remote = service.remote.lock().unwrap();
+        remote
+            .by_account
+            .entry(account.clone())
+            .or_default()
+            .devices = vec![
+            player("unnamed", " \n "),
+            player("first", " Yoto de  Camille\n"),
+            player("second", "Deuxième lecteur"),
+        ];
+        remote.generation += 1;
+    }
+    let versions = service
+        .interface_changes(&initial)
+        .unwrap()
+        .apply(&mut shared);
+    let label = |snapshot: &Snapshot, id: &AccountId| {
+        snapshot
+            .accounts
+            .iter()
+            .find(|a| &a.id == id)
+            .unwrap()
+            .label
+            .clone()
+    };
+    assert_eq!(label(&shared, &account), "Yoto de Camille");
+    assert_eq!(label(&shared, &other), "Yoto");
+    assert_eq!(
+        label(&service.snapshot().unwrap(), &account),
+        "Yoto de Camille"
+    );
+    // Device-only updates must refresh Accounts too, without overwriting its stored source.
+    assert_eq!(
+        service
+            .db
+            .get::<Account>(Table::Account, account.as_str())
+            .unwrap()
+            .unwrap()
+            .label,
+        stored.label
+    );
+    {
+        let mut remote = service.remote.lock().unwrap();
+        remote.by_account.get_mut(&account).unwrap().devices[1].name = "Yoto du salon".into();
+        remote.generation += 1;
+    }
+    let versions = service
+        .interface_changes(&versions)
+        .unwrap()
+        .apply(&mut shared);
+    assert_eq!(label(&shared, &account), "Yoto du salon");
+    {
+        let mut remote = service.remote.lock().unwrap();
+        remote.by_account.get_mut(&account).unwrap().devices.clear();
+        remote.generation += 1;
+    }
+    service
+        .interface_changes(&versions)
+        .unwrap()
+        .apply(&mut shared);
+    assert_eq!(label(&shared, &account), "Yoto");
+}
+
+#[tokio::test]
+async fn account_name_projection_accepts_short_and_unicode_account_ids() {
+    let root = tempfile::tempdir().unwrap();
+    let (service, _) = fixture(root.path().join("profile"), "http://127.0.0.1:1".into());
+    for (id, label) in [("one", None), ("aéééé", Some("Camille"))] {
+        let id = AccountId::new(id).unwrap();
+        service
+            .db
+            .put(
+                Table::Account,
+                id.as_str(),
+                &Account {
+                    id: id.clone(),
+                    label: label
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| crate::auth::fallback_label(&id)),
+                    scopes: vec![],
+                },
+            )
+            .unwrap();
+    }
+    let expected = |snapshot: &Snapshot| {
+        assert_eq!(
+            snapshot
+                .accounts
+                .iter()
+                .find(|a| a.id.as_str() == "one")
+                .unwrap()
+                .label,
+            "Yoto"
+        );
+        assert_eq!(
+            snapshot
+                .accounts
+                .iter()
+                .find(|a| a.id.as_str() == "aéééé")
+                .unwrap()
+                .label,
+            "Camille"
+        );
+    };
+    expected(&service.snapshot().unwrap());
+    let mut shared = Snapshot::default();
+    service.interface_changes(&[]).unwrap().apply(&mut shared);
+    expected(&shared);
+}
+
+#[tokio::test]
+async fn a_real_profile_name_takes_priority_over_player_names() {
+    let root = tempfile::tempdir().unwrap();
+    let (service, account) = fixture(root.path().join("profile"), "http://127.0.0.1:1".into());
+    service
+        .remote
+        .lock()
+        .unwrap()
+        .by_account
+        .entry(account.clone())
+        .or_default()
+        .devices
+        .push(Device {
+            id: DeviceId::new("first-player").unwrap(),
+            name: "Yoto du salon".into(),
+            online: true,
+            firmware: None,
+            product: None,
+            extra: Extra::new(),
+        });
+    let snapshot = service.snapshot().unwrap();
+    assert_eq!(
+        snapshot
+            .accounts
+            .iter()
+            .find(|a| a.id == account)
+            .unwrap()
+            .label,
+        "Test"
+    );
+}
+
+#[tokio::test]
 async fn new_login_activates_shared_account_and_selection_and_remote_cache_survive_restart() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");

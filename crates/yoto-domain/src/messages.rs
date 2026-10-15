@@ -132,6 +132,14 @@ pub const SELECT_PLAYER: &str = "Select a player";
 pub const PLAYER_NAME_EMPTY: &str = "Enter a player name";
 pub const GROUP_NAME_LENGTH: &str = "Group name must contain 1–100 characters";
 pub const IMAGE_TOO_LARGE: &str = "Image exceeds 8 MB";
+pub const IMAGE_DOWNLOAD_FAILED: &str = "The selected Yoto image could not be downloaded";
+const IMAGE_DOWNLOAD_REJECTED: &str = "Yoto image download returned HTTP ";
+pub fn image_download_rejected(status: u16) -> String {
+    format!("{IMAGE_DOWNLOAD_REJECTED}{status}")
+}
+pub fn parse_image_download_rejected(message: &str) -> Option<u16> {
+    message.strip_prefix(IMAGE_DOWNLOAD_REJECTED)?.parse().ok()
+}
 pub const FAMILY_IMAGE_TOO_LARGE: &str = "Family image exceeds 8 MB";
 pub const IMAGE_DIMENSIONS_EXCEED: &str = "Image dimensions exceed 8192 pixels";
 pub const IMAGE_DIMENSIONS_TOO_LARGE: &str = "Image dimensions too large";
@@ -251,6 +259,7 @@ pub const ALL: &[&str] = &[
     PLAYER_NAME_EMPTY,
     GROUP_NAME_LENGTH,
     IMAGE_TOO_LARGE,
+    IMAGE_DOWNLOAD_FAILED,
     FAMILY_IMAGE_TOO_LARGE,
     IMAGE_DIMENSIONS_EXCEED,
     IMAGE_DIMENSIONS_TOO_LARGE,

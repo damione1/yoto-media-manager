@@ -2312,6 +2312,7 @@ impl PlaylistEditor {
                 },
                 parent,
                 Some(account.clone()),
+                window,
                 cx,
             )
         });
@@ -2468,6 +2469,27 @@ impl PlaylistEditor {
             self.schedule(cx);
             cx.notify();
         }
+    }
+    /// Library additions always append to the whole playlist. The media picker may
+    /// have left a replacement or chapter selected; neither applies to this action.
+    pub(super) fn append_library_media(
+        &mut self,
+        media: Vec<(MediaId, RecipeId)>,
+        cx: &mut Context<Self>,
+    ) -> yoto_domain::Result<()> {
+        self.owning_remote(cx)?;
+        if media.is_empty() || self.held() {
+            return Err(Failure::Validation(if self.status.is_empty() {
+                tr!("Cette playlist doit être vérifiée avant d’ajouter de l’audio.").into()
+            } else {
+                self.status.clone()
+            }));
+        }
+        enqueue(&mut self.queued_media, None, media);
+        self.status = text::writing().into();
+        self.schedule(cx);
+        cx.notify();
+        Ok(())
     }
     pub fn delete_remote(&mut self, cx: &mut Context<Self>) {
         if self.blocked() || self.autosave.in_flight() {
@@ -2648,39 +2670,75 @@ impl PlaylistEditor {
             .tooltip(label)
             .disabled(blocked)
             .child(picture)
-            .on_click(cx.listener(|v, _, _, cx| v.cover(cx)))
+            .on_click(cx.listener(|v, _, window, cx| v.cover(window, cx)))
     }
-    fn cover(&mut self, cx: &mut Context<Self>) {
-        let service = self.service.clone();
-        let rt = self.runtime.clone();
-        self.tasks.push(cx.spawn(async move |weak, cx| {
-            if let Some(file) = rfd::AsyncFileDialog::new()
-                .add_filter(tr!("Image"), &["png", "jpg", "jpeg", "gif"])
-                .pick_file()
-                .await
-            {
-                let r = rt
-                    .spawn(async move {
-                        service
-                            .execute(Command::StoreImage {
-                                path: file.path().to_owned(),
-                                pixel_art: false,
-                            })
-                            .await
-                    })
-                    .await;
-                let _ = weak.update(cx, |v, cx| {
-                    match joined(r).and_then(Reply::into_asset) {
-                        Ok(id) => {
-                            v.draft.metadata.cover = Some(id);
-                            v.changed(Change::Discrete, cx);
-                        }
-                        Err(e) => v.status = failure_text(&e),
-                    }
-                    cx.notify();
-                });
-            }
-        }));
+    fn cover(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.blocked() {
+            return;
+        }
+        let Some(parent) = self.parent.upgrade() else {
+            return;
+        };
+        let account = parent.read(cx).snapshot.active_account.clone();
+        let editor = cx.entity();
+        let picker = cx.new(|cx| {
+            pixelart::IconPicker::new(
+                pixelart::IconTarget::Cover(editor.downgrade()),
+                parent,
+                account.clone(),
+                window,
+                cx,
+            )
+        });
+        self.picker_window = Some(window.window_handle());
+        self.icon_error = None;
+        let weak = editor.downgrade();
+        window.open_dialog(cx, move |dialog, _, _| {
+            let cancel = picker.downgrade();
+            let close = weak.clone();
+            dialog
+                .title(tr!("Choisir une couverture"))
+                .w(px(440.))
+                .child(picker.clone())
+                .on_cancel(move |_, _, cx| {
+                    cancel
+                        .upgrade()
+                        .is_none_or(|picker| picker.read(cx).can_cancel(cx))
+                })
+                .on_close(move |_, _, cx| {
+                    let _ = close.update(cx, |v, cx| {
+                        v.picker_window = None;
+                        v.icon_error = None;
+                        cx.notify();
+                    });
+                })
+        });
+        if let Some(account) = account {
+            self.send(Command::RefreshIcons(account), cx);
+        }
+    }
+    pub(super) fn choose_cover(
+        &mut self,
+        asset: AssetId,
+        account: Option<&AccountId>,
+        cx: &mut Context<Self>,
+    ) {
+        let current_account = self
+            .parent
+            .upgrade()
+            .and_then(|parent| parent.read(cx).snapshot.active_account.clone());
+        if self.blocked() || self.picker_window.is_none() || current_account.as_ref() != account {
+            self.icon_error = Some(
+                tr!("Le compte ou la playlist a changé. Rouvrez le sélecteur d’icônes.").into(),
+            );
+            self.send(Command::ReleaseAsset(asset), cx);
+            cx.notify();
+            return;
+        }
+        self.draft.metadata.cover = Some(asset);
+        self.icon_error = None;
+        self.close_picker(cx);
+        self.changed(Change::Discrete, cx);
     }
 }
 
@@ -2720,6 +2778,9 @@ fn title_field(input: Input, size: f32) -> Input {
         .font_family(theme::HEADING_FONT)
         .font_weight(FontWeight::SEMIBOLD)
         .text_size(px(size))
+        // Input's default line height is a fixed 1.25 rem, which clips the
+        // display face when the playlist title is larger than body text.
+        .line_height(relative(1.3))
         .h(px((size * 1.75).round()))
         .px(px(8.))
 }

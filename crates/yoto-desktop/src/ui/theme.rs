@@ -350,6 +350,18 @@ pub fn header_row(title: impl IntoElement, actions: Vec<AnyElement>) -> Div {
                 .children(actions)
         }))
 }
+/// Dialog actions keep their natural button widths and move onto another row when
+/// translated labels do not fit the available popup width.
+pub fn dialog_actions() -> Div {
+    div()
+        .w_full()
+        .min_w_0()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .justify_end()
+        .gap(px(8.))
+}
 /// A button that closes its dialog, for a row of dialog actions. The kit's close
 /// wrapper fills whatever holds it (`size_full`): dropped straight into a row it
 /// claims the whole width and squeezes its siblings, so it is boxed at the
