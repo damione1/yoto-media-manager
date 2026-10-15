@@ -7,6 +7,10 @@ name: Rust
 # Caches written by master are the only ones every pull request and release
 # tag can read, so after each merge `warm` compiles (without testing) what the
 # checks and the release build need, and saves it.
+#
+# Changes that only touch the website or documentation skip all of it. Branch
+# protection requires the single `Rust checks` job, which passes when every
+# job either passed or was skipped for that reason.
 on:
   pull_request:
     branches: [master]
@@ -21,8 +25,32 @@ permissions:
 env:
   YOTO_CLIENT_ID: ${{ secrets.YOTO_CLIENT_ID }}
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: diff
+        shell: bash
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # Anything outside the website and documentation counts as the app; a
+          # manual run, or a base we cannot compare with, checks everything.
+          app=true
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            if ! git diff --name-only "$BASE" "$GITHUB_SHA" | grep -qvE '^site/|\.md$|^assets/social/|^\.github/workflows/site\.yml$'; then
+              app=false
+            fi
+          fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "App changes: $app"
   fmt:
-    if: github.event_name != 'push'
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,7 +59,8 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
   checks:
-    if: github.event_name != 'push'
+    needs: changes
+    if: github.event_name != 'push' && needs.changes.outputs.app == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -77,8 +106,24 @@ jobs:
         run: |
           cargo build -p yoto-mcp --locked --target ${{ matrix.target }}
           python3 tests/mcp_smoke.py --executable target/${{ matrix.target }}/debug/yoto-mcp${{ runner.os == 'Windows' && '.exe' || '' }} --tools tools/${{ matrix.target }}
+  # The check branch protection requires: a skipped job is fine, a failed or
+  # cancelled one is not.
+  result:
+    name: Rust checks
+    needs: [changes, fmt, checks]
+    if: always() && github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) exit 1 ;; esac
+          done
   warm:
-    if: github.event_name == 'push'
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.app == 'true'
     strategy:
       fail-fast: false
       matrix:
