@@ -78,6 +78,31 @@ pub struct Chapter {
     pub tracks: Vec<Track>,
     pub extra: Extra,
 }
+impl Chapter {
+    /// A lone track is shown as one song in the editor. Keep its chapter's navigation
+    /// icon in step with its playback icon unless the chapter has a distinct icon.
+    /// Passing no track edits only the chapter, as in the advanced settings.
+    pub fn set_icon(&mut self, track: Option<TrackId>, icon: Option<IconReference>) -> Result<()> {
+        match track {
+            Some(id) => {
+                let single = self.tracks.len() == 1;
+                let track = self
+                    .tracks
+                    .iter_mut()
+                    .find(|t| t.id == id)
+                    .ok_or_else(|| Failure::Validation(crate::messages::TRACK_ABSENT.into()))?;
+                if single
+                    && (self.icon.is_none() || track.icon.is_none() || self.icon == track.icon)
+                {
+                    self.icon = icon.clone();
+                }
+                track.icon = icon;
+            }
+            None => self.icon = icon,
+        }
+        Ok(())
+    }
+}
 /// One Yoto track to make from a media of the library: its prepared version and its title.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct MediaTrack {

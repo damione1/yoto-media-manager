@@ -2289,16 +2289,7 @@ impl Service {
                     .iter_mut()
                     .find(|c| c.id == chapter)
                     .ok_or_else(|| Failure::Validation(messages::CHAPTER_ABSENT.into()))?;
-                match track {
-                    Some(id) => {
-                        c.tracks
-                            .iter_mut()
-                            .find(|t| t.id == id)
-                            .ok_or_else(|| Failure::Validation(messages::TRACK_ABSENT.into()))?
-                            .icon = Some(IconReference::Local { asset: asset.id })
-                    }
-                    None => c.icon = Some(IconReference::Local { asset: asset.id }),
-                };
+                c.set_icon(track, Some(IconReference::Local { asset: asset.id }))?;
                 p.touch()?;
                 self.db.save_playlist_cas(&p, base)?;
                 Ok(Reply::Updated)

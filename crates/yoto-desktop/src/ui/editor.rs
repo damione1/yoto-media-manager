@@ -2604,15 +2604,10 @@ impl PlaylistEditor {
         track: Option<TrackId>,
         icon: Option<IconReference>,
     ) {
-        if let Some(c) = self.draft.chapters.iter_mut().find(|c| c.id == chapter) {
-            match track {
-                Some(id) => {
-                    if let Some(t) = c.tracks.iter_mut().find(|t| t.id == id) {
-                        t.icon = icon;
-                    }
-                }
-                None => c.icon = icon,
-            }
+        if let Some(c) = self.draft.chapters.iter_mut().find(|c| c.id == chapter)
+            && let Err(error) = c.set_icon(track, icon)
+        {
+            self.status = failure_text(&error);
         }
     }
     fn change_event(&mut self, track: TrackId, trigger: EventTrigger, cmd: Option<EventCommand>) {
