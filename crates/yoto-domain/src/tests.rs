@@ -493,6 +493,86 @@ fn local_icon(reference: &Option<IconReference>) -> Option<AssetId> {
         Some(IconReference::Yoto { .. }) | None => None,
     }
 }
+#[test]
+fn a_lone_tracks_icon_updates_navigation_and_playback_together() {
+    for icon in [
+        IconReference::Local {
+            asset: AssetId::new(),
+        },
+        IconReference::Yoto {
+            account: AccountId::new("family").unwrap(),
+            media: YotoMediaId::new("catalogue-icon").unwrap(),
+        },
+    ] {
+        let mut playlist = structured(&[("song", &["track"])]);
+        let chapter = &mut playlist.chapters[0];
+        let track = chapter.tracks[0].id;
+        // Picking an icon after adding a song without one fills both levels.
+        chapter.set_icon(Some(track), Some(icon.clone())).unwrap();
+        assert_eq!(chapter.icon, Some(icon.clone()));
+        assert_eq!(chapter.tracks[0].icon, chapter.icon);
+        // Replacing or removing a shared icon must not leave the old navigation icon.
+        let replacement = IconReference::Local {
+            asset: AssetId::new(),
+        };
+        chapter
+            .set_icon(Some(track), Some(replacement.clone()))
+            .unwrap();
+        assert_eq!(chapter.icon, Some(replacement.clone()));
+        assert_eq!(chapter.tracks[0].icon, chapter.icon);
+        chapter.set_icon(Some(track), None).unwrap();
+        assert_eq!(chapter.icon, None);
+        assert_eq!(chapter.tracks[0].icon, None);
+        // A song saved by an earlier release can have only a playback icon.
+        chapter.tracks[0].icon = Some(icon.clone());
+        chapter.set_icon(Some(track), Some(icon.clone())).unwrap();
+        assert_eq!(chapter.icon, Some(icon));
+        // Imported songs may inherit their playback icon from the chapter.
+        chapter.tracks[0].icon = None;
+        chapter
+            .set_icon(Some(track), Some(replacement.clone()))
+            .unwrap();
+        assert_eq!(chapter.icon, Some(replacement));
+        assert_eq!(chapter.tracks[0].icon, chapter.icon);
+    }
+}
+#[test]
+fn explicit_chapter_icons_and_grouped_tracks_remain_independent() {
+    let navigation = IconReference::Local {
+        asset: AssetId::new(),
+    };
+    let playback = IconReference::Local {
+        asset: AssetId::new(),
+    };
+    for tracks in [&["one"][..], &["one", "two"][..]] {
+        let mut playlist = structured(&[("chapter", tracks)]);
+        let chapter = &mut playlist.chapters[0];
+        let track = chapter.tracks[0].id;
+        chapter.tracks[0].icon = Some(playback.clone());
+        chapter.set_icon(None, Some(navigation.clone())).unwrap();
+        chapter
+            .set_icon(Some(track), Some(playback.clone()))
+            .unwrap();
+        assert_eq!(chapter.icon, Some(navigation.clone()));
+        assert_eq!(chapter.tracks[0].icon, Some(playback.clone()));
+        chapter.set_icon(Some(track), None).unwrap();
+        assert_eq!(chapter.icon, Some(navigation.clone()));
+        assert_eq!(chapter.tracks[0].icon, None);
+    }
+    let mut playlist = structured(&[("chapter", &["one", "two"])]);
+    let chapter = &mut playlist.chapters[0];
+    chapter
+        .set_icon(Some(chapter.tracks[0].id), Some(playback))
+        .unwrap();
+    assert_eq!(chapter.icon, None);
+    assert_eq!(chapter.tracks[1].icon, None);
+    assert!(
+        chapter
+            .set_icon(Some(TrackId::new()), Some(navigation))
+            .is_err()
+    );
+    assert_eq!(chapter.icon, None);
+}
 fn media_fixture(title: &str, seconds: f64, icon: Option<AssetId>) -> MediaItem {
     MediaItem {
         id: MediaId::new(),

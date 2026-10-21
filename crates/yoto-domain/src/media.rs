@@ -355,7 +355,7 @@ pub enum TrackMedia {
         format: AudioFormat,
     },
 }
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum IconReference {
     Local {
         asset: AssetId,

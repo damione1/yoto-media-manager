@@ -521,6 +521,44 @@ fn stream_chapter() -> Chapter {
         extra: Extra::new(),
     }
 }
+#[tokio::test]
+async fn changing_a_lone_tracks_icon_publishes_it_on_the_chapter_too() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Service::isolated(root.path().join("profile"), tools(), [13; 32]).unwrap();
+    let mut playlist = Playlist::new("Chanson".into()).unwrap();
+    playlist.chapters.push(stream_chapter());
+    service.db.save_playlist(&playlist).unwrap();
+    let chapter = &playlist.chapters[0];
+    let image = root.path().join("icon.png");
+    image::RgbaImage::from_pixel(16, 16, image::Rgba([255, 0, 0, 255]))
+        .save(&image)
+        .unwrap();
+    service
+        .execute(Command::ImportIcon {
+            path: image,
+            playlist: playlist.id,
+            chapter: chapter.id,
+            track: Some(chapter.tracks[0].id),
+        })
+        .await
+        .unwrap();
+
+    let saved = service.playlist(playlist.id).unwrap();
+    let Some(IconReference::Local { asset }) = saved.chapters[0].tracks[0].icon else {
+        panic!("the imported icon must be stored on the track");
+    };
+    let account = AccountId::new("family").unwrap();
+    let icons = [(asset, YotoMediaId::new("uploaded-icon").unwrap())].into();
+    let document = crate::api::write_playlist(&saved, &account, &[], &icons, None).unwrap();
+    let chapter = &document["content"]["chapters"][0];
+    assert_eq!(chapter["display"]["icon16x16"], "yoto:#uploaded-icon");
+    assert_eq!(
+        chapter["tracks"][0]["display"]["icon16x16"],
+        "yoto:#uploaded-icon"
+    );
+    assert_eq!(document["content"]["chapters"].as_array().unwrap().len(), 1);
+    assert_eq!(chapter["tracks"].as_array().unwrap().len(), 1);
+}
 #[test]
 fn an_unchanged_card_keeps_labels_and_extensions_and_recomputes_chapter_sums() {
     let account = AccountId::new("owner").unwrap();
