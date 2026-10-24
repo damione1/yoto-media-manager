@@ -81,11 +81,12 @@ async fn large_grants_survive_restart_rotation_and_disconnect() {
     assert_eq!(reopened.load(&f.id).unwrap().access, access);
     reopened.host = server.uri();
     assert_eq!(
-        &*reopened
+        reopened
             .access(&f.id, Scope::UserContentView)
             .await
-            .unwrap(),
-        rotated
+            .unwrap()
+            .as_str(),
+        rotated.as_str()
     );
     let request = &server.received_requests().await.unwrap()[0];
     let fields: HashMap<_, _> = url::form_urlencoded::parse(&request.body)
