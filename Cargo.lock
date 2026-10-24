@@ -9454,6 +9454,7 @@ dependencies = [
  "url",
  "uuid",
  "webbrowser",
+ "windows-sys 0.61.2",
  "wiremock",
  "yoto-api-generated",
  "yoto-auth-generated",
