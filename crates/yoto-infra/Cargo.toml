@@ -34,6 +34,8 @@ tempfile = "3"
 rumqttc = { version = "=0.25.1", features = ["websocket", "url"] }
 libc = "0.2"
 schemars = "1"
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSError", "NSString", "NSURL"] }

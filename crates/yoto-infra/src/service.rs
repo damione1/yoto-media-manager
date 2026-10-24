@@ -619,7 +619,7 @@ impl Service {
     }
     fn with_key(profile: PathBuf, tools: Tools, key: [u8; 32], lock: File) -> Result<Arc<Self>> {
         let db = Database::open(&profile.join("catalogue.db"), &key)?;
-        let namespace = crate::profile_namespace(&profile);
+        let auth = TokenBroker::new(&profile)?;
         let youtube = Arc::new(crate::youtube_tool::YoutubeTool::new(
             profile.join("tools").join("yt-dlp"),
             tools.youtube.clone(),
@@ -650,7 +650,7 @@ impl Service {
             db,
             store,
             tools,
-            auth: TokenBroker::new(namespace)?,
+            auth,
             api: YotoGateway::new()?,
             snapshot_bytes: Mutex::new(None),
             interface_bytes: Mutex::new(None),

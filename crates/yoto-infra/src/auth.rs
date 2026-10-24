@@ -16,6 +16,10 @@ use tokio::{
 use yoto_auth_generated::apis::{authentication_api, configuration::Configuration};
 use yoto_domain::*;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
+#[cfg(all(test, windows))]
+mod windows_tests;
+#[cfg(windows)]
+mod windows_vault;
 /// How many more times the sign-in tries the callback port before calling it busy.
 const CALLBACK_BIND_ATTEMPTS: u32 = 10;
 /// Pause between two tries of the callback port.
@@ -74,6 +78,8 @@ enum TokenExchange<'a> {
 type TestVault = Arc<std::sync::Mutex<HashMap<String, Zeroizing<String>>>>;
 pub struct TokenBroker {
     namespace: String,
+    #[cfg(windows)]
+    vault: windows_vault::WindowsVault,
     config: PublicConfig,
     http: reqwest::Client,
     host: String,
@@ -82,8 +88,12 @@ pub struct TokenBroker {
     test_vault: Option<TestVault>,
 }
 impl TokenBroker {
-    pub fn new(namespace: String) -> Result<Self> {
+    pub fn new(profile: &std::path::Path) -> Result<Self> {
+        let profile = crate::canonical_profile(profile)?;
+        let namespace = crate::profile_namespace(&profile);
         Ok(Self {
+            #[cfg(windows)]
+            vault: windows_vault::WindowsVault::new(&profile, namespace.clone()),
             namespace,
             config: PublicConfig::embedded()?,
             http: reqwest::Client::builder()
@@ -120,12 +130,21 @@ impl TokenBroker {
                 .ok_or(Failure::Authentication)?;
             return serde_json::from_str(text).map_err(|_| Failure::Authentication);
         }
+        #[cfg(windows)]
+        if let Some(bytes) = self.vault.load(id)? {
+            return serde_json::from_slice(&bytes).map_err(|_| Failure::Authentication);
+        }
         let s = Zeroizing::new(
             self.entry(id)?
                 .get_password()
                 .map_err(|_| Failure::Authentication)?,
         );
-        serde_json::from_str(&s).map_err(|_| Failure::Authentication)
+        let grant = serde_json::from_str(&s).map_err(|_| Failure::Authentication)?;
+        // Migrate only after reading a valid legacy grant. The durable DPAPI write
+        // precedes deletion of the old credential, so a failed write loses nothing.
+        #[cfg(windows)]
+        self.save(id, &grant)?;
+        Ok(grant)
     }
     fn save(&self, id: &AccountId, g: &Grant) -> Result<()> {
         let text = Zeroizing::new(serde_json::to_string(g).map_err(storage)?);
@@ -137,6 +156,12 @@ impl TokenBroker {
                 .insert(self.vault_key(id), text);
             return Ok(());
         }
+        #[cfg(windows)]
+        {
+            self.vault.save(id, text.as_bytes())?;
+            self.delete_legacy(id)
+        }
+        #[cfg(not(windows))]
         self.entry(id)?.set_password(&text).map_err(storage)
     }
     pub async fn disconnect(&self, id: &AccountId) -> Result<()> {
@@ -153,6 +178,14 @@ impl TokenBroker {
             vault.lock().map_err(storage)?.remove(&self.vault_key(id));
             return Ok(());
         }
+        // Remove the legacy entry first: deleting only the file could otherwise
+        // let a later load restore a session that the user disconnected.
+        self.delete_legacy(id)?;
+        #[cfg(windows)]
+        self.vault.delete(id)?;
+        Ok(())
+    }
+    fn delete_legacy(&self, id: &AccountId) -> Result<()> {
         match self.entry(id)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(storage(e)),
@@ -212,7 +245,8 @@ impl TokenBroker {
     }
     #[cfg(test)]
     pub(crate) fn test_broker(host: String, id: &AccountId, grant: &Grant) -> Self {
-        let mut broker = Self::new("test".into()).unwrap();
+        let profile = tempfile::tempdir().unwrap();
+        let mut broker = Self::new(profile.path()).unwrap();
         broker.host = host;
         broker.test_vault = Some(Arc::new(std::sync::Mutex::new(HashMap::new())));
         broker.save(id, grant).unwrap();
@@ -495,7 +529,8 @@ mod tests {
     #[tokio::test]
     async fn refresh_is_single_flight_rotated_and_logout_cannot_resurrect() {
         let server = MockServer::start().await;
-        let mut broker = TokenBroker::new("test".into()).unwrap();
+        let profile = tempfile::tempdir().unwrap();
+        let mut broker = TokenBroker::new(profile.path()).unwrap();
         broker.host = server.uri();
         broker.test_vault = Some(Arc::new(std::sync::Mutex::new(HashMap::new())));
         let broker = Arc::new(broker);
@@ -566,10 +601,11 @@ mod tests {
         let server = MockServer::start().await;
         let vault = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let id = AccountId::new("same-subject").unwrap();
-        let mut a = TokenBroker::new("canonical-profile-a".into()).unwrap();
+        let profiles = tempfile::tempdir().unwrap();
+        let mut a = TokenBroker::new(&profiles.path().join("a")).unwrap();
         a.host = server.uri();
         a.test_vault = Some(vault.clone());
-        let mut b = TokenBroker::new("canonical-profile-b".into()).unwrap();
+        let mut b = TokenBroker::new(&profiles.path().join("b")).unwrap();
         b.host = server.uri();
         b.test_vault = Some(vault.clone());
         let grant = |access: &str, expired| Grant {
@@ -610,9 +646,9 @@ mod tests {
         let b_profile = crate::canonical_profile(&root.path().join("b")).unwrap();
         let id = AccountId::new(format!("synthetic-test-{}", uuid::Uuid::new_v4())).unwrap();
         let server = MockServer::start().await;
-        let mut a = TokenBroker::new(crate::profile_namespace(&a_profile)).unwrap();
+        let mut a = TokenBroker::new(&a_profile).unwrap();
         a.host = server.uri();
-        let b = TokenBroker::new(crate::profile_namespace(&b_profile)).unwrap();
+        let b = TokenBroker::new(&b_profile).unwrap();
         let _cleanup = Cleanup(vec![a.entry(&id).unwrap(), b.entry(&id).unwrap()]);
         let grant = |access: &str, expires| Grant {
             access: access.into(),
