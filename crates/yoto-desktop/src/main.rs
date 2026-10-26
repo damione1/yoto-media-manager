@@ -2,14 +2,21 @@
 gpui_kit::actions!(yoto, [Quit]);
 #[macro_use]
 mod i18n;
+mod diagnostics;
 mod image_http;
 mod ui;
 use gpui_kit::*;
 use std::sync::Arc;
 use yoto_infra::{Session, media::Tools};
 fn main() {
+    if let Ok(profile) = yoto_infra::default_profile()
+        && let Err(error) = diagnostics::init(&profile, yoto_updater::CURRENT_VERSION)
+    {
+        eprintln!("Unable to initialize crash logging: {error}");
+    }
     choose_language();
     if let Err(e) = launch() {
+        diagnostics::record(format_args!("Application launch failed: {e}"));
         eprintln!("{e}");
         // A double-clicked app has no terminal: a launch failure must be visible on screen.
         let updating = std::env::args_os()
@@ -41,6 +48,7 @@ fn main() {
             .show();
         std::process::exit(1);
     }
+    diagnostics::record("Application stopped normally");
 }
 /// The audio tools installed with the application are missing or do not match their
 /// manifest: only a reinstall puts them back, so the parent is told so plainly.

@@ -419,6 +419,7 @@ impl AppView {
         cx.notify();
     }
     pub fn send(&mut self, command: Command, cx: &mut Context<Self>) {
+        let refreshing_icons = matches!(&command, Command::RefreshIcons(_));
         let creating_playlist = matches!(
             &command,
             Command::CreateYotoPlaylist { .. } | Command::DuplicateYotoPlaylist { .. }
@@ -535,6 +536,12 @@ impl AppView {
                                     .all(|(current, next)| next >= current))
                         {
                             view.adopt(prepared, cx);
+                        }
+                        if refreshing_icons && matches!(reply, Err(Failure::Cancelled)) {
+                            // Another refresh owns the catalogue now. Preserve its status
+                            // and do not present an expected cancellation as a failed edit.
+                            cx.notify();
+                            return;
                         }
                         if let Some((_, done)) = progress {
                             view.status = done.into();
