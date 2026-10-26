@@ -845,6 +845,7 @@ impl PlaylistEditor {
         self.draft.touch()
     }
     pub(super) fn send(&mut self, command: Command, cx: &mut Context<Self>) {
+        let refreshing_icons = matches!(&command, Command::RefreshIcons(_));
         let service = self.service.clone();
         let rt = self.runtime.clone();
         self.tasks.push(cx.spawn(async move |weak, cx| {
@@ -853,6 +854,9 @@ impl PlaylistEditor {
                 .await;
             let _ = weak.update(cx, |view, cx| {
                 view.status = match joined(result) {
+                    // A newer catalogue request superseded this one. Its result will
+                    // arrive separately; choosing an icon did not fail.
+                    Err(Failure::Cancelled) if refreshing_icons => return,
                     Ok(_) => tr!("Opération terminée.").into(),
                     Err(e) => failure_text(&e),
                 };
