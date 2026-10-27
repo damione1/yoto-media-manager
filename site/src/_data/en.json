@@ -1,8 +1,8 @@
 {
   "meta": {
-    "title": "YotoMediaManager · The songs they ask for, on their Yoto",
-    "description": "A desktop app for parents with a Yoto at home: import audio from a file or a YouTube link, trim it, and add it to a playlist on your Yoto account. For macOS and Windows.",
-    "ogDescription": "Import a song, keep just the right part, and add it to a playlist on their Yoto. A desktop app for macOS and Windows.",
+    "title": "Yoto audio imports and playlists · YotoMediaManager",
+    "description": "Import audio files or YouTube, trim your tracks and build Yoto playlists. A free desktop app for Mac and Windows.",
+    "ogDescription": "Import audio files or YouTube, trim your tracks and build Yoto playlists. A free desktop app for Mac and Windows.",
     "imageAlt": "YotoMediaManager: the songs they ask for, on their Yoto. Beside the line, the app's playlist editor with four nursery rhymes saved on Yoto.",
     "docsSuffix": "YotoMediaManager guide",
     "notFoundTitle": "Page not found · YotoMediaManager"
@@ -25,7 +25,7 @@
     "sub": "A nursery rhyme found on YouTube, a story in your language, Grandma’s lullaby: import it, keep just the right part, and add it to a playlist on your player.",
     "ctaMac": "Download for macOS",
     "ctaWin": "For Windows",
-    "note": "macOS and Windows · works with your Yoto account",
+    "note": "Free · macOS 14 or later and 64-bit Windows",
     "cardTitle": "Evening songs",
     "cardMeta": "4 tracks · 8 min 58 s",
     "tracks": [
@@ -34,7 +34,8 @@
       { "title": "Brahms’ Lullaby", "dur": "3:21", "family": "lilac", "icon": "moon" },
       { "title": "Twinkle, Twinkle, Little Star", "dur": "1:23", "family": "mint", "icon": "star" }
     ],
-    "toast": "Saved on Yoto"
+    "toast": "Saved on Yoto",
+    "intro": "A free desktop app to import, trim and organize your Yoto Make Your Own playlists on Mac and Windows."
   },
   "how": {
     "title": "Four steps, one place",
@@ -54,17 +55,23 @@
       "import": {
         "title": "Paste a link, get the song",
         "text": "Paste a public YouTube video or playlist, or add a file from your computer. The audio is downloaded on your computer and waits in your library, ready to listen to.",
-        "alt": "Animation of the app: a YouTube link is pasted into Import audio and Import is pressed; the task appears under Activity, downloads, then is ready in the library, and Listen opens the song in the Library."
+        "alt": "Animation of the app: a YouTube link is pasted into Import audio and Import is pressed; the task appears under Activity, downloads, then is ready in the library, and Listen opens the song in the Library.",
+        "guideSlug": "imports",
+        "guideLabel": "Read the import guide"
       },
       "trim": {
         "title": "Keep just the right part",
         "text": "Drag the two handles past the intro and the credits, and click the waveform to listen from any spot. Apply keeps your original and creates the trimmed version for your playlists.",
-        "alt": "Animation of the trim dialog: the start and end handles are dragged inward, a click on the waveform moves the playhead, the selection plays from there, then Apply prepares the trimmed version."
+        "alt": "Animation of the trim dialog: the start and end handles are dragged inward, a click on the waveform moves the playhead, the selection plays from there, then Apply prepares the trimmed version.",
+        "guideSlug": "prepare-audio",
+        "guideLabel": "Learn to trim your audio"
       },
       "playlist": {
         "title": "Straight onto their Yoto",
         "text": "Choose Add media, tick a song from your library and the version to send. Once Yoto has it, it appears in the playlist; click its empty icon slot to give it its little pixel icon. Changes are saved to your Yoto account as you go: there is no publish button.",
-        "alt": "Animation of the playlist editor: Add media opens a dialog, a trimmed song is ticked and added; once sent to Yoto it appears as a new track, its empty icon slot opens Choose an icon, an icon is used, and the playlist shows Saved on Yoto."
+        "alt": "Animation of the playlist editor: Add media opens a dialog, a trimmed song is ticked and added; once sent to Yoto it appears as a new track, its empty icon slot opens Choose an icon, an icon is used, and the playlist shows Saved on Yoto.",
+        "guideSlug": "playlists",
+        "guideLabel": "Build your Yoto playlist"
       }
     }
   },
@@ -93,7 +100,8 @@
       { "q": "Do I need a Yoto account?", "a": "Not to import and trim audio. To create playlists and play them on a player, yes." },
       { "q": "Are my originals changed when I trim?", "a": "Never. Trimming creates a version next to the original, which you can export at any time." },
       { "q": "Is the app finished?", "a": "It is still being validated: some combinations of players and computers remain to be tested. The app tells you when a feature is not available, and offers new versions as soon as they are published." },
-      { "q": "Is it good?", "a": "Yes." }
+      { "q": "Is the app free?", "a": "Yes. YotoMediaManager is free to download and use, with source code available under GPL-3.0-or-later. The Yoto player and Make Your Own cards are sold separately." },
+      { "q": "How do I put my playlist on a Make Your Own card?", "a": "YotoMediaManager creates and edits the playlist on your Yoto account. Then link it to a Make Your Own card with the official Yoto app. The getting-started guide explains this last step." }
     ]
   },
   "cta": {
@@ -101,21 +109,26 @@
     "mac": "Download for macOS",
     "win": "For Windows"
   },
-  "dl": { "intel": "Mac with an Intel processor?", "intelLink": "Intel version", "all": "All versions", "signing": "Windows: free code signing provided by", "signingBy": ", certificate by" },
+  "dl": { "intel": "Mac with an Intel processor?", "intelLink": "Intel version", "all": "All versions", "requirements": "Apple Silicon or Intel Mac · 64-bit Windows", "license": "Free and open-source · GPL-3.0-or-later" },
   "footer": {
     "label": "Footer",
     "guide": "User guide",
     "releases": "Releases",
     "notices": "Third-party notices",
     "source": "Source code",
-    "notAffiliated": "Independent app, not affiliated with Yoto Ltd. Yoto is a trademark of Yoto Ltd."
+    "notAffiliated": "Independent app, not affiliated with Yoto Ltd. Yoto is a trademark of Yoto Ltd.",
+    "support": "Report an issue",
+    "license": "GPL license"
   },
   "docs": {
     "title": "User guide",
     "contents": "Guide contents",
     "onThisPage": "On this page",
     "prev": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "home": "Home",
+    "breadcrumb": "Breadcrumb",
+    "getStarted": "From your first file to a Yoto card"
   },
   "notFound": {
     "title": "This page is not here",

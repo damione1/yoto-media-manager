@@ -82,7 +82,7 @@
   transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.2s ease, background-color 0.2s;
 }
 .m-btn-primary { background: var(--peach); color: var(--on-primary); box-shadow: 0 3px 0 var(--peach-shadow); }
-.m-btn-mint { background: var(--mint); color: #fff; box-shadow: 0 3px 0 var(--mint-shadow); }
+.m-btn-mint { background: var(--mint); color: var(--ink); box-shadow: 0 3px 0 var(--mint-shadow); }
 .m-btn-outline { background: var(--surface); color: var(--ink); border: 2px solid var(--border); font-weight: 700; }
 .m-btn-dashed { border-style: dashed; border-color: var(--box-border); }
 .m-btn-ghost { background: transparent; color: var(--ink); font-weight: 700; }

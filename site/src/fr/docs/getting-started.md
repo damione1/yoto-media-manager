@@ -1,11 +1,17 @@
 ---
-title: Votre première playlist
+title: "Créer sa première playlist et carte Yoto"
+navTitle: Votre première playlist
+description: "Installez YotoMediaManager sur Mac ou Windows, ajoutez votre audio, créez une playlist puis associez-la à une Carte à créer avec l’app Yoto."
 order: 2
 ---
 
-# Votre première playlist
+# Créer sa première playlist et carte Yoto
+
+Passez d’un fichier audio sur votre ordinateur à une playlist dans votre compte Yoto, puis associez-la à une Carte à créer physique avec l’application officielle Yoto.
 
 ## Installer l’application
+
+Le téléchargement est gratuit. Sur Mac, macOS 14 ou ultérieur est requis ; l’installateur Windows est prévu pour un système 64 bits.
 
 Téléchargez la dernière version pour votre ordinateur : [Mac avec puce Apple](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-AppleSilicon.dmg) (M1 et suivants), [Mac avec processeur Intel](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-macOS-Intel.dmg) ou [Windows](https://github.com/damione1/yoto-media-manager/releases/latest/download/YotoMediaManager-Windows-setup.exe). Toutes les versions sont aussi sur les [versions publiées sur GitHub](https://github.com/damione1/yoto-media-manager/releases).
 
@@ -36,3 +42,17 @@ Vous pouvez importer et préparer de l’audio sans compte Yoto. Créer et modif
 ## Écouter sur votre lecteur
 
 Dans `Lecteurs`, actualisez vos appareils, choisissez votre lecteur et lancez la playlist. Le [guide du compte et de la synchronisation](account-and-sync.md) explique les états d’envoi et les conflits possibles.
+
+## Associer la playlist à une Carte à créer
+
+Une playlist enregistrée sur votre compte ne se trouve pas encore sur une carte physique. Cette association se fait dans l’application officielle Yoto sur votre téléphone :
+
+1. Connectez-vous à l’application Yoto avec le même compte que dans YotoMediaManager.
+2. Retrouvez votre playlist dans la bibliothèque, dans la partie Make Your Own / Cartes à créer, puis ouvrez-la.
+3. Dans son menu `⋯`, choisissez l’option de liaison à une carte.
+4. Insérez une Carte à créer dans votre lecteur Yoto et confirmez la liaison dans l’application.
+5. Attendez la confirmation sur le lecteur, puis retirez et réinsérez la carte pour écouter la playlist.
+
+Les intitulés peuvent varier selon la langue et la version de l’application Yoto. Le [guide officiel Yoto](https://support.yotoplay.com/en_gb/how-to-add-your-own-mp3-files-to-a-yoto-card-rJl2utiQfe) détaille cette association. YotoMediaManager prépare la playlist ; il ne réalise pas cette liaison physique.
+
+Pour aller plus loin : [importer depuis YouTube](imports.md), [préparer les pistes](prepare-audio.md) ou [modifier la playlist et ses icônes](playlists.md).

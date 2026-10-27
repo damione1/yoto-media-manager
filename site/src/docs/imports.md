@@ -1,9 +1,13 @@
 ---
-title: Import media
+title: "Import MP3 files or YouTube audio for Yoto"
+navTitle: Import media
+description: "Add audio files or public YouTube links to YotoMediaManager. Follow downloads, find imported tracks and prepare audio for your Yoto playlists."
 order: 3
 ---
 
-# Import media
+# Import MP3 files or YouTube audio for Yoto
+
+Bring audio files or a public YouTube video or playlist into your local library. You can then [trim the audio](prepare-audio.md) and [add it to a Yoto playlist](playlists.md).
 
 ## From an audio file
 

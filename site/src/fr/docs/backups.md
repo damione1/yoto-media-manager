@@ -1,9 +1,13 @@
 ---
-title: Exporter et importer votre médiathèque
+title: "Sauvegarder et restaurer sa médiathèque"
+navTitle: Exporter et importer votre médiathèque
+description: "Exportez une sauvegarde chiffrée de votre médiathèque YotoMediaManager, conservez sa clé et importez vos fichiers sur un autre ordinateur."
 order: 8
 ---
 
-# Exporter et importer votre médiathèque
+# Sauvegarder et restaurer sa médiathèque
+
+Gardez une copie de votre médiathèque locale ou transférez-la vers un autre ordinateur. Cet export est distinct des playlists enregistrées dans votre [compte Yoto](account-and-sync.md).
 
 Votre médiathèque contient votre audio original et les versions préparées. Elle est stockée localement, sous forme chiffrée. Le catalogue garde aussi des données en cache et suit les opérations Yoto ; les playlists elles-mêmes appartiennent à votre compte Yoto. Exporter la médiathèque vous donne une copie protégée, que vous pouvez importer sur une nouvelle installation ou un autre ordinateur.
 

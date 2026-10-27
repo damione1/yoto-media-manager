@@ -21,6 +21,7 @@ export default {
     windows: `${repo}/releases/latest/download/YotoMediaManager-Windows-setup.exe`,
   },
   issues: `${repo}/issues`,
+  license: `${repo}/blob/master/LICENSE`,
   notices: `${repo}/blob/master/distribution/THIRD-PARTY-NOTICES.md`,
   author: "Damien Goehrig",
   year: new Date().getFullYear(),

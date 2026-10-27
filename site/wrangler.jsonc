@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yoto-media-manager",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./_site",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
+    "run_worker_first": [
+      "/*",
+      "!/css/*",
+      "!/js/*",
+      "!/fonts/*",
+      "!/img/*",
+      "!/docs/images/*",
+      "!/og-*.png",
+      "!/icon-*.png",
+      "!/apple-touch-icon.png",
+      "!/favicon.ico",
+      "!/site.webmanifest",
+      "!/robots.txt",
+      "!/sitemap.xml"
+    ]
+  }
+}

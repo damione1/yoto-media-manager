@@ -1,9 +1,13 @@
 ---
-title: Construire une playlist
+title: "Créer une playlist Yoto et choisir ses icônes"
+navTitle: Construire une playlist
+description: "Créez et modifiez vos playlists Yoto Make Your Own : ajoutez des fichiers ou des versions découpées, ordonnez les chapitres et choisissez leurs icônes."
 order: 5
 ---
 
-# Construire une playlist
+# Créer une playlist Yoto et choisir ses icônes
+
+Composez une playlist Make Your Own dans votre compte Yoto à partir de vos fichiers audio. Commencez par [importer vos pistes](imports.md), puis [découpez-les](prepare-audio.md) si nécessaire.
 
 ## Retrouver vos playlists Yoto
 
@@ -78,3 +82,5 @@ Dans `Plus`, la duplication crée une nouvelle playlist sur Yoto. Supprimer une 
 Ouvrir ou actualiser une playlist relit son contenu sur Yoto. Si une autre application l’a modifiée pendant votre opération, un conflit peut demander un choix. Vos modifications sont conservées pour vous permettre de le résoudre.
 
 Si Yoto a peut-être accepté un envoi sans que sa réponse arrive, ouvrez le détail de la tâche dans `Imports` et choisissez `Vérifier auprès de Yoto`. L’application vérifie le résultat avant d’autoriser un nouvel envoi, pour éviter les doublons.
+
+Pour écouter avec une carte physique, terminez par [l’association à une Carte à créer dans le guide de démarrage](getting-started.md#associer-la-playlist-a-une-carte-a-creer).

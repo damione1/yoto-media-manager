@@ -1,9 +1,13 @@
 ---
-title: Yoto account and sync
+title: "Connect your Yoto account and sync playlists"
+navTitle: Yoto account and sync
+description: "Connect your Yoto account, load Make Your Own playlists, follow uploads and resolve uncertain results or conflicts without losing local audio."
 order: 6
 ---
 
-# Yoto account and sync
+# Connect your Yoto account and sync playlists
+
+Connect the account that will hold your [Yoto playlists](playlists.md). Your audio library stays on your computer; adding a track to a playlist sends the selected version to Yoto.
 
 ## Connect your account
 
@@ -34,14 +38,17 @@ Importing or trimming audio in the library is a local operation. It is sent to Y
 
 ## Recognize versions already uploaded
 
-The playlist editor shows the upload state of each track, and of the playlist next to its title:
+The editor shows each track’s state and the playlist’s state next to its title:
 
 | App state | Meaning |
 | --- | --- |
-| `Sending to Yoto…` | The track is being uploaded to Yoto. |
+| `Saving…` | Playlist changes are being sent. |
+| `Saved on Yoto` | The displayed playlist is saved on your account. |
+| `Sending to Yoto…` | The track is being uploaded. |
 | `On Yoto` | The track has been saved on Yoto. |
-| `To check` | The app needs to confirm an upload's result. |
-| `Upload failed` | Check the relevant task in `Imports`. |
+| `Not saved` | Some changes could not yet be saved. |
+| `To check` | An upload or remote change needs verification. |
+| `Upload failed` | Read the details and the relevant task in `Imports`. |
 
 An original can have several versions; the app remembers, for each account, which ones were already uploaded. Changing accounts can therefore require another upload.
 

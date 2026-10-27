@@ -4,9 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "eleventy --serve",
-    "build": "eleventy"
+    "build": "eleventy",
+    "images": "python3 scripts/optimize_images.py",
+    "test": "npm run build && node --test",
+    "preview": "npm run build && wrangler dev --local --port 8787",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
-    "@11ty/eleventy": "^3.1.6"
+    "@11ty/eleventy": "^3.1.6",
+    "wrangler": "4.154.0"
   }
 }

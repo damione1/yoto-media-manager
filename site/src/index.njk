@@ -11,8 +11,6 @@ layout: layouts/base.njk
 <a class="btn {{ 'btn-light' if onInk else 'btn-ghost' }} btn-lg" href="{{ site.download.windows }}">{{ secondary }}</a>
 {% endmacro %}
 
-{% macro signing(t) %}{{ t.dl.signing }} <a href="https://signpath.io">SignPath.io</a>{{ t.dl.signingBy }} <a href="https://signpath.org">SignPath Foundation</a>.{% endmacro %}
-
 {% macro otherDownloads(t) %}{{ t.dl.intel }} <a href="{{ site.download.macIntel }}">{{ t.dl.intelLink }}</a> · <a href="{{ site.releases }}">{{ t.dl.all }}</a>{% endmacro %}
 
 {# ── Hero ── #}
@@ -20,6 +18,7 @@ layout: layouts/base.njk
   <div class="hero-copy">
     <p class="badge f-lilac">{{ t.hero.badge }}</p>
     <h1 id="hero-title" class="h-display">{{ t.hero.title }} <span class="accent">{{ t.hero.titleAccent }}</span></h1>
+    <p class="hero-intro">{{ t.hero.intro }}</p>
     <p class="lede">{{ t.hero.sub }}</p>
     <div class="actions">{{ downloads(t, t.hero.ctaMac, t.hero.ctaWin) }}</div>
     <p class="meta">{{ t.hero.note }}</p>
@@ -74,6 +73,7 @@ layout: layouts/base.njk
       <div class="scene-copy">
         <h3 id="scene-{{ key }}" class="h3">{{ sc.title }}</h3>
         <p>{{ sc.text }}</p>
+        <p class="scene-guide"><a href="/{{ loc.dir }}docs/{{ sc.guideSlug }}/">{{ sc.guideLabel }}</a></p>
       </div>
       <figure class="plate">
         {%- if key == "import" %}{{ importScene(t) }}
@@ -86,6 +86,7 @@ layout: layouts/base.njk
       </figure>
     </article>
     {%- endfor %}
+    <p><a href="/{{ loc.dir }}docs/getting-started/">{{ t.docs.getStarted }}</a></p>
   </div>
 </section>
 
@@ -136,7 +137,8 @@ layout: layouts/base.njk
     <div class="cta-do">
       <div class="actions">{{ downloads(t, t.cta.mac, t.cta.win, true) }}</div>
       <p class="cta-note other-dl">{{ otherDownloads(t) }}</p>
-      <p class="cta-note other-dl">{{ signing(t) }}</p>
+      <p class="cta-note other-dl">{{ t.hero.note }} · {{ t.dl.requirements }}</p>
+      <p class="cta-note other-dl"><a href="{{ site.license }}">{{ t.dl.license }}</a> · <a href="{{ site.issues }}">{{ t.footer.support }}</a></p>
     </div>
   </div>
 </section>

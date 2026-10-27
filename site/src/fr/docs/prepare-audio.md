@@ -1,9 +1,13 @@
 ---
-title: Découper et écouter
+title: "Découper et écouter un audio pour Yoto"
+navTitle: Découper et écouter
+description: "Écoutez vos fichiers, retirez une introduction, ajustez le volume et conservez vos originaux en préparant les pistes de vos playlists Yoto."
 order: 4
 ---
 
-# Découper et écouter
+# Découper et écouter un audio pour Yoto
+
+Préparez les pistes que vous avez [importées](imports.md) avant de les ajouter à une [playlist Yoto](playlists.md). La découpe conserve l’original pour vous permettre de choisir un autre passage plus tard.
 
 Dans `Médiathèque`, choisissez `Écouter` sur le média voulu. Le lecteur affiche son titre et sa durée, un bouton de lecture et un curseur pour se déplacer. Les outils de modification sont là quand vous en avez besoin.
 

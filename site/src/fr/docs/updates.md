@@ -1,9 +1,13 @@
 ---
-title: Garder l’application à jour
+title: "Mettre à jour YotoMediaManager"
+navTitle: Garder l’application à jour
+description: "Vérifiez votre version et installez les mises à jour de YotoMediaManager sur Mac ou Windows, en conservant votre médiathèque et votre compte."
 order: 10
 ---
 
-# Garder l’application à jour
+# Mettre à jour YotoMediaManager
+
+Gardez YotoMediaManager à jour sur Mac ou Windows. Pour transférer votre médiathèque vers un autre ordinateur, commencez par une [sauvegarde](backups.md).
 
 YotoMediaManager cherche les nouvelles versions à son ouverture. Quand une nouvelle version est disponible, **Mises à jour**, à droite de la barre d’état en bas de la fenêtre, affiche un point et permet de la télécharger sans quitter l’application.
 

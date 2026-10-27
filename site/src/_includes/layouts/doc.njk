@@ -18,7 +18,7 @@ layout: layouts/base.njk
       <nav aria-label="{{ t.docs.contents }}">
         <ol class="docs-pages">
           {%- for p in pages %}
-          <li><a href="{{ p.url }}"{% if p.url == page.url %} aria-current="page"{% endif %}>{{ p.data.title }}</a></li>
+          <li><a href="{{ p.url }}"{% if p.url == page.url %} aria-current="page"{% endif %}>{{ p.data.navTitle or p.data.title }}</a></li>
           {%- endfor %}
         </ol>
       </nav>
@@ -26,7 +26,17 @@ layout: layouts/base.njk
   </aside>
 
   <article class="docs-body">
-    <p class="docs-kicker">{{ t.docs.title }}</p>
+    <nav class="breadcrumbs" aria-label="{{ t.docs.breadcrumb }}">
+      <ol>
+        <li><a href="/{{ loc.dir }}">{{ t.docs.home }}</a></li>
+        {%- if page.url == "/" + loc.dir + "docs/" %}
+        <li aria-current="page">{{ t.docs.title }}</li>
+        {%- else %}
+        <li><a href="/{{ loc.dir }}docs/">{{ t.docs.title }}</a></li>
+        <li aria-current="page">{{ navTitle or title }}</li>
+        {%- endif %}
+      </ol>
+    </nav>
     {% set parts = content | splitTitle %}
     <div class="prose">
       {{ parts[0] | safe }}
@@ -43,10 +53,10 @@ layout: layouts/base.njk
 
     <nav class="docs-pager" aria-label="{{ t.docs.prev }} / {{ t.docs.next }}">
       {%- if prev %}
-      <a class="pager-prev" href="{{ prev.url }}" rel="prev"><span>{{ icon("arrowLeft", 16) }}{{ t.docs.prev }}</span><strong>{{ prev.data.title }}</strong></a>
+      <a class="pager-prev" href="{{ prev.url }}" rel="prev"><span>{{ icon("arrowLeft", 16) }}{{ t.docs.prev }}</span><strong>{{ prev.data.navTitle or prev.data.title }}</strong></a>
       {%- endif %}
       {%- if next %}
-      <a class="pager-next" href="{{ next.url }}" rel="next"><span>{{ t.docs.next }}{{ icon("arrowRight", 16) }}</span><strong>{{ next.data.title }}</strong></a>
+      <a class="pager-next" href="{{ next.url }}" rel="next"><span>{{ t.docs.next }}{{ icon("arrowRight", 16) }}</span><strong>{{ next.data.navTitle or next.data.title }}</strong></a>
       {%- endif %}
     </nav>
   </article>

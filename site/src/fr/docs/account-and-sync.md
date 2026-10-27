@@ -1,9 +1,13 @@
 ---
-title: Compte Yoto et synchronisation
+title: "Connecter son compte Yoto et synchroniser"
+navTitle: Compte Yoto et synchronisation
+description: "Connectez votre compte Yoto, retrouvez vos playlists Make Your Own, suivez les envois et résolvez les résultats incertains ou les conflits."
 order: 6
 ---
 
-# Compte Yoto et synchronisation
+# Connecter son compte Yoto et synchroniser
+
+Connectez le compte qui accueillera vos [playlists Yoto](playlists.md). Votre médiathèque reste sur votre ordinateur ; l’ajout d’une piste à une playlist envoie la version choisie à Yoto.
 
 ## Connecter votre compte
 
@@ -34,17 +38,19 @@ Importer ou découper de l’audio dans la médiathèque est une opération loca
 
 ## Reconnaître les versions déjà envoyées
 
-Les choix de version audio affichent leur état pour le compte actif :
+L’éditeur indique l’état des pistes et celui de la playlist à côté de son titre :
 
 | État dans l’application | Signification |
 | --- | --- |
-| `Local uniquement` | Cette version n’a pas d’envoi confirmé pour ce compte. |
-| `Envoi en cours` | Une tâche d’envoi utilise cette version. |
-| `Envoyé sur Yoto` | Le lien avec le média Yoto a été enregistré. |
-| `À vérifier` | L’application doit confirmer le résultat d’un envoi. |
-| `Échec d’envoi` | Consultez la tâche concernée dans `Imports`. |
+| `Enregistrement…` | Les changements de la playlist sont en cours d’envoi. |
+| `Enregistré sur Yoto` | La playlist affichée est enregistrée sur votre compte. |
+| `Envoi sur Yoto…` | La piste est en cours d’envoi. |
+| `Sur Yoto` | La piste a été enregistrée sur Yoto. |
+| `Non enregistré` | Des changements n’ont pas encore pu être enregistrés. |
+| `À vérifier` | Un envoi ou une modification distante demande une vérification. |
+| `Envoi échoué` | Consultez les détails et la tâche concernée dans `Imports`. |
 
-Un original peut avoir plusieurs versions, chacune avec son propre état. Changer de compte peut donc changer l’état affiché.
+Un original peut avoir plusieurs versions ; l’application retient, pour chaque compte, celles qui ont déjà été envoyées. Changer de compte peut donc nécessiter un nouvel envoi.
 
 ## Comprendre un résultat incertain
 
