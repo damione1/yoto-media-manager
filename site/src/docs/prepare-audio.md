@@ -1,9 +1,13 @@
 ---
-title: Trim and listen
+title: "Trim and preview audio for your Yoto playlists"
+navTitle: Trim and listen
+description: "Preview audio, remove intros or credits, adjust volume and keep your original files while preparing tracks for Yoto playlists in YotoMediaManager."
 order: 4
 ---
 
-# Trim and listen
+# Trim and preview audio for your Yoto playlists
+
+Prepare the tracks you have [imported](imports.md) before adding them to a [Yoto playlist](playlists.md). Trimming keeps the original so you can choose a different cut later.
 
 From `Library`, choose `Listen` on the media you want. The player shows its title and duration, a play button, and a slider for seeking. Editing tools are available when you need them.
 

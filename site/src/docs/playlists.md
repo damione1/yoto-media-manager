@@ -1,9 +1,13 @@
 ---
-title: Build a playlist
+title: "Create Yoto playlists and choose track icons"
+navTitle: Build a playlist
+description: "Create and edit Yoto Make Your Own playlists, add original or trimmed audio, order chapters and choose pixel icons in YotoMediaManager."
 order: 5
 ---
 
-# Build a playlist
+# Create Yoto playlists and choose track icons
+
+Build a Make Your Own playlist on your Yoto account using audio from your computer. Start by [importing your tracks](imports.md), then [trim them](prepare-audio.md) if needed.
 
 ## Find your Yoto playlists
 
@@ -78,3 +82,5 @@ In the playlist’s `⋯` menu (`More actions`), duplication creates a new playl
 Opening or refreshing a playlist reads its content from Yoto again. If another app changed it during your operation, a conflict may require a choice. Your edits are preserved to let you resolve it.
 
 If Yoto may have accepted an upload but its response did not arrive, open the task details in `Imports` and choose `Check with Yoto`. The app checks the result before allowing another upload, to avoid duplicates.
+
+To listen with a physical card, finish by [linking a Make Your Own card in the getting-started guide](getting-started.md#link-the-playlist-to-a-make-your-own-card).

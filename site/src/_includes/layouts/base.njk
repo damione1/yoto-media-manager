@@ -26,7 +26,7 @@
   <meta name="robots" content="noindex">
   {%- endif %}
   <meta property="og:title" content="{{ pageTitle }}">
-  <meta property="og:description" content="{{ t.meta.ogDescription }}">
+  <meta property="og:description" content="{{ description or t.meta.ogDescription }}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:image" content="{{ site.url }}/og-{{ loc.code }}.png">
@@ -41,24 +41,41 @@
   {%- endif %}{% endfor %}
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{ pageTitle }}">
-  <meta name="twitter:description" content="{{ t.meta.ogDescription }}">
+  <meta name="twitter:description" content="{{ description or t.meta.ogDescription }}">
   <meta name="twitter:image" content="{{ site.url }}/og-{{ loc.code }}.png">
   <meta name="twitter:image:alt" content="{{ t.meta.imageAlt }}">
   {%- if not isDocs and not is404 %}
   {% set app = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
+    "@id": site.url + "/#software",
     "name": site.name,
     "description": t.meta.description,
     "url": site.url + page.url,
     "image": site.url + "/og-" + loc.code + ".png",
     "applicationCategory": "MultimediaApplication",
     "operatingSystem": "macOS, Windows",
-    "downloadUrl": site.download.mac,
-    "author": { "@type": "Person", "name": site.author },
+    "downloadUrl": [site.download.mac, site.download.macIntel, site.download.windows],
+    "license": site.license,
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CAD", "url": site.url + page.url + "#download" },
+    "softwareHelp": { "@type": "WebPage", "url": site.url + "/" + loc.dir + "docs/" },
+    "author": { "@type": "Person", "@id": site.repo + "#author", "name": site.author, "url": site.repo },
     "inLanguage": loc.htmlLang
   } %}
   <script type="application/ld+json">{{ app | jsonld | safe }}</script>
+  {%- elif isDocs %}
+  {% set home = site.url + "/" + loc.dir %}
+  {% set guide = home + "docs/" %}
+  {% set crumbs = [
+    { "@type": "ListItem", "position": 1, "name": t.docs.home, "item": home },
+    { "@type": "ListItem", "position": 2, "name": t.docs.title, "item": guide }
+  ] %}
+  {% if page.url != "/" + loc.dir + "docs/" %}
+    {% set crumbs = crumbs.concat([{ "@type": "ListItem", "position": 3, "name": title, "item": site.url + page.url }]) %}
+  {% endif %}
+  {% set breadcrumb = { "@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": crumbs } %}
+  <script type="application/ld+json">{{ breadcrumb | jsonld | safe }}</script>
   {%- endif %}
 </head>
 <body{% if isDocs %} class="is-docs"{% endif %}>

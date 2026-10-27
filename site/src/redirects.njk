@@ -1,0 +1,20 @@
+---
+permalink: _redirects
+eleventyExcludeFromCollections: true
+---
+# Normalize known HTML pages permanently; leave missing paths as 404.
+/index.html / 301
+/index / 301
+{%- for loc in locales %}
+{%- if loc.dir %}
+/{{ loc.dir.slice(0, -1) }} /{{ loc.dir }} 301
+/{{ loc.dir }}index.html /{{ loc.dir }} 301
+/{{ loc.dir }}index /{{ loc.dir }} 301
+{%- endif %}
+{%- for p in collections.docs_en %}
+{% set url = p.url | localeUrl(loc.code) -%}
+{{ url.slice(0, -1) }} {{ url }} 301
+{{ url }}index.html {{ url }} 301
+{{ url }}index {{ url }} 301
+{%- endfor %}
+{%- endfor %}

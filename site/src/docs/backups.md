@@ -1,9 +1,13 @@
 ---
-title: Export and import your library
+title: "Back up and restore your audio library"
+navTitle: Export and import your library
+description: "Export an encrypted backup of your YotoMediaManager library, save its recovery key and import it on another computer while preserving your audio."
 order: 8
 ---
 
-# Export and import your library
+# Back up and restore your audio library
+
+Keep a copy of your local audio library or move it to another computer. This export is separate from the playlists saved on your [Yoto account](account-and-sync.md).
 
 Your library contains your original audio and prepared versions. It is stored locally in encrypted form. The catalog also keeps cached data and tracks Yoto operations; the playlists themselves belong to your Yoto account. Exporting the library gives you a protected copy you can import on a new installation or another computer.
 

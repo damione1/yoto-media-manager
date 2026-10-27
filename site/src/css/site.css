@@ -80,6 +80,11 @@ a { color: var(--link); text-underline-offset: 0.18em; }
 a:hover { color: var(--link-hover); }
 :focus-visible { outline: 3px solid var(--peach); outline-offset: 3px; border-radius: 6px; }
 main:focus { outline: none; }
+.hero-intro { max-width: 48ch; margin-top: 16px; color: var(--ink-soft); font-weight: 700; }
+.scene-guide { margin-top: 16px; }
+.breadcrumbs { margin-bottom: 20px; font-size: .875rem; color: var(--ink-mute); }
+.breadcrumbs ol { display: flex; flex-wrap: wrap; gap: 6px 10px; list-style: none; padding: 0; margin: 0; }
+.breadcrumbs li + li::before { content: "/"; margin-right: 10px; color: var(--ink-mute); }
 h1, h2, h3, p { margin: 0; }
 abbr[title] { text-decoration: none; }
 

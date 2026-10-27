@@ -1,9 +1,13 @@
 ---
-title: Troubleshooting
+title: "Fix Yoto imports, uploads and connection problems"
+navTitle: Troubleshooting
+description: "Resolve import errors, incomplete Yoto sign-in, missing playlists, uncertain uploads and backup recovery problems, or report a YotoMediaManager issue."
 order: 9
 ---
 
-# Troubleshooting
+# Fix Yoto imports, uploads and connection problems
+
+Find the symptom below before retrying an import, upload or account connection. When a step still fails, use the reporting link at the end of this page.
 
 ## The app does not open
 
@@ -60,3 +64,5 @@ Type the key exactly as it was shown at export time: eight groups of eight lette
 ## Report a problem
 
 Note the app version, your operating system, the action you took, and the error text. A screenshot of the relevant area can help. Avoid including passwords, recovery keys, or private content. A short, reproducible audio example is useful for a processing problem.
+
+[Report an issue on GitHub](https://github.com/damione1/yoto-media-manager/issues/new) with these details.

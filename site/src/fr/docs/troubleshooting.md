@@ -1,9 +1,13 @@
 ---
-title: Dépannage
+title: "Résoudre les erreurs d’import et d’envoi Yoto"
+navTitle: Dépannage
+description: "Résolvez les erreurs d’import, de connexion à Yoto, de playlists et de restauration, ou signalez un problème dans YotoMediaManager."
 order: 9
 ---
 
-# Dépannage
+# Résoudre les erreurs d’import et d’envoi Yoto
+
+Retrouvez le symptôme ci-dessous avant de relancer un import, un envoi ou une connexion. Si le problème persiste, utilisez le lien de signalement en fin de page.
 
 ## L’application ne s’ouvre pas
 
@@ -60,3 +64,5 @@ Saisissez la clé exactement comme elle a été affichée lors de l’export : h
 ## Signaler un problème
 
 Notez la version de l’application, votre système d’exploitation, l’action effectuée et le texte de l’erreur. Une capture d’écran de la zone concernée peut aider. N’y mettez pas de mot de passe, de clé de récupération ni de contenu privé. Pour un problème de traitement, un court exemple audio qui reproduit le problème est utile.
+
+[Signaler un problème sur GitHub](https://github.com/damione1/yoto-media-manager/issues/new) en précisant ces informations.

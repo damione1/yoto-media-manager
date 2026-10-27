@@ -1,9 +1,13 @@
 ---
-title: Players and groups
+title: "Control your Yoto players and groups"
+navTitle: Players and groups
+description: "Select a Yoto player, start a playlist and control playback from YotoMediaManager. Understand player availability, group settings and command errors."
 order: 7
 ---
 
-# Players and groups
+# Control your Yoto players and groups
+
+Use YotoMediaManager to choose a player connected to your Yoto account and play your playlists. [Connect your account](account-and-sync.md) before using these controls.
 
 ## Choose a player
 

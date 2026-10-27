@@ -1,9 +1,13 @@
 ---
-title: Lecteurs et groupes
+title: "Contrôler ses lecteurs et groupes Yoto"
+navTitle: Lecteurs et groupes
+description: "Choisissez un lecteur Yoto, lancez une playlist et contrôlez la lecture depuis YotoMediaManager. Consultez les états des lecteurs et des groupes."
 order: 7
 ---
 
-# Lecteurs et groupes
+# Contrôler ses lecteurs et groupes Yoto
+
+Choisissez un lecteur lié à votre compte Yoto et lancez vos playlists depuis YotoMediaManager. [Connectez votre compte](account-and-sync.md) avant d’utiliser ces commandes.
 
 ## Choisir un lecteur
 

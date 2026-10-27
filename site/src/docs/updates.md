@@ -1,9 +1,13 @@
 ---
-title: Keep the app up to date
+title: "Update YotoMediaManager on Mac or Windows"
+navTitle: Keep the app up to date
+description: "Check your YotoMediaManager version, install app updates on Mac or Windows and understand what happens to your library and account during an update."
 order: 10
 ---
 
-# Keeping the app up to date
+# Update YotoMediaManager on Mac or Windows
+
+Keep YotoMediaManager up to date on your Mac or Windows computer. Before moving your library to another computer, make a [backup](backups.md).
 
 YotoMediaManager checks for new releases when you open it. When a new version is available, **Updates**, at the right of the status bar at the bottom of the window, shows a dot and lets you download it without leaving the app.
 

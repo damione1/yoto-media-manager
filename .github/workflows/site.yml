@@ -28,11 +28,11 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
-      - name: Build
+      - name: Build and validate SEO and Worker behavior
         working-directory: site
         run: |
           npm ci --ignore-scripts
-          npm run build
+          npm test
 
       # A build that silently produced nothing would pass unnoticed.
       - name: Check the build produced a page

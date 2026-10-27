@@ -1,8 +1,8 @@
 {
   "meta": {
-    "title": "YotoMediaManager · Les chansons qu’ils réclament, sur leur Yoto",
-    "description": "Une application pour les parents qui ont un Yoto à la maison : importez de l’audio depuis un fichier ou un lien YouTube, découpez-le et ajoutez-le à une playlist de votre compte Yoto. Pour macOS et Windows.",
-    "ogDescription": "Importez une chanson, gardez juste le bon morceau et ajoutez-la à une playlist de leur Yoto. Une application pour macOS et Windows.",
+    "title": "Importez et découpez votre audio Yoto · YotoMediaManager",
+    "description": "Importez vos fichiers audio ou YouTube, découpez vos morceaux et créez vos playlists Yoto. Application gratuite pour Mac et Windows.",
+    "ogDescription": "Importez vos fichiers audio ou YouTube, découpez vos morceaux et créez vos playlists Yoto. Application gratuite pour Mac et Windows.",
     "imageAlt": "YotoMediaManager : les chansons qu’ils réclament, sur leur Yoto. À côté, l’éditeur de playlist de l’application avec quatre comptines enregistrées sur Yoto.",
     "docsSuffix": "Guide YotoMediaManager",
     "notFoundTitle": "Page introuvable · YotoMediaManager"
@@ -25,7 +25,7 @@
     "sub": "Une comptine trouvée sur YouTube, une histoire dans votre langue, la berceuse de Mamie : importez-la, gardez juste le bon morceau, et rangez-la dans une playlist de votre lecteur.",
     "ctaMac": "Télécharger pour macOS",
     "ctaWin": "Pour Windows",
-    "note": "macOS et Windows · fonctionne avec votre compte Yoto",
+    "note": "Gratuit · macOS 14 ou ultérieur et Windows 64 bits",
     "cardTitle": "Chansons du soir",
     "cardMeta": "4 pistes · 8 min 58 s",
     "tracks": [
@@ -34,7 +34,8 @@
       { "title": "Berceuse de Brahms", "dur": "3:21", "family": "lilac", "icon": "moon" },
       { "title": "Une souris verte", "dur": "1:23", "family": "mint", "icon": "mouse" }
     ],
-    "toast": "Enregistré sur Yoto"
+    "toast": "Enregistré sur Yoto",
+    "intro": "L’application gratuite pour importer, découper et organiser vos playlists Yoto Make Your Own sur Mac et Windows."
   },
   "how": {
     "title": "Quatre étapes, un seul endroit",
@@ -54,17 +55,23 @@
       "import": {
         "title": "Collez un lien, récupérez la chanson",
         "text": "Collez une vidéo ou une playlist YouTube publique, ou ajoutez un fichier de votre ordinateur. L’audio est téléchargé sur votre ordinateur et attend dans votre médiathèque, prêt à écouter.",
-        "alt": "Animation de l’application : un lien YouTube est collé dans Importer de l’audio, puis Importer est choisi ; la tâche apparaît dans Activités, se télécharge, devient prête dans la médiathèque, et Écouter ouvre la chanson dans la Médiathèque."
+        "alt": "Animation de l’application : un lien YouTube est collé dans Importer de l’audio, puis Importer est choisi ; la tâche apparaît dans Activités, se télécharge, devient prête dans la médiathèque, et Écouter ouvre la chanson dans la Médiathèque.",
+        "guideSlug": "imports",
+        "guideLabel": "Lire le guide d’import"
       },
       "trim": {
         "title": "Gardez juste le bon morceau",
         "text": "Faites glisser les deux poignées après l’intro et avant le générique, cliquez sur la forme d’onde pour écouter à partir de n’importe quel endroit. Appliquer garde votre original et crée la version découpée pour vos playlists.",
-        "alt": "Animation du dialogue de découpe : les poignées de début et de fin sont glissées vers l’intérieur, un clic sur la forme d’onde déplace la tête de lecture, la sélection est écoutée à partir de là, puis Appliquer prépare la version découpée."
+        "alt": "Animation du dialogue de découpe : les poignées de début et de fin sont glissées vers l’intérieur, un clic sur la forme d’onde déplace la tête de lecture, la sélection est écoutée à partir de là, puis Appliquer prépare la version découpée.",
+        "guideSlug": "prepare-audio",
+        "guideLabel": "Apprendre à découper un audio"
       },
       "playlist": {
         "title": "Directement sur leur Yoto",
         "text": "Choisissez Ajouter des médias, cochez une chanson de votre médiathèque et la version à envoyer. Une fois sur Yoto, elle apparaît dans la playlist ; cliquez sur son emplacement d’icône vide pour lui donner sa petite icône pixel. Les changements sont enregistrés sur votre compte Yoto au fur et à mesure : il n’y a pas de bouton pour publier.",
-        "alt": "Animation de l’éditeur de playlist : Ajouter des médias ouvre un dialogue, une chanson découpée est cochée et ajoutée ; une fois envoyée sur Yoto, elle apparaît comme nouvelle piste, son emplacement d’icône vide ouvre Choisir une icône, une icône est utilisée, et la playlist affiche Enregistré sur Yoto."
+        "alt": "Animation de l’éditeur de playlist : Ajouter des médias ouvre un dialogue, une chanson découpée est cochée et ajoutée ; une fois envoyée sur Yoto, elle apparaît comme nouvelle piste, son emplacement d’icône vide ouvre Choisir une icône, une icône est utilisée, et la playlist affiche Enregistré sur Yoto.",
+        "guideSlug": "playlists",
+        "guideLabel": "Créer sa playlist Yoto"
       }
     }
   },
@@ -93,7 +100,8 @@
       { "q": "Faut-il un compte Yoto ?", "a": "Pour importer et découper de l’audio, non. Pour créer des playlists et les écouter sur un lecteur, oui." },
       { "q": "Mes originaux sont-ils modifiés quand je découpe ?", "a": "Jamais. La découpe crée une version à côté de l’original, que vous pouvez exporter à tout moment." },
       { "q": "L’application est-elle terminée ?", "a": "Elle est encore en rodage : certaines combinaisons de lecteurs et d’ordinateurs restent à valider. L’app vous prévient quand une fonction n’est pas disponible, et vous propose les nouvelles versions dès leur publication." },
-      { "q": "Est-ce que c’est bien ?", "a": "Oui." }
+      { "q": "L’application est-elle gratuite ?", "a": "Oui. Le téléchargement et les fonctions de YotoMediaManager sont gratuits, et le code est disponible sous licence GPL-3.0 ou ultérieure. Le lecteur et les Cartes à créer Yoto sont vendus séparément." },
+      { "q": "Comment mettre ma playlist sur une Carte à créer ?", "a": "YotoMediaManager crée et modifie la playlist dans votre compte Yoto. Associez ensuite cette playlist à une Carte à créer avec l’application officielle Yoto : le guide de démarrage explique la dernière étape." }
     ]
   },
   "cta": {
@@ -101,21 +109,26 @@
     "mac": "Télécharger pour macOS",
     "win": "Pour Windows"
   },
-  "dl": { "intel": "Mac avec processeur Intel ?", "intelLink": "Version Intel", "all": "Toutes les versions", "signing": "Windows : signature de code gratuite fournie par", "signingBy": ", certificat de la" },
+  "dl": { "intel": "Mac avec processeur Intel ?", "intelLink": "Version Intel", "all": "Toutes les versions", "requirements": "Mac Apple Silicon ou Intel · Windows 64 bits", "license": "Logiciel libre · GPL-3.0 ou ultérieure" },
   "footer": {
     "label": "Pied de page",
     "guide": "Guide d’utilisation",
     "releases": "Versions",
     "notices": "Licences tierces",
     "source": "Code source",
-    "notAffiliated": "Application indépendante, non affiliée à Yoto Ltd. Yoto est une marque de Yoto Ltd."
+    "notAffiliated": "Application indépendante, non affiliée à Yoto Ltd. Yoto est une marque de Yoto Ltd.",
+    "support": "Signaler un problème",
+    "license": "Licence GPL"
   },
   "docs": {
     "title": "Guide d’utilisation",
     "contents": "Sommaire du guide",
     "onThisPage": "Sur cette page",
     "prev": "Précédent",
-    "next": "Suivant"
+    "next": "Suivant",
+    "home": "Accueil",
+    "breadcrumb": "Fil d’Ariane",
+    "getStarted": "Du premier fichier à la carte Yoto"
   },
   "notFound": {
     "title": "Cette page n’est pas ici",

@@ -1,9 +1,13 @@
 ---
-title: Importer des médias
+title: "Importer un MP3 ou YouTube pour Yoto"
+navTitle: Importer des médias
+description: "Ajoutez des fichiers audio ou des liens YouTube publics dans YotoMediaManager. Suivez les imports et préparez vos morceaux pour vos playlists Yoto."
 order: 3
 ---
 
-# Importer des médias
+# Importer un MP3 ou YouTube pour Yoto
+
+Ajoutez des fichiers audio, une vidéo ou une playlist YouTube publique à votre médiathèque locale. Vous pourrez ensuite [découper l’audio](prepare-audio.md) et [l’ajouter à une playlist Yoto](playlists.md).
 
 ## Depuis un fichier audio
 

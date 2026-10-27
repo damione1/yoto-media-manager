@@ -1,9 +1,11 @@
 ---
-title: Your audio library
+title: "Your Yoto audio library and playlists"
+navTitle: Your audio library
+description: "Find your way around YotoMediaManager: import audio, keep your originals, build Yoto playlists and control playback from your Mac or Windows computer."
 order: 1
 ---
 
-# YotoMediaManager
+# Your Yoto audio library and playlists
 
 YotoMediaManager helps you collect audio, prepare excerpts, and manage playlists for your Yoto players. Your audio library stays on your computer. Your playlists belong to your Yoto account, and changes are sent to Yoto directly.
 

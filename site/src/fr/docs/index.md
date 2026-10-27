@@ -1,9 +1,11 @@
 ---
-title: Votre médiathèque audio
+title: "Votre médiathèque et vos playlists Yoto"
+navTitle: Votre médiathèque audio
+description: "Découvrez YotoMediaManager : importer de l’audio, conserver les originaux, créer des playlists Yoto et contrôler la lecture sur Mac ou Windows."
 order: 1
 ---
 
-# YotoMediaManager
+# Votre médiathèque et vos playlists Yoto
 
 YotoMediaManager vous aide à rassembler de l’audio, à préparer des extraits et à gérer les playlists de vos lecteurs Yoto. Votre médiathèque audio reste sur votre ordinateur. Vos playlists appartiennent à votre compte Yoto, et les changements sont envoyés directement à Yoto.
 

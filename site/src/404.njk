@@ -1,5 +1,6 @@
 ---
-permalink: 404.html
+pagination: { data: locales, size: 1, alias: loc }
+permalink: "{{ loc.dir }}404.html"
 layout: layouts/base.njk
 is404: true
 eleventyExcludeFromCollections: true
