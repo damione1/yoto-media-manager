@@ -1,13 +1,30 @@
 import { securityHeaders } from "../security-headers.js";
+import { canonicalOrigin, redirectedHosts } from "../origins.js";
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+    if (redirectedHosts.has(url.hostname)) {
+      // Set the destination origin explicitly: a path starting // must never
+      // be interpreted as another host. Keep the original path and query.
+      const destination = new URL(canonicalOrigin);
+      destination.pathname = url.pathname;
+      destination.search = url.search;
+      return Response.redirect(destination.href, 301);
+    }
+
     // HTML is fetched from the asset cache, then gets a fresh policy per
     // response. An old browser validator must not turn it into a bodyless 304.
-    const assetRequest = new Request(request);
-    assetRequest.headers.delete("If-None-Match");
-    assetRequest.headers.delete("If-Modified-Since");
-    const response = await env.ASSETS.fetch(assetRequest);
+    let response = await env.ASSETS.fetch(request);
+    if (response.status === 304) {
+      const assetRequest = new Request(request);
+      assetRequest.headers.delete("If-None-Match");
+      assetRequest.headers.delete("If-Modified-Since");
+      const unconditional = await env.ASSETS.fetch(assetRequest);
+      // Static assets retain their original conditional response and caching.
+      if (!unconditional.headers.get("Content-Type")?.startsWith("text/html")) return response;
+      response = unconditional;
+    }
     if (!response.headers.get("Content-Type")?.startsWith("text/html")) return response;
 
     const headers = new Headers(response.headers);
