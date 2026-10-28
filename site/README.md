@@ -43,14 +43,6 @@ with Pillow available in your Python environment, then commit the generated
 checked-in files; they do not need Python or an image service. The renderer uses
 `picture`, `srcset`, `sizes`, lazy loading and explicit dimensions.
 
-## Search follow-up after publishing
-
-In the existing Search Console property, check the sitemap and inspect the two
-homepages and both languages of the imports/playlists guides. Record Google's
-chosen canonical and any indexing exclusions. Compare non-brand impressions
-and CTR by query/page/device after recrawling and several weeks of data; local
-Lighthouse scores do not establish actual indexation or field Core Web Vitals.
-
 References: [Workers assets and custom 404s](https://developers.cloudflare.com/workers/static-assets/routing/static-site-generation/),
 [permanent redirects](https://developers.cloudflare.com/workers/static-assets/redirects/),
 [Cloudflare JavaScript Detections and CSP](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/javascript-detections/).
