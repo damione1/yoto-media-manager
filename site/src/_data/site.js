@@ -26,5 +26,6 @@ export default {
   license: `${repo}/blob/master/LICENSE`,
   notices: `${repo}/blob/master/distribution/THIRD-PARTY-NOTICES.md`,
   author: "Damien Goehrig",
+  authorUrl: "https://damiengoehrig.ca/",
   year: new Date().getFullYear(),
 };
