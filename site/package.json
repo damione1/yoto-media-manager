@@ -7,7 +7,7 @@
     "build": "eleventy",
     "images": "python3 scripts/optimize_images.py",
     "test": "npm run build && node --test",
-    "preview": "npm run build && wrangler dev --local --port 8787",
+    "preview": "npm run build && wrangler dev --local --port 8787 --infer-origin-from-routes=false",
     "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {

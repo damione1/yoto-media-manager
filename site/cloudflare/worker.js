@@ -4,7 +4,8 @@ import { canonicalOrigin, redirectedHosts } from "../origins.js";
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (redirectedHosts.has(url.hostname)) {
+    if (redirectedHosts.has(url.hostname)
+      || (url.origin === canonicalOrigin.replace("https:", "http:"))) {
       // Set the destination origin explicitly: a path starting // must never
       // be interpreted as another host. Keep the original path and query.
       const destination = new URL(canonicalOrigin);
