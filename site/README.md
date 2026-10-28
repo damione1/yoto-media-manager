@@ -26,9 +26,11 @@ use the same public canonicals unless this variable is explicitly overridden.
 Wrangler manages the primary custom domain `yotomediamanager.app`, its `www`
 alias and the previous `yotomediamanager.damiengoehrig.ca` domain. The aliases
 and the Worker's `workers.dev` address redirect permanently to the primary
-domain, preserving paths and query strings, including static assets and the
+HTTPS domain, preserving paths and query strings, including static assets and the
 sitemap. `origins.js` also normalizes the previous production `SITE_URL` so
 older Cloudflare build settings cannot restore the retired canonical domain.
+HTTP requests to the primary domain also redirect to HTTPS. The local preview
+keeps its localhost origin so production redirects do not intercept it.
 
 The build emits `_redirects` for known page aliases only. Asset routing uses
 `404-page` to return the nearest localized `404.html` with status 404. The HTML

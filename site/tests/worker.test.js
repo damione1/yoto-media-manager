@@ -54,6 +54,15 @@ test("primary domain and local preview serve assets without a domain redirect", 
   }
 });
 
+test("HTTP on the primary domain redirects directly to HTTPS", async () => {
+  const path = "/fr/docs/imports/?source=http&name=a%2Fb";
+  const response = await worker.fetch(new Request(`http://yotomediamanager.app${path}`), {
+    ASSETS: { fetch: async () => { throw new Error("HTTP must redirect before fetching assets"); } },
+  });
+  assert.equal(response.status, 301);
+  assert.equal(response.headers.get("Location"), `${canonicalOrigin}${path}`);
+});
+
 test("previous Cloudflare build variables cannot restore retired canonicals", () => {
   assert.equal(buildOrigin(), canonicalOrigin);
   for (const host of redirectedHosts) assert.equal(buildOrigin(`https://${host}/`), canonicalOrigin);
