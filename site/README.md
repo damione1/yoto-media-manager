@@ -19,16 +19,24 @@ http://localhost:8787, including permanent redirects, security headers and real
 `wrangler.jsonc` targets the existing **yoto-media-manager** Worker. Cloudflare
 Workers Builds uses `site/` as its root, `npm run build` as the build command
 and `npx wrangler deploy` as its deployment command. Keep the production
-`SITE_URL=https://yotomediamanager.damiengoehrig.ca` build variable for canonical
+`SITE_URL=https://yotomediamanager.app` build variable for canonical
 URLs, language alternates, Open Graph images and the sitemap. Preview builds
 use the same public canonicals unless this variable is explicitly overridden.
+
+Wrangler manages the primary custom domain `yotomediamanager.app`, its `www`
+alias and the previous `yotomediamanager.damiengoehrig.ca` domain. The aliases
+and the Worker's `workers.dev` address redirect permanently to the primary
+domain, preserving paths and query strings, including static assets and the
+sitemap. `origins.js` also normalizes the previous production `SITE_URL` so
+older Cloudflare build settings cannot restore the retired canonical domain.
 
 The build emits `_redirects` for known page aliases only. Asset routing uses
 `404-page` to return the nearest localized `404.html` with status 404. The HTML
 Worker adds a fresh CSP nonce to each response; Cloudflare JavaScript Detections
 reads this nonce and applies it to the scripts it injects. HTML responses use
-`no-store` so the nonce is not reused through a browser cache. Static resources
-skip the Worker and retain their asset cache policies. `security-headers.js`
+`no-store` so the nonce is not reused through a browser cache. All requests
+reach the Worker for domain redirects; static resources retain their asset
+cache policies and conditional responses on the primary domain. `security-headers.js`
 is the common source for Worker headers and the generated `_headers` file.
 
 For a manually authorized deployment, run `npm run deploy` from this directory.
@@ -42,14 +50,6 @@ with Pillow available in your Python environment, then commit the generated
 480px and full-width lossless WebP variants. Production builds only copy these
 checked-in files; they do not need Python or an image service. The renderer uses
 `picture`, `srcset`, `sizes`, lazy loading and explicit dimensions.
-
-## Search follow-up after publishing
-
-In the existing Search Console property, check the sitemap and inspect the two
-homepages and both languages of the imports/playlists guides. Record Google's
-chosen canonical and any indexing exclusions. Compare non-brand impressions
-and CTR by query/page/device after recrawling and several weeks of data; local
-Lighthouse scores do not establish actual indexation or field Core Web Vitals.
 
 References: [Workers assets and custom 404s](https://developers.cloudflare.com/workers/static-assets/routing/static-site-generation/),
 [permanent redirects](https://developers.cloudflare.com/workers/static-assets/redirects/),

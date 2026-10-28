@@ -87,6 +87,13 @@ test("normalization is permanent, loop-free and never replaces missing pages wit
   const config = JSON.parse(readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
   assert.equal(config.assets.not_found_handling, "404-page");
   assert.equal(config.name, "yoto-media-manager");
+  assert.equal(config.assets.run_worker_first, true);
+  assert.equal(config.workers_dev, true);
+  assert.deepEqual(config.routes.map((route) => [route.pattern, route.custom_domain]), [
+    ["yotomediamanager.app", true],
+    ["www.yotomediamanager.app", true],
+    ["yotomediamanager.damiengoehrig.ca", true],
+  ]);
 });
 
 test("static asset CSP uses literal policy syntax rather than HTML entities", () => {

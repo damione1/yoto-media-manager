@@ -6,11 +6,13 @@
  * build variable of the Worker); without it the build falls back to the
  * site's public domain.
  */
+import { buildOrigin } from "../../origins.js";
+
 const repo = "https://github.com/damione1/yoto-media-manager";
 
 export default {
   name: "YotoMediaManager",
-  url: (process.env.SITE_URL || "https://yotomediamanager.damiengoehrig.ca").replace(/\/+$/, ""),
+  url: buildOrigin(process.env.SITE_URL || undefined),
   repo,
   releases: `${repo}/releases`,
   latest: `${repo}/releases/latest`,
