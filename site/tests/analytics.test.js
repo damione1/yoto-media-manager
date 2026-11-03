@@ -8,7 +8,7 @@ const release=parseRelease(JSON.parse(readFileSync(new URL('./fixtures/release.j
 const source=readFileSync(new URL('../src/js/analytics.js',import.meta.url),'utf8');
 function browser({host='yotomediamanager.app',group='landing'}={}) {
   const listeners={}, scripts=[]; let now=0; let interval;
-  const document={currentScript:{dataset:{measurementId:'G-ZG7VKNHLGP',pageLocale:'fr',contentGroup:group,contentId:'/docs/overview/'}},
+  const document={currentScript:{dataset:{measurementId:'G-TEST123',pageLocale:'fr',contentGroup:group,contentId:'/docs/overview/'}},
     visibilityState:'visible',head:{append:s=>scripts.push(s)},createElement:()=>({}),
     querySelector:()=>({getBoundingClientRect:()=>({top:0,height:1000})}),
     addEventListener:(name,fn)=>listeners[name]=fn};
@@ -61,7 +61,8 @@ test('built downloads agree with the release snapshot and strict CSP permits Ana
     const html=readFileSync(new URL('../_site/'+path,import.meta.url),'utf8');
     const version=html.match(/data-download-version="([^"]+)"/)[1];
     for(const target of Object.values(downloadTargets)) assert.ok(html.includes('/releases/download/v'+version+'/'+target.filename));
-    assert.equal((html.match(/data-measurement-id="G-ZG7VKNHLGP"/g)||[]).length,1);
+    const tags = [...html.matchAll(/data-measurement-id="([^"]+)"/g)].map(match => match[1]);
+    assert.deepEqual(tags, process.env.GA_MEASUREMENT_ID ? [process.env.GA_MEASUREMENT_ID] : []);
     for(const match of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
       assert.ok(match[1].includes('src=') || match[1].includes('application/ld+json'));
     }
