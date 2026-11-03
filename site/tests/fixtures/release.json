@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "tag": "v0.3.3",
+  "downloads": {
+    "mac": "https://github.com/damione1/yoto-media-manager/releases/download/v0.3.3/YotoMediaManager-macOS-AppleSilicon.dmg",
+    "macIntel": "https://github.com/damione1/yoto-media-manager/releases/download/v0.3.3/YotoMediaManager-macOS-Intel.dmg",
+    "windows": "https://github.com/damione1/yoto-media-manager/releases/download/v0.3.3/YotoMediaManager-Windows-setup.exe"
+  }
+}
