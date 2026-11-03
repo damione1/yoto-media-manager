@@ -6,9 +6,14 @@ export const redirectedHosts = new Set([
   "yoto-media-manager.damien-goehrig.workers.dev",
 ]);
 
+export function isRedirectedHost(hostname) {
+  return redirectedHosts.has(hostname)
+    || /^[a-z0-9-]+-yoto-media-manager\.damien-goehrig\.workers\.dev$/.test(hostname);
+}
+
 // Older Cloudflare build settings may still supply the retired SITE_URL.
 // Keep explicit development origins, but never publish old production canonicals.
 export function buildOrigin(value = canonicalOrigin) {
   const url = new URL(value);
-  return redirectedHosts.has(url.hostname) ? canonicalOrigin : url.origin;
+  return isRedirectedHost(url.hostname) ? canonicalOrigin : url.origin;
 }

@@ -40,6 +40,8 @@ jobs:
 
       - name: Build and validate SEO and Worker behavior
         working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           npm ci --ignore-scripts
           npm test

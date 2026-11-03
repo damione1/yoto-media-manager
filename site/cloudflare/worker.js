@@ -1,10 +1,10 @@
 import { securityHeaders } from "../security-headers.js";
-import { canonicalOrigin, redirectedHosts } from "../origins.js";
+import { canonicalOrigin, isRedirectedHost } from "../origins.js";
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (redirectedHosts.has(url.hostname)
+    if (isRedirectedHost(url.hostname)
       || (url.origin === canonicalOrigin.replace("https:", "http:"))) {
       // Set the destination origin explicitly: a path starting // must never
       // be interpreted as another host. Keep the original path and query.

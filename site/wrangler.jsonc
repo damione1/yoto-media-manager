@@ -4,6 +4,7 @@
   "main": "cloudflare/worker.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
+  "preview_urls": false,
   "routes": [
     { "pattern": "yotomediamanager.app", "custom_domain": true },
     { "pattern": "www.yotomediamanager.app", "custom_domain": true },

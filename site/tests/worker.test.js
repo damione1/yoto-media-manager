@@ -32,7 +32,7 @@ test("HTML responses have fresh CSP nonces without relaxing inline-script restri
 
 test("retired domains redirect pages and assets with their path and query intact", async () => {
   const env = { ASSETS: { fetch: async () => { throw new Error("Redirects must not fetch assets"); } } };
-  for (const host of redirectedHosts) {
+  for (const host of [...redirectedHosts, "dea36d7c-yoto-media-manager.damien-goehrig.workers.dev", "preview-yoto-media-manager.damien-goehrig.workers.dev"]) {
     for (const path of ["/", "/fr/docs/imports/?source=old&name=a%2Fb", "/sitemap.xml", "/css/site.css?v=123", "//example.org/path", "/fr/docs/inconnu/"]) {
       for (const method of ["GET", "HEAD"]) {
         const response = await worker.fetch(new Request(`https://${host}${path}`, { method }), env);
@@ -45,7 +45,7 @@ test("retired domains redirect pages and assets with their path and query intact
 });
 
 test("primary domain and local preview serve assets without a domain redirect", async () => {
-  for (const origin of [canonicalOrigin, "http://localhost:8787"]) {
+  for (const origin of [canonicalOrigin, "http://localhost:8787", "https://other-worker.damien-goehrig.workers.dev", "https://yoto-media-manager.damien-goehrig.workers.dev.example.com"]) {
     const response = await worker.fetch(new Request(`${origin}/fr/`), {
       ASSETS: { fetch: async () => new Response("<h1>Yoto</h1>", { headers: htmlHeaders }) },
     });
