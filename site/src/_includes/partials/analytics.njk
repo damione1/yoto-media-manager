@@ -1,6 +1,8 @@
+{% if analytics.measurementId %}
 <script src="{{ '/js/analytics.js' | bust }}"
   data-measurement-id="{{ analytics.measurementId }}"
   data-page-locale="{{ loc.code }}"
   data-content-group="{% if is404 %}not_found{% elif isDocs %}documentation{% else %}landing{% endif %}"
   data-content-id="{{ page.url | localeUrl('en') }}"
   data-web-vitals="{{ webVitalsUrl }}" defer></script>
+{% endif %}
