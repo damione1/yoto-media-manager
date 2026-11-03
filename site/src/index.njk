@@ -7,11 +7,11 @@ layout: layouts/base.njk
 {% from "mocks/mocks.njk" import importScene, trimScene, playlistScene %}
 
 {% macro downloads(t, primary, secondary, onInk = false) %}
-<a class="btn btn-primary btn-lg" href="{{ site.download.mac }}">{{ icon("download", 20, 2.6) }}{{ primary }}</a>
-<a class="btn {{ 'btn-light' if onInk else 'btn-ghost' }} btn-lg" href="{{ site.download.windows }}">{{ secondary }}</a>
+<a class="btn btn-primary btn-lg" href="{{ site.download.mac }}" data-download-version="{{ release.version }}" data-download-platform="{{ release.downloads.mac.platform }}" data-download-architecture="{{ release.downloads.mac.architecture }}" data-release-channel="{{ release.downloads.mac.channel }}">{{ icon("download", 20, 2.6) }}{{ primary }}</a>
+<a class="btn {{ 'btn-light' if onInk else 'btn-ghost' }} btn-lg" href="{{ site.download.windows }}" data-download-version="{{ release.version }}" data-download-platform="{{ release.downloads.windows.platform }}" data-download-architecture="{{ release.downloads.windows.architecture }}" data-release-channel="{{ release.downloads.windows.channel }}">{{ secondary }}</a>
 {% endmacro %}
 
-{% macro otherDownloads(t) %}{{ t.dl.intel }} <a href="{{ site.download.macIntel }}">{{ t.dl.intelLink }}</a> · <a href="{{ site.releases }}">{{ t.dl.all }}</a>{% endmacro %}
+{% macro otherDownloads(t) %}{{ t.dl.intel }} <a href="{{ site.download.macIntel }}" data-download-version="{{ release.version }}" data-download-platform="{{ release.downloads.macIntel.platform }}" data-download-architecture="{{ release.downloads.macIntel.architecture }}" data-release-channel="{{ release.downloads.macIntel.channel }}">{{ t.dl.intelLink }}</a> · <a href="{{ site.releases }}">{{ t.dl.all }}</a>{% endmacro %}
 
 {# ── Hero ── #}
 <section class="hero wrap" aria-labelledby="hero-title">

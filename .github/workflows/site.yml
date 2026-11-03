@@ -3,19 +3,29 @@ name: Site
 # Checks that the public website (site/, Eleventy) still builds. Cloudflare
 # Workers Builds watches master and builds and publishes the site itself
 # (root directory site/, SITE_URL as a build variable), so this workflow only
-# guards pull requests and never deploys.
+# guards pull requests. A completed release triggers a fresh production build
+# so installer URLs and measured versions advance together.
 on:
   pull_request:
     paths:
       - "site/**"
       - ".github/workflows/site.yml"
+  workflow_run:
+    workflows: [Signed release]
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      redeploy:
+        description: Refresh the published installers and deploy the website
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -37,3 +47,15 @@ jobs:
       # A build that silently produced nothing would pass unnoticed.
       - name: Check the build produced a page
         run: test -s site/_site/index.html
+
+  refresh-downloads:
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'workflow_dispatch' && inputs.redeploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Rebuild the website with the published installers
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.SITE_DEPLOY_HOOK_URL }}
+        run: |
+          test -n "$DEPLOY_HOOK_URL"
+          curl --silent --show-error --fail --request POST "$DEPLOY_HOOK_URL" --output /dev/null

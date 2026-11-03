@@ -7,25 +7,25 @@
  * site's public domain.
  */
 import { buildOrigin } from "../../origins.js";
+import release from "./release.js";
 
 const repo = "https://github.com/damione1/yoto-media-manager";
 
-export default {
+export default async function () {
+  const published = await release();
+  return {
   name: "YotoMediaManager",
   url: buildOrigin(process.env.SITE_URL || undefined),
   repo,
   releases: `${repo}/releases`,
   latest: `${repo}/releases/latest`,
-  // Every release also publishes its installers under these fixed names.
-  download: {
-    mac: `${repo}/releases/latest/download/YotoMediaManager-macOS-AppleSilicon.dmg`,
-    macIntel: `${repo}/releases/latest/download/YotoMediaManager-macOS-Intel.dmg`,
-    windows: `${repo}/releases/latest/download/YotoMediaManager-Windows-setup.exe`,
-  },
+  // The resolved release keeps the file URL and its measured version together.
+  download: Object.fromEntries(Object.entries(published.downloads).map(([key,asset]) => [key,asset.url])),
   issues: `${repo}/issues`,
   license: `${repo}/blob/master/LICENSE`,
   notices: `${repo}/blob/master/distribution/THIRD-PARTY-NOTICES.md`,
   author: "Damien Goehrig",
   authorUrl: "https://damiengoehrig.ca/",
   year: new Date().getFullYear(),
-};
+  };
+}
