@@ -12,8 +12,8 @@ const attr = (tag, name) => tag.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1];
 const meta = (html, name) => attr([...html.matchAll(/<meta\b[^>]*>/g)].map((m) => m[0]).find((tag) => attr(tag, "name") === name || attr(tag, "property") === name) || "", "content");
 const scripts = (html) => [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
 
-test("all 22 indexable pages have unique descriptions, headings and reciprocal language links", () => {
-  assert.equal(pages.length, 22);
+test("all 24 indexable pages have unique descriptions, headings and reciprocal language links", () => {
+  assert.equal(pages.length, 24);
   const descriptions = new Set();
   const titles = new Set();
   for (const { url, html } of pages) {
@@ -62,6 +62,11 @@ test("guide breadcrumbs describe the visible hierarchy and app facts stay truthf
       assert.ok(trail, url.href);
       assert.equal(trail.itemListElement.at(-1).item, url.href);
       assert.ok(html.includes('class="breadcrumbs"'));
+    } else if (url.pathname.endsWith("/contact/")) {
+      assert.equal(scripts(html).length, 0);
+      assert.ok(html.includes('data-contact-form'));
+      assert.ok(html.includes('/js/contact.js'));
+      assert.ok(!html.includes('/js/mocks.js'));
     } else {
       const app = scripts(html).find((s) => s["@type"] === "SoftwareApplication");
       assert.equal(app.offers.price, "0");

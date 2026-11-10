@@ -5,12 +5,12 @@
   {% include "partials/analytics.njk" %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ pageTitle }}</title>
-  <meta name="description" content="{{ description or t.meta.description }}">
+  <meta name="description" content="{{ contact[loc.code].intro if isContact else (description or t.meta.description) }}">
   <meta name="theme-color" content="#FFF8EF">
   <link rel="preload" href="/fonts/nunito-regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/fredoka-semibold.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ '/css/site.css' | bust }}">
-  {%- if not isDocs and not is404 %}
+  {%- if not isContact and not isDocs and not is404 %}
   <link rel="stylesheet" href="{{ '/css/mocks.css' | bust }}">
   {%- endif %}
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
@@ -27,7 +27,7 @@
   <meta name="robots" content="noindex">
   {%- endif %}
   <meta property="og:title" content="{{ pageTitle }}">
-  <meta property="og:description" content="{{ description or t.meta.ogDescription }}">
+  <meta property="og:description" content="{{ contact[loc.code].intro if isContact else (description or t.meta.ogDescription) }}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:image" content="{{ site.url }}/og-{{ loc.code }}.png">
@@ -42,10 +42,10 @@
   {%- endif %}{% endfor %}
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{ pageTitle }}">
-  <meta name="twitter:description" content="{{ description or t.meta.ogDescription }}">
+  <meta name="twitter:description" content="{{ contact[loc.code].intro if isContact else (description or t.meta.ogDescription) }}">
   <meta name="twitter:image" content="{{ site.url }}/og-{{ loc.code }}.png">
   <meta name="twitter:image:alt" content="{{ t.meta.imageAlt }}">
-  {%- if not isDocs and not is404 %}
+  {%- if not isContact and not isDocs and not is404 %}
   {% set app = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -78,6 +78,7 @@
   {% set breadcrumb = { "@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": crumbs } %}
   <script type="application/ld+json">{{ breadcrumb | jsonld | safe }}</script>
   {%- endif %}
+  {% if isContact %}<link rel="stylesheet" href="{{ '/css/contact.css' | bust }}">{% endif %}
 </head>
 <body{% if isDocs %} class="is-docs"{% endif %}>
   <a class="skip" href="#content">{{ t.nav.skip }}</a>
@@ -85,8 +86,9 @@
   <main id="content" tabindex="-1">{{ content | safe }}</main>
   {% include "partials/footer.njk" %}
   <script src="{{ '/js/site.js' | bust }}" defer></script>
-  {%- if not isDocs and not is404 %}
+  {%- if not isContact and not isDocs and not is404 %}
   <script src="{{ '/js/mocks.js' | bust }}" defer></script>
   {%- endif %}
+  {% if isContact %}<script src="{{ '/js/contact.js' | bust }}" defer></script>{% endif %}
 </body>
 </html>

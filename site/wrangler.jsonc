@@ -6,9 +6,18 @@
   "workers_dev": true,
   "preview_urls": false,
   "routes": [
-    { "pattern": "yotomediamanager.app", "custom_domain": true },
-    { "pattern": "www.yotomediamanager.app", "custom_domain": true },
-    { "pattern": "yotomediamanager.damiengoehrig.ca", "custom_domain": true }
+    {
+      "pattern": "yotomediamanager.app",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.yotomediamanager.app",
+      "custom_domain": true
+    },
+    {
+      "pattern": "yotomediamanager.damiengoehrig.ca",
+      "custom_domain": true
+    }
   ],
   "assets": {
     "directory": "./_site",
@@ -16,5 +25,23 @@
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page",
     "run_worker_first": true
-  }
+  },
+  "vars": {
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAF64lro3L-xJyr5k"
+  },
+  "send_email": [
+    {
+      "name": "CONTACT_EMAIL"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "CONTACT_RATE_LIMITER",
+      "namespace_id": "202611093",
+      "simple": {
+        "limit": 3,
+        "period": 60
+      }
+    }
+  ]
 }
