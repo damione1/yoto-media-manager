@@ -1,3 +1,4 @@
+import { contact } from './contact-worker.mjs';
 import { securityHeaders } from "../security-headers.js";
 import { canonicalOrigin, isRedirectedHost } from "../origins.js";
 
@@ -13,6 +14,8 @@ export default {
       destination.search = url.search;
       return Response.redirect(destination.href, 301);
     }
+
+    if (url.pathname === '/api/contact' || url.pathname === '/api/contact/config') return contact(request, env);
 
     // HTML is fetched from the asset cache, then gets a fresh policy per
     // response. An old browser validator must not turn it into a bodyless 304.

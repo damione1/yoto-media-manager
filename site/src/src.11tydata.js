@@ -11,6 +11,7 @@ export default {
     pageTitle: (data) => {
       const t = data.loc && data.loc.code === "fr" ? data.fr : data.en;
       if (!t) return "";
+      if (data.isContact) return data.contact[data.loc.code].title;
       if (data.isDocs) return `${data.title} · ${t.meta.docsSuffix}`;
       if (data.is404) return t.meta.notFoundTitle;
       return t.meta.title;
